@@ -2,12 +2,12 @@
 
 ## Copyright
 
-BlackPearl is © VisorCraft LLC and contributors, distributed under the
+Ghost Galleon is © VisorCraft LLC and contributors, distributed under the
 [GNU General Public License v3.0](LICENSE).
 
 ## Design inspiration
 
-BlackPearl's dual-screen launcher model - an interactive deck on one
+Ghost Galleon's dual-screen launcher model - an interactive deck on one
 panel with a hero preview on the other, plus SECONDARY_HOME handling for
 the bottom display - follows the trail blazed by
 **[Cocoon](https://github.com/inssekt/CocoonFE)**, the dual-screen shell
@@ -19,7 +19,7 @@ menus. None of these projects' code is used; they inspired the design.
 
 ## Runtime dependencies
 
-BlackPearl relies on the following system components and external
+Ghost Galleon relies on the following system components and external
 services at execution time. None are bundled - the Android components
 are provided by the OS, and the network service is operated by its own
 provider. The same list is viewable in-app under
@@ -36,7 +36,7 @@ Settings → About → Licenses → "Runtime components".
 
 ## Gradle dependencies
 
-BlackPearl's only direct dependencies are the Kotlin standard library
+Ghost Galleon's only direct dependencies are the Kotlin standard library
 and three AndroidX libraries; the rest are AndroidX/Kotlin transitives.
 Every bundled library is Apache-2.0. The full list with exact resolved
 versions is bundled in-app (Settings → About → Licenses →
@@ -62,5 +62,5 @@ Apache-2.0 is permissive and combines freely with GPL-3.0.
 
 If you find code or assets in this repository that we have failed to
 credit, please open an issue at
-<https://github.com/visorcraft/BlackPearl/issues> and we will correct
+<https://github.com/visorcraft/GhostGalleon/issues> and we will correct
 the record.

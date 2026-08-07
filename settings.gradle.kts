@@ -11,5 +11,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "BlackPearl"
+rootProject.name = "Ghost Galleon"
 include(":app")

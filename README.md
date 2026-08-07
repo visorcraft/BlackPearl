@@ -1,8 +1,9 @@
 <p align="center">
-  <img src="static/icon-512.png" alt="BlackPearl logo" width="250" />
+  <img src="static/icon-512.png" alt="Ghost Galleon logo" width="250" />
 </p>
 
-<h1 align="center">BlackPearl</h1>
+<h1 align="center">Ghost Galleon</h1>
+<p align="center"><i>Ghost Galleon Dual Screen Launcher</i></p>
 
 <p align="center">
   <b>A dual-screen Android launcher built for the One X Sugar handheld.</b>
@@ -13,7 +14,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/visorcraft/BlackPearl/releases/latest"><img src="https://img.shields.io/github/v/release/visorcraft/BlackPearl?sort=semver" alt="Latest release" /></a>
+  <a href="https://github.com/visorcraft/GhostGalleon/releases/latest"><img src="https://img.shields.io/github/v/release/visorcraft/GhostGalleon?sort=semver" alt="Latest release" /></a>
   <img src="https://img.shields.io/badge/platform-Android%2014-3ddc84?logo=android&amp;logoColor=white" alt="Android 14" />
   <img src="https://img.shields.io/badge/language-Kotlin-7f52ff?logo=kotlin&amp;logoColor=white" alt="Kotlin" />
   <img src="https://img.shields.io/badge/API-34-0b57a4" alt="API 34" />
@@ -26,24 +27,24 @@
 <table>
   <tr>
     <td width="50%">
-      <img src="docs/screenshots/grid-mode.png" alt="BlackPearl Grid Mode on the bottom display with icon grid and dock" />
+      <img src="docs/screenshots/grid-mode.png" alt="Ghost Galleon Grid Mode on the bottom display with icon grid and dock" />
       <br />
       <sub><b>Grid Mode</b> - curated 3DS-style grid, blank "+" slots, and the dock.</sub>
     </td>
     <td width="50%">
-      <img src="docs/screenshots/hero-panel.png" alt="BlackPearl hero preview panel on the top display" />
+      <img src="docs/screenshots/hero-panel.png" alt="Ghost Galleon hero preview panel on the top display" />
       <br />
       <sub><b>Hero panel</b> - the non-interactive display previews the current selection.</sub>
     </td>
   </tr>
   <tr>
     <td width="50%">
-      <img src="docs/screenshots/game-mode.png" alt="BlackPearl Game Mode card carousel" />
+      <img src="docs/screenshots/game-mode.png" alt="Ghost Galleon Game Mode card carousel" />
       <br />
       <sub><b>Game Mode</b> - Daijisho/GameDeck-style card carousel.</sub>
     </td>
     <td width="50%">
-      <img src="docs/screenshots/app-picker.png" alt="BlackPearl searchable app and ROM picker" />
+      <img src="docs/screenshots/app-picker.png" alt="Ghost Galleon searchable app and ROM picker" />
       <br />
       <sub><b>Picker</b> - search apps and ROMs to fill any grid or dock slot.</sub>
     </td>
@@ -52,16 +53,16 @@
 
 ---
 
-## What is BlackPearl?
+## What is Ghost Galleon?
 
-BlackPearl is a home-screen replacement for dual-screen Android handhelds,
+Ghost Galleon (Ghost Galleon Dual Screen Launcher) is a home-screen replacement for dual-screen Android handhelds,
 built and tuned on the One X Sugar (Android 14, top 2160×1080 + bottom
 1240×1080). One display runs the interactive deck - the grid or the carousel -
 while the other shows a hero preview of whatever is selected. It holds the
 Android HOME role, starts at boot, and is designed to be driven entirely from
 the built-in gamepad.
 
-BlackPearl can:
+Ghost Galleon can:
 
 - Run two launcher modes: **Grid Mode** (3DS/Wii-style icon grid with a dock)
   and **Game Mode** (Daijisho/GameDeck-style card carousel), switchable at any
@@ -93,7 +94,7 @@ BlackPearl can:
 
 ## ROM library
 
-BlackPearl scans ROM folders through Storage Access Framework tree grants -
+Ghost Galleon scans ROM folders through Storage Access Framework tree grants -
 the app requests no storage permissions; ROM access comes only from folders
 you explicitly grant.
 
@@ -178,8 +179,8 @@ screens.
 Requires the Android SDK (set `sdk.dir` in `local.properties`).
 
 ```bash
-git clone https://github.com/visorcraft/BlackPearl.git
-cd BlackPearl
+git clone https://github.com/visorcraft/GhostGalleon.git
+cd Ghost Galleon
 
 ./gradlew assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
@@ -194,7 +195,7 @@ Run the host unit tests:
 ## Releases & updates
 
 Signed release APKs are published on the
-[GitHub releases page](https://github.com/visorcraft/BlackPearl/releases).
+[GitHub releases page](https://github.com/visorcraft/GhostGalleon/releases).
 On-device updates are tracked via Obtainium (source: GitHub releases).
 Note: release builds are signed with the release key (not the debug key) -
 switching from a debug install requires uninstall; use Settings → Library →
@@ -205,10 +206,10 @@ Export/Import settings to carry your layout and library across.
 - [Credits & attribution](CREDITS.md) and
   [third-party licenses](docs/credits-third-party.md) - also bundled in-app
   under Settings → About.
-- [GitHub releases](https://github.com/visorcraft/BlackPearl/releases)
+- [GitHub releases](https://github.com/visorcraft/GhostGalleon/releases)
 
 ## License
 
-BlackPearl is free and open-source software, distributed under the
+Ghost Galleon is free and open-source software, distributed under the
 [GNU General Public License v3.0](LICENSE). Every bundled library is
 Apache-2.0; see [CREDITS.md](CREDITS.md) for the full attribution record.

@@ -1,13 +1,13 @@
 # Third-Party Licenses
 
 This document lists the third-party libraries bundled in release builds
-of BlackPearl, grouped by license text. It mirrors the in-app
+of Ghost Galleon, grouped by license text. It mirrors the in-app
 **Settings → About → Licenses → Third-party** view
 (`app/src/main/res/raw/licenses_third_party.txt`) - update both together
 after any dependency change. Resolved versions come from
 `./gradlew :app:dependencies --configuration releaseRuntimeClasspath`.
 
-BlackPearl is distributed under GPL-3.0-only; the libraries listed here
+Ghost Galleon is distributed under GPL-3.0-only; the libraries listed here
 are included under their stated GPL-compatible licenses and we
 acknowledge their authors and copyright holders accordingly.
 

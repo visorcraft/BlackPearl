@@ -2,12 +2,12 @@ Third-Party Licenses
 ====================
 
 This document lists the third-party libraries bundled in this build of
-BlackPearl, grouped by license text. The full license text is reproduced
-below. BlackPearl is distributed under GPL-3.0-only; the libraries listed
+Ghost Galleon, grouped by license text. The full license text is reproduced
+below. Ghost Galleon is distributed under GPL-3.0-only; the libraries listed
 here are included under their stated GPL-compatible licenses and we
 acknowledge their authors and copyright holders accordingly.
 
-BlackPearl's only direct dependencies are the Kotlin standard library and
+Ghost Galleon's only direct dependencies are the Kotlin standard library and
 three AndroidX libraries; everything else below is pulled in transitively
 by AndroidX. Test-only dependencies (JUnit, org.json) are not bundled in
 the app.

@@ -16,11 +16,11 @@ val releaseProps = Properties().apply {
 }
 
 android {
-    namespace = "com.visorcraft.blackpearl"
+    namespace = "com.visorcraft.ghostgalleon"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.visorcraft.blackpearl"
+        applicationId = "com.visorcraft.ghostgalleon"
         minSdk = 26
         targetSdk = 34
         versionCode = 11
