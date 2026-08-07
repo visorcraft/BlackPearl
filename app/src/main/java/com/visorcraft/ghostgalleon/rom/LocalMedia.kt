@@ -12,9 +12,11 @@ object LocalMedia {
 
     val ART_DIRS = listOf(
         "images", "media", "art", "boxfront", "covers", "screenshots",
-        "titlescreens", "wheels", "marquee", "logos",
+        "titlescreens", "wheels", "marquee", "logos", "videos", "video",
     )
     val IMAGE_EXTENSIONS = setOf("png", "jpg", "jpeg", "webp")
+    val VIDEO_EXTENSIONS = setOf("mp4", "webm", "mkv")
+    val VIDEO_DIRS = listOf("videos", "video", "snaps", "movies")
 
     /** Box-art stem suffixes tried after exact stem match. */
     val ART_SUFFIXES = listOf(
@@ -183,5 +185,78 @@ object LocalMedia {
         }
         val bare = index["$prefix|$norm"]
         return if (bare != null && bare != artUri) bare else null
+    }
+
+    /**
+     * Index video snaps under conventional dirs. Keys `"$prefix|$lowercaseStem"`.
+     * Accepts flat `videos/stem.mp4`, `media/videos/stem.mp4`, and platform-
+     * prefixed `snes/videos/stem.mp4`.
+     */
+    fun indexVideos(docs: List<DocFile>, rootIsPlatform: Boolean): Map<String, String> {
+        val map = LinkedHashMap<String, String>()
+        docs.forEach { doc ->
+            if (doc.relativePath.split('/').any { it.startsWith('.') }) return@forEach
+            val parsed = parseVideoPath(doc.relativePath, rootIsPlatform) ?: return@forEach
+            val (prefix, fileName) = parsed
+            val dot = fileName.lastIndexOf('.')
+            if (dot <= 0 || dot == fileName.length - 1) return@forEach
+            if (fileName.substring(dot + 1).lowercase() !in VIDEO_EXTENSIONS) return@forEach
+            val stem = fileName.substring(0, dot).lowercase()
+            map.putIfAbsent("$prefix|$stem", doc.uri)
+        }
+        return map
+    }
+
+    fun lookupVideo(index: Map<String, String>, prefix: String, stem: String): String? =
+        index["$prefix|${stem.lowercase()}"]
+
+    /**
+     * Parse video relative path → (platformPrefix, fileName).
+     * - root platform: `videos/x.mp4`, `media/videos/x.mp4`
+     * - container: `snes/videos/x.mp4`, `snes/media/videos/x.mp4`
+     */
+    fun parseVideoPath(
+        relativePath: String,
+        rootIsPlatform: Boolean,
+    ): Pair<String, String>? {
+        val segments = relativePath.split('/').filter { it.isNotEmpty() }
+        if (segments.size < 2) return null
+        val videoDirs = VIDEO_DIRS.map { it.lowercase() }.toSet()
+        return if (rootIsPlatform) {
+            when (segments.size) {
+                2 -> {
+                    if (segments[0].lowercase() !in videoDirs) return null
+                    "" to segments[1]
+                }
+                3 -> {
+                    // media/videos/file.mp4
+                    if (segments[0].lowercase() == "media" &&
+                        segments[1].lowercase() in videoDirs
+                    ) {
+                        "" to segments[2]
+                    } else {
+                        null
+                    }
+                }
+                else -> null
+            }
+        } else {
+            when (segments.size) {
+                3 -> {
+                    if (segments[1].lowercase() !in videoDirs) return null
+                    segments[0] to segments[2]
+                }
+                4 -> {
+                    if (segments[1].lowercase() == "media" &&
+                        segments[2].lowercase() in videoDirs
+                    ) {
+                        segments[0] to segments[3]
+                    } else {
+                        null
+                    }
+                }
+                else -> null
+            }
+        }
     }
 }

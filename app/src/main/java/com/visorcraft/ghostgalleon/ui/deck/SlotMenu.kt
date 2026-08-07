@@ -31,8 +31,11 @@ class SlotMenu(
         FAVORITE("Favorite"),
         UNFAVORITE("Unfavorite"),
         OPEN_WITH("Open with…"),
+        PLAYER("Player…"),
         SET_ART("Set artwork"),
         ADD_TO_GRID("Add to grid"),
+        NEW_FOLDER("New folder"),
+        ADD_MEMBER("Add member"),
         REMOVE("Remove"),
         CANCEL("Cancel"),
     }

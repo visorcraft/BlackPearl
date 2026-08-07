@@ -15,6 +15,7 @@ class ActionLabelTest {
         assertEquals("Open settings", Action.OPEN_SETTINGS.label())
         assertEquals("Page left (L1)", Action.PAGE_PREV.label())
         assertEquals("Page right (R1)", Action.PAGE_NEXT.label())
+        assertEquals("Quick panel", Action.OPEN_QUICK_PANEL.label())
     }
 
     @Test

@@ -1,5 +1,6 @@
 package com.visorcraft.ghostgalleon.ui.deck
 
+import android.app.ActivityOptions
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -9,6 +10,8 @@ import android.graphics.Outline
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.LayerDrawable
+import android.media.MediaPlayer
+import android.net.Uri
 import android.os.BatteryManager
 import android.util.TypedValue
 import android.view.Gravity
@@ -20,6 +23,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextClock
 import android.widget.TextView
+import android.widget.VideoView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.children
 import com.visorcraft.ghostgalleon.GhostGalleonApp
@@ -28,15 +32,22 @@ import com.visorcraft.ghostgalleon.art.ArtCache
 import com.visorcraft.ghostgalleon.art.ArtTile
 import com.visorcraft.ghostgalleon.library.AppLibrary
 import com.visorcraft.ghostgalleon.library.CollectionsOps
+import com.visorcraft.ghostgalleon.library.LibraryBrowse
+import com.visorcraft.ghostgalleon.library.RetroAchievements
 import com.visorcraft.ghostgalleon.library.SessionMath
 import com.visorcraft.ghostgalleon.library.SessionTracker
 import com.visorcraft.ghostgalleon.rom.HeroDetail
 import com.visorcraft.ghostgalleon.rom.PlatformTile
 import com.visorcraft.ghostgalleon.rom.Platforms
 import com.visorcraft.ghostgalleon.rom.RomEntry
+import com.visorcraft.ghostgalleon.rom.RomProfiles
+import com.visorcraft.ghostgalleon.settings.CompanionRole
+import com.visorcraft.ghostgalleon.settings.CompanionRoleResolve
 import com.visorcraft.ghostgalleon.settings.Settings
 import com.visorcraft.ghostgalleon.settings.SlotKey
 import com.visorcraft.ghostgalleon.state.DeckState
+import com.visorcraft.ghostgalleon.system.SystemInfoCollector
+import com.visorcraft.ghostgalleon.system.SystemInfoFormat
 import com.visorcraft.ghostgalleon.ui.settings.SettingsActivity
 
 object CompanionPanel {
@@ -45,11 +56,15 @@ object CompanionPanel {
     private const val TAG_HERO_NAME = "hero_name"
     private const val TAG_HERO_SUB = "hero_sub"
     private const val TAG_HERO_META = "hero_meta"
+    private const val TAG_HERO_METADATA = "hero_metadata"
     private const val TAG_HERO_PLAYER = "hero_player"
+    private const val TAG_HERO_RA = "hero_ra"
     private const val TAG_HERO_DESC = "hero_desc"
     private const val TAG_HERO_SHOT = "hero_shot"
+    private const val TAG_HERO_VIDEO = "hero_video"
     private const val TAG_HERO_BANNER = "hero_banner"
     private const val TAG_PANEL_ROOT = "panel_root"
+    private const val TAG_ROLE_CHIPS = "role_chips"
 
     // Layered depth background: a vertical gradient lifting to #FF202028 in
     // the center band, plus a huge soft radial glow behind the hero icon
@@ -150,18 +165,26 @@ object CompanionPanel {
             sub.text = HeroDetail.platformLine(platform, rom.platformId)
             view.findViewWithTag<TextView>(TAG_HERO_META)?.text =
                 romMetaLine(settings, SlotKey.rom(rom.id))
+            bindMetadataLine(view.findViewWithTag(TAG_HERO_METADATA), rom)
             val installed = { pkg: String ->
                 runCatching {
                     context.packageManager.getPackageInfo(pkg, 0)
                     true
                 }.getOrDefault(false)
             }
+            val preferred = RomProfiles.preferredPlayerId(
+                rom.id,
+                settings.romProfiles,
+                settings.defaultPlayers[rom.platformId],
+            )
             view.findViewWithTag<TextView>(TAG_HERO_PLAYER)?.text =
-                HeroDetail.playerLine(
-                    platform,
-                    settings.defaultPlayers[rom.platformId],
-                    installed,
-                ) ?: ""
+                HeroDetail.playerLine(platform, preferred, installed) ?: ""
+            val appCtx = context.applicationContext as GhostGalleonApp
+            bindRaLine(
+                view.findViewWithTag(TAG_HERO_RA),
+                appCtx.raProgressFor(rom.id),
+                !settings.raApiKey.isNullOrBlank(),
+            )
             val desc = HeroDetail.descriptionText(rom.description)
             view.findViewWithTag<TextView>(TAG_HERO_DESC)?.let { tv ->
                 if (desc != null) {
@@ -177,6 +200,7 @@ object CompanionPanel {
                 (context.applicationContext as GhostGalleonApp).artCache,
                 rom,
             )
+            bindHeroVideo(view.findViewWithTag(TAG_HERO_VIDEO), rom)
             view.findViewWithTag<View>(TAG_PANEL_ROOT)?.background =
                 panelBackground(context, PlatformTile.colorFor(rom.platformId))
             return true
@@ -271,6 +295,30 @@ object CompanionPanel {
         return parts.joinToString(" · ").ifEmpty { "Never played" }
     }
 
+    private fun bindMetadataLine(tv: TextView?, rom: RomEntry) {
+        if (tv == null) return
+        val line = HeroDetail.metadataLine(rom)
+        if (line != null) {
+            tv.visibility = View.VISIBLE
+            tv.text = line
+        } else {
+            tv.visibility = View.GONE
+            tv.text = ""
+        }
+    }
+
+    private fun bindRaLine(tv: TextView?, progress: com.visorcraft.ghostgalleon.library.RaProgress?, hasCreds: Boolean) {
+        if (tv == null) return
+        val line = RetroAchievements.heroLine(progress, hasCreds)
+        if (line != null) {
+            tv.visibility = View.VISIBLE
+            tv.text = line
+        } else {
+            tv.visibility = View.GONE
+            tv.text = ""
+        }
+    }
+
     // Async screenshot under the meta block when [RomEntry.screenshotUri] is set.
     private fun bindScreenshot(
         image: ImageView?,
@@ -301,6 +349,67 @@ object CompanionPanel {
                     image.setImageBitmap(bmp)
                 }
             }
+        }
+    }
+
+    /**
+     * Muted looping VideoView for [RomEntry.videoUri]. Starts after 300ms;
+     * hides silently on error; stops/releases on detach or rebind.
+     * [VideoView.tag] holds the bound URI string (same pattern as screenshot).
+     */
+    private fun bindHeroVideo(video: VideoView?, rom: RomEntry) {
+        if (video == null) return
+        // Cancel any pending delayed start from a previous bind.
+        (video.getTag(android.R.id.message) as? Runnable)?.let { video.removeCallbacks(it) }
+        runCatching { video.stopPlayback() }
+        val uri = HeroDetail.videoUri(rom)
+        if (uri == null) {
+            video.visibility = View.GONE
+            video.tag = null
+            return
+        }
+        video.tag = uri
+        video.visibility = View.VISIBLE
+        val startRunnable = Runnable {
+            if (!video.isAttachedToWindow) return@Runnable
+            if (video.tag != uri) return@Runnable
+            runCatching {
+                video.setVideoURI(Uri.parse(uri))
+                video.setOnPreparedListener { mp: MediaPlayer ->
+                    runCatching {
+                        mp.isLooping = true
+                        mp.setVolume(0f, 0f)
+                    }
+                    if (video.isAttachedToWindow && video.tag == uri) {
+                        video.start()
+                    }
+                }
+                video.setOnErrorListener { _, _, _ ->
+                    video.visibility = View.GONE
+                    true
+                }
+            }.onFailure {
+                video.visibility = View.GONE
+            }
+        }
+        // Stash the runnable so a rebind can cancel it.
+        video.setTag(android.R.id.message, startRunnable)
+        video.postDelayed(startRunnable, 300L)
+        // Ensure cleanup when the view leaves the window (selection rebuild).
+        if (video.getTag(android.R.id.background) == null) {
+            val listener = object : View.OnAttachStateChangeListener {
+                override fun onViewAttachedToWindow(v: View) {}
+                override fun onViewDetachedFromWindow(v: View) {
+                    (v.getTag(android.R.id.message) as? Runnable)?.let {
+                        v.removeCallbacks(it)
+                    }
+                    (v as? VideoView)?.let { vv ->
+                        runCatching { vv.stopPlayback() }
+                    }
+                }
+            }
+            video.addOnAttachStateChangeListener(listener)
+            video.setTag(android.R.id.background, listener)
         }
     }
 
@@ -368,8 +477,86 @@ object CompanionPanel {
             setPadding(dp(24), dp(20), dp(24), 0)
         }
 
-        // Now Playing banner when a session is open (game on other display).
         val app = activity.application as GhostGalleonApp
+
+        // Companion role chips (Hero / Now Playing / Perf / Pin).
+        val preferredRole = CompanionRole.parse(settings.companionRole)
+        val sessionPlatform = app.openSession?.key?.let { k ->
+            SlotKey.platformIdOf(k)
+        }
+        val pinPkg = settings.companionPinnedPackage
+        val pinInstalled = pinPkg != null && runCatching {
+            context.packageManager.getPackageInfo(pinPkg, 0); true
+        }.getOrDefault(false)
+        val effectiveRole = CompanionRoleResolve.effective(
+            CompanionRoleResolve.Context(
+                preferred = preferredRole,
+                openSessionKey = app.openSession?.key,
+                pinnedPackage = pinPkg,
+                openSessionPlatformId = sessionPlatform,
+                pinnedPackageInstalled = pinInstalled,
+            ),
+        )
+        val toDp: (Int) -> Int = { v -> dp(v) }
+        content.addView(roleChipRow(context, settings, preferredRole, toDp) { role ->
+            app.updateSettings(settings.copy(companionRole = role.name))
+        }, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+        ).apply { bottomMargin = dp(8) })
+
+        when (effectiveRole) {
+            CompanionRole.PERF_HUD -> {
+                content.addView(buildPerfHud(context, settings, toDp), LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                ))
+                content.background = panelBackground(context, settings.accentColor)
+                root.addView(content, FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                ))
+                return root
+            }
+            CompanionRole.PINNED_APP -> {
+                content.addView(
+                    buildPinnedAppPanel(activity, settings, pinPkg, pinInstalled, toDp),
+                    LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                    ),
+                )
+                content.background = panelBackground(context, settings.accentColor)
+                root.addView(content, FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                ))
+                return root
+            }
+            CompanionRole.NOW_PLAYING -> {
+                // Full Now Playing as primary content when role is set.
+                val session = app.openSession
+                if (session != null) {
+                    content.addView(
+                        buildNowPlayingCard(activity, state, library, roms, settings, session, toDp),
+                        LinearLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.WRAP_CONTENT,
+                        ),
+                    )
+                    content.background = panelBackground(context, settings.accentColor)
+                    root.addView(content, FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                    ))
+                    return root
+                }
+                // Fall through to hero when no session.
+            }
+            CompanionRole.HERO -> { /* default hero below */ }
+        }
+
+        // Now Playing banner when a session is open (game on other display).
         app.openSession?.let { session ->
             val nowPlaying = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
@@ -487,6 +674,48 @@ object CompanionPanel {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
         }
+        // Continue chip near hero when a continue target is known.
+        run {
+            val available = buildList {
+                addAll(settings.gridSlots.filterNotNull())
+                addAll(settings.dockSlots.filterNotNull())
+                addAll(roms.filter { it.visibleInUi }.map { SlotKey.rom(it.id) })
+                addAll(library.visible(settings).map { it.packageName })
+                addAll(settings.lastLaunchedMs.keys)
+            }
+            val cont = LibraryBrowse.continueKey(available, settings.lastLaunchedMs)
+            if (cont != null) {
+                val contName = when {
+                    SlotKey.isRom(cont) -> {
+                        val id = SlotKey.romId(cont)
+                        roms.firstOrNull { it.id == id }?.name ?: cont
+                    }
+                    else -> library.visible(settings)
+                        .firstOrNull { it.packageName == cont }?.label ?: cont
+                }
+                hero.addView(TextView(context).apply {
+                    text = "Continue: $contName"
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                    setTextColor(Color.BLACK)
+                    background = TileBackgrounds.selected(context, settings.accentColor)
+                    setPadding(dp(16), dp(8), dp(16), dp(8))
+                    gravity = Gravity.CENTER
+                    maxLines = 1
+                    ellipsize = android.text.TextUtils.TruncateAt.END
+                    setOnClickListener {
+                        val idx = settings.gridSlots.indexOf(cont)
+                        if (idx >= 0) state.selectSlot(idx, cont) else state.select(cont)
+                        launchSlotKey(activity, state, roms, cont)
+                    }
+                }, LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ).apply {
+                    gravity = Gravity.CENTER_HORIZONTAL
+                    bottomMargin = dp(12)
+                })
+            }
+        }
         if (selectedRom != null) {
             // ROM hero: wide HERO banner when cached (async swap-in),
             // otherwise the square tile — cached grid art over the platform
@@ -539,6 +768,16 @@ object CompanionPanel {
                 gravity = Gravity.CENTER
                 setPadding(0, dp(4), 0, 0)
             })
+            val metadataText = HeroDetail.metadataLine(selectedRom)
+            hero.addView(TextView(context).apply {
+                tag = TAG_HERO_METADATA
+                text = metadataText.orEmpty()
+                visibility = if (metadataText != null) View.VISIBLE else View.GONE
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                setTextColor(0x88FFFFFF.toInt())
+                gravity = Gravity.CENTER
+                setPadding(0, dp(2), 0, 0)
+            })
             val platform = Platforms.byId(selectedRom.platformId)
             val installed = { pkg: String ->
                 runCatching {
@@ -546,15 +785,34 @@ object CompanionPanel {
                     true
                 }.getOrDefault(false)
             }
+            val preferredPlayer = RomProfiles.preferredPlayerId(
+                selectedRom.id,
+                settings.romProfiles,
+                settings.defaultPlayers[selectedRom.platformId],
+            )
             hero.addView(TextView(context).apply {
                 tag = TAG_HERO_PLAYER
                 text = HeroDetail.playerLine(
                     platform,
-                    settings.defaultPlayers[selectedRom.platformId],
+                    preferredPlayer,
                     installed,
                 ).orEmpty()
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
                 setTextColor(0x99FFFFFF.toInt())
+                gravity = Gravity.CENTER
+                setPadding(0, dp(2), 0, 0)
+            })
+            val raLine = RetroAchievements.heroLine(
+                app.raProgressFor(selectedRom.id),
+                !settings.raApiKey.isNullOrBlank(),
+            )
+            hero.addView(TextView(context).apply {
+                tag = TAG_HERO_RA
+                text = raLine.orEmpty()
+                visibility = if (raLine != null) View.VISIBLE else View.GONE
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                setTextColor(
+                    (settings.accentColor and 0x00FFFFFF) or (0xBB shl 24))
                 gravity = Gravity.CENTER
                 setPadding(0, dp(2), 0, 0)
             })
@@ -587,6 +845,22 @@ object CompanionPanel {
                 gravity = Gravity.CENTER_HORIZONTAL
             })
             bindScreenshot(shot, cache, selectedRom)
+            // Optional video snap (muted loop) below/alongside screenshot.
+            val video = VideoView(context).apply {
+                tag = TAG_HERO_VIDEO
+                visibility = View.GONE
+                clipToOutline = true
+                outlineProvider = object : ViewOutlineProvider() {
+                    override fun getOutline(view: View, outline: Outline) {
+                        outline.setRoundRect(0, 0, view.width, view.height, dp(12).toFloat())
+                    }
+                }
+            }
+            hero.addView(video, LinearLayout.LayoutParams(dp(320), dp(180)).apply {
+                topMargin = dp(10)
+                gravity = Gravity.CENTER_HORIZONTAL
+            })
+            bindHeroVideo(video, selectedRom)
             // Hero quick actions for the selected ROM (Phase 3).
             val quick = LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL
@@ -781,5 +1055,208 @@ object CompanionPanel {
                 ViewGroup.LayoutParams.MATCH_PARENT))
         }
         return root
+    }
+
+    private fun roleChipRow(
+        context: Context,
+        settings: Settings,
+        current: CompanionRole,
+        dp: (Int) -> Int,
+        onPick: (CompanionRole) -> Unit,
+    ): View {
+        val row = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+        fun chip(role: CompanionRole, label: String) {
+            row.addView(TextView(context).apply {
+                text = label
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                setTextColor(if (current == role) Color.BLACK else Color.WHITE)
+                setBackgroundColor(
+                    if (current == role) settings.accentColor else 0xFF2A2A32.toInt())
+                setPadding(dp(10), dp(6), dp(10), dp(6))
+                setOnClickListener { onPick(role) }
+            }, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply { marginEnd = dp(6) })
+        }
+        chip(CompanionRole.HERO, "Hero")
+        chip(CompanionRole.NOW_PLAYING, "Now")
+        chip(CompanionRole.PERF_HUD, "Perf")
+        chip(CompanionRole.PINNED_APP, "Pin")
+        return row
+    }
+
+    private fun buildPerfHud(
+        context: Context,
+        settings: Settings,
+        dp: (Int) -> Int,
+    ): View {
+        val col = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(dp(8), dp(16), dp(8), dp(16))
+        }
+        col.addView(TextView(context).apply {
+            text = "PERF HUD"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setTextColor((settings.accentColor and 0x00FFFFFF) or (0xCC shl 24))
+            letterSpacing = 0.12f
+            gravity = Gravity.CENTER
+        })
+        val readings = SystemInfoCollector.collect(context)
+        SystemInfoFormat.rows(readings).forEach { (label, value) ->
+            col.addView(TextView(context).apply {
+                text = "$label"
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                setTextColor(0x88FFFFFF.toInt())
+                setPadding(0, dp(10), 0, 0)
+            })
+            col.addView(TextView(context).apply {
+                text = value
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
+                setTextColor(Color.WHITE)
+            })
+        }
+        return col
+    }
+
+    private fun buildPinnedAppPanel(
+        activity: AppCompatActivity,
+        settings: Settings,
+        pinPkg: String?,
+        installed: Boolean,
+        dp: (Int) -> Int,
+    ): View {
+        val col = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(dp(16), dp(24), dp(16), dp(16))
+        }
+        col.addView(TextView(activity).apply {
+            text = "PINNED APP"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setTextColor((settings.accentColor and 0x00FFFFFF) or (0xCC shl 24))
+            letterSpacing = 0.12f
+            gravity = Gravity.CENTER
+        })
+        if (pinPkg.isNullOrBlank() || !installed) {
+            col.addView(TextView(activity).apply {
+                text = if (pinPkg.isNullOrBlank()) {
+                    "Set pin in Settings → Companion"
+                } else {
+                    "Pinned app not installed"
+                }
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
+                setTextColor(0x99FFFFFF.toInt())
+                gravity = Gravity.CENTER
+                setPadding(0, dp(16), 0, 0)
+            })
+        } else {
+            val label = runCatching {
+                val pm = activity.packageManager
+                pm.getApplicationLabel(pm.getApplicationInfo(pinPkg, 0)).toString()
+            }.getOrDefault(pinPkg)
+            col.addView(TextView(activity).apply {
+                text = label
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 24f)
+                setTextColor(Color.WHITE)
+                gravity = Gravity.CENTER
+                setPadding(0, dp(12), 0, dp(16))
+            })
+            col.addView(TextView(activity).apply {
+                text = "Launch pin"
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                setTextColor(Color.BLACK)
+                background = TileBackgrounds.selected(activity, settings.accentColor)
+                setPadding(dp(20), dp(12), dp(20), dp(12))
+                gravity = Gravity.CENTER
+                setOnClickListener {
+                    val intent = activity.packageManager.getLaunchIntentForPackage(pinPkg)
+                        ?: return@setOnClickListener
+                    val displayId = activity.display?.displayId ?: 0
+                    val options = ActivityOptions.makeBasic().setLaunchDisplayId(displayId)
+                    runCatching {
+                        activity.startActivity(intent, options.toBundle())
+                    }
+                }
+            })
+        }
+        return col
+    }
+
+    private fun buildNowPlayingCard(
+        activity: AppCompatActivity,
+        state: DeckState,
+        library: AppLibrary,
+        roms: List<RomEntry>,
+        settings: Settings,
+        session: com.visorcraft.ghostgalleon.library.OpenSession,
+        dp: (Int) -> Int,
+    ): View {
+        val app = activity.application as GhostGalleonApp
+        val nowPlaying = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            background = TileBackgrounds.card(activity)
+            setPadding(dp(16), dp(12), dp(16), dp(12))
+        }
+        nowPlaying.addView(TextView(activity).apply {
+            text = "NOW PLAYING"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            setTextColor((settings.accentColor and 0x00FFFFFF) or (0xCC shl 24))
+            letterSpacing = 0.12f
+            gravity = Gravity.CENTER
+        })
+        val label = when {
+            SlotKey.isRom(session.key) -> {
+                val id = SlotKey.romId(session.key)
+                roms.firstOrNull { it.id == id }?.name ?: session.key
+            }
+            else -> library.visible(settings)
+                .firstOrNull { it.packageName == session.key }?.label
+                ?: session.key
+        }
+        nowPlaying.addView(TextView(activity).apply {
+            text = label
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 28f)
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            maxLines = 2
+            ellipsize = android.text.TextUtils.TruncateAt.END
+        })
+        val elapsed = SessionTracker.activeElapsedMs(session, System.currentTimeMillis())
+        nowPlaying.addView(TextView(activity).apply {
+            text = "Session ${SessionMath.formatPlaytime(elapsed)}" +
+                if (!session.isActive) " (paused)" else ""
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+            setTextColor(0x99FFFFFF.toInt())
+            gravity = Gravity.CENTER
+        })
+        val actions = LinearLayout(activity).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            setPadding(0, dp(12), 0, 0)
+        }
+        actions.addView(TextView(activity).apply {
+            text = "Swap"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setTextColor(Color.BLACK)
+            background = TileBackgrounds.selected(activity, settings.accentColor)
+            setPadding(dp(16), dp(8), dp(16), dp(8))
+            setOnClickListener { state.swapDisplays() }
+        })
+        actions.addView(View(activity), LinearLayout.LayoutParams(dp(12), 1))
+        actions.addView(TextView(activity).apply {
+            text = "End session"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setTextColor(Color.WHITE)
+            setPadding(dp(16), dp(8), dp(16), dp(8))
+            setOnClickListener { app.clearOpenSession() }
+        })
+        nowPlaying.addView(actions)
+        return nowPlaying
     }
 }

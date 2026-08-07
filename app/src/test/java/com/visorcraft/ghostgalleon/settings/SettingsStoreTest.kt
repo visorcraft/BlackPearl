@@ -61,10 +61,60 @@ class SettingsStoreTest {
             favorites = setOf("rom:snes:x.sfc"),
             collections = mapOf("RPGs" to listOf("rom:snes:x.sfc", "rom:3ds:y")),
             setupDismissed = true,
+            companionRole = CompanionRole.PERF_HUD.name,
+            companionPinnedPackage = "com.example.pin",
+            romProfiles = mapOf("snes:x.sfc" to "snes9x"),
+            folders = mapOf(
+                "f1" to FolderSpec("f1", "RPGs", listOf("rom:snes:x.sfc")),
+            ),
+            themePackId = ThemePack.NEON.id,
+            themeCustomJson = """{"id":"neon","accentColor":"#FF2D95"}""",
+            raApiKey = "ra-key",
+            raUsername = "player1",
         )
         store.save(s)
-        assertEquals(s, SettingsStore(f).load())
-        assertEquals(true, SettingsStore(f).load().setupDismissed)
+        val loaded = SettingsStore(f).load()
+        assertEquals(s, loaded)
+        assertEquals(true, loaded.setupDismissed)
+        assertEquals(CompanionRole.PERF_HUD.name, loaded.companionRole)
+        assertEquals("com.example.pin", loaded.companionPinnedPackage)
+        assertEquals(mapOf("snes:x.sfc" to "snes9x"), loaded.romProfiles)
+        assertEquals(FolderSpec("f1", "RPGs", listOf("rom:snes:x.sfc")), loaded.folders["f1"])
+        assertEquals(ThemePack.NEON.id, loaded.themePackId)
+        assertEquals("""{"id":"neon","accentColor":"#FF2D95"}""", loaded.themeCustomJson)
+        assertEquals("ra-key", loaded.raApiKey)
+        assertEquals("player1", loaded.raUsername)
+    }
+
+    @Test
+    fun `v6 json without v7 fields loads defaults and stamps schema 7`() {
+        val f = tmp.root.resolve("cfg-v6/settings.json")
+        SettingsStore(f).save(Settings.DEFAULT.copy(setupDismissed = true))
+        val raw = org.json.JSONObject(f.readText())
+        raw.put("schemaVersion", 6)
+        raw.remove("companionRole")
+        raw.remove("companionPinnedPackage")
+        raw.remove("romProfiles")
+        raw.remove("folders")
+        raw.remove("themePackId")
+        raw.remove("themeCustomJson")
+        raw.remove("raApiKey")
+        raw.remove("raUsername")
+        f.writeText(raw.toString())
+        val loaded = SettingsStore(f).load()
+        assertEquals(CompanionRole.HERO.name, loaded.companionRole)
+        assertEquals(null, loaded.companionPinnedPackage)
+        assertTrue(loaded.romProfiles.isEmpty())
+        assertTrue(loaded.folders.isEmpty())
+        assertEquals(ThemePack.GHOST.id, loaded.themePackId)
+        assertEquals(null, loaded.themeCustomJson)
+        assertEquals(null, loaded.raApiKey)
+        assertEquals(null, loaded.raUsername)
+        assertEquals(SettingsStore.CURRENT_SCHEMA, loaded.schemaVersion)
+        assertEquals(
+            SettingsStore.CURRENT_SCHEMA,
+            org.json.JSONObject(f.readText()).getInt("schemaVersion"),
+        )
     }
 
     @Test

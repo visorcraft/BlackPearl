@@ -43,4 +43,35 @@ class HeroDetailTest {
         assertEquals("content://shot", HeroDetail.screenshotUri(rom))
         assertNull(HeroDetail.screenshotUri(rom.copy(screenshotUri = null)))
     }
+
+    @Test
+    fun `metadataLine joins year genre developer rating`() {
+        val rom = RomEntry(
+            id = "snes:x.smc",
+            name = "x",
+            platformId = "snes",
+            uri = "content://r",
+            path = null,
+            year = "1995",
+            genre = "RPG",
+            developer = "Square",
+            rating = "4.5",
+        )
+        assertEquals("1995 · RPG · Square · ★ 4.5", HeroDetail.metadataLine(rom))
+        assertNull(HeroDetail.metadataLine(rom.copy(year = null, genre = null, developer = null, rating = null)))
+    }
+
+    @Test
+    fun `videoUri reads rom field`() {
+        val rom = RomEntry(
+            id = "snes:x.smc",
+            name = "x",
+            platformId = "snes",
+            uri = "content://r",
+            path = null,
+            videoUri = "content://vid/x.mp4",
+        )
+        assertEquals("content://vid/x.mp4", HeroDetail.videoUri(rom))
+        assertNull(HeroDetail.videoUri(rom.copy(videoUri = "  ")))
+    }
 }

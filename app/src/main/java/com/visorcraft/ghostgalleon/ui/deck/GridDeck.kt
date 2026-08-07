@@ -30,8 +30,10 @@ import com.visorcraft.ghostgalleon.rom.Platforms
 import com.visorcraft.ghostgalleon.rom.PlatformTile
 import com.visorcraft.ghostgalleon.rom.PlayerResolver
 import com.visorcraft.ghostgalleon.rom.RomEntry
+import com.visorcraft.ghostgalleon.rom.RomProfiles
 import com.visorcraft.ghostgalleon.settings.Action
 import com.visorcraft.ghostgalleon.settings.DockSlots
+import com.visorcraft.ghostgalleon.settings.Folders
 import com.visorcraft.ghostgalleon.settings.GridSlots
 import com.visorcraft.ghostgalleon.settings.Settings
 import com.visorcraft.ghostgalleon.settings.SlotKey
@@ -87,6 +89,7 @@ class GridDeck(
     // Modals (at most one at a time).
     private var slotMenu: SlotMenu? = null
     private var picker: AppPicker? = null
+    private var folderPanel: FolderPanel? = null
     private var rootView: FrameLayout? = null
 
     // Live view state captured by primaryView() so updateSelection() can
@@ -307,25 +310,66 @@ class GridDeck(
     // Tap-to-focus: first tap on an unfocused slot only moves the
     // selection; tapping the selected filled slot launches it, and a blank
     // slot opens the picker on first tap when focused. During move mode a
-    // tap drops the lifted tile on that slot.
+    // tap drops the lifted tile on that slot. Folder tiles open the member list.
     private fun onSlotTap(position: Int) {
         when {
             moveIndex != null -> dropMove(tapSlot = position)
             state.selectedSlot == position -> {
                 val key = settings.gridSlots.getOrNull(position)
-                if (key != null) launchSlotKey(activity, state, roms, key)
-                else openPicker(position)
+                when {
+                    key == null -> openPicker(position)
+                    SlotKey.isFolder(key) -> openFolder(key)
+                    else -> launchSlotKey(activity, state, roms, key)
+                }
             }
             else -> state.selectSlot(
                 position, settings.gridSlots.getOrNull(position))
         }
     }
 
-    // Long-press a filled tile opens the Move/Remove menu.
+    // Long-press opens Move/Remove (filled) or New folder (blank).
     private fun onSlotLongPress(position: Int) {
-        if (moveIndex == null && settings.gridSlots.getOrNull(position) != null) {
-            openSlotMenu(position)
+        if (moveIndex == null) openSlotMenu(position)
+    }
+
+    private fun memberLabel(key: String): String {
+        SlotKey.romId(key)?.let { id ->
+            return roms.firstOrNull { it.id == id }?.name ?: key
         }
+        if (SlotKey.isFolder(key)) {
+            val fid = SlotKey.folderId(key)
+            return settings.folders[fid]?.name ?: key
+        }
+        return visibleByPkg[key]?.label ?: key
+    }
+
+    private fun openFolder(folderKey: String) {
+        val fid = SlotKey.folderId(folderKey) ?: return
+        val spec = settings.folders[fid]
+        val name = spec?.name ?: fid
+        val members = Folders.members(settings.folders, fid).map { k ->
+            k to memberLabel(k)
+        }
+        closeFolderPanel()
+        val panel = FolderPanel(
+            activity,
+            settings.accentColor,
+            title = name,
+            members = members,
+            onLaunch = { memberKey ->
+                closeFolderPanel()
+                launchSlotKey(activity, state, roms, memberKey)
+            },
+            onClose = { closeFolderPanel() },
+        )
+        folderPanel = panel
+        rootView?.addView(panel.view, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+    }
+
+    private fun closeFolderPanel() {
+        folderPanel?.let { rootView?.removeView(it.view) }
+        folderPanel = null
     }
 
     override fun primaryView(context: Context): View {
@@ -871,34 +915,158 @@ class GridDeck(
             .show()
     }
 
+    /** Per-ROM preferred player profile (persists in settings.romProfiles). */
+    private fun showPlayerProfileMenu(rom: RomEntry) {
+        val platform = Platforms.byId(rom.platformId) ?: return
+        val players = platform.players
+        if (players.isEmpty()) {
+            Toast.makeText(activity, "No players for platform", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val current = settings.romProfiles[rom.id]
+        val labels = players.map { p ->
+            val mark = if (p.id == current) " ✓" else ""
+            p.displayName + mark
+        } + listOf(
+            if (current == null) "Platform default ✓" else "Platform default",
+        )
+        android.app.AlertDialog.Builder(activity)
+            .setTitle("Player profile")
+            .setItems(labels.toTypedArray()) { _, which ->
+                val app = activity.application as GhostGalleonApp
+                val nextProfiles = if (which >= players.size) {
+                    RomProfiles.clearProfile(app.settings.romProfiles, rom.id)
+                } else {
+                    RomProfiles.setProfile(
+                        app.settings.romProfiles, rom.id, players[which].id)
+                }
+                app.updateSettings(app.settings.copy(romProfiles = nextProfiles))
+                Toast.makeText(activity, "Player saved", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun createFolderAt(slot: Int) {
+        val app = activity.application as GhostGalleonApp
+        val id = Folders.nextId(app.settings.folders)
+        val folders = Folders.create(app.settings.folders, id, "Folder")
+        val key = Folders.key(id)
+        val slots = GridSlots.fill(app.settings.gridSlots, slot, key)
+        app.updateSettings(app.settings.copy(folders = folders, gridSlots = slots))
+        state.selectSlot(slot, key)
+        Toast.makeText(activity, "Folder created", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun renameFolder(folderId: String) {
+        val current = settings.folders[folderId]?.name ?: folderId
+        val input = android.widget.EditText(activity).apply {
+            setText(current)
+            setSelectAllOnFocus(true)
+            setTextColor(Color.WHITE)
+            setHintTextColor(0x66FFFFFF)
+            hint = "Folder name"
+            setSingleLine()
+        }
+        val container = FrameLayout(activity).apply {
+            val margin = (20 * resources.displayMetrics.density).toInt()
+            setPadding(margin, (12 * resources.displayMetrics.density).toInt(), margin, 0)
+            addView(input)
+        }
+        androidx.appcompat.app.AlertDialog.Builder(activity)
+            .setTitle("Rename folder")
+            .setView(container)
+            .setPositiveButton("Save") { _, _ ->
+                val name = input.text.toString().trim()
+                if (name.isEmpty()) return@setPositiveButton
+                val app = activity.application as GhostGalleonApp
+                app.updateSettings(app.settings.copy(
+                    folders = Folders.rename(app.settings.folders, folderId, name)))
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun addFolderMember(folderId: String) {
+        val appPicker = AppPicker(
+            activity,
+            settings.accentColor,
+            library.visible(settings),
+            roms,
+            iconLoader,
+            title = "Add to folder",
+            onPick = { key ->
+                closePicker()
+                val app = activity.application as GhostGalleonApp
+                app.updateSettings(app.settings.copy(
+                    folders = Folders.addMember(app.settings.folders, folderId, key)))
+                Toast.makeText(activity, "Added to folder", Toast.LENGTH_SHORT).show()
+            },
+            onHide = { packageName ->
+                closePicker()
+                hideApp(packageName)
+            },
+            onClose = { closePicker() },
+        )
+        picker = appPicker
+        rootView?.addView(appPicker.view, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+    }
+
+    private fun removeFolderSlot(slot: Int, folderKey: String) {
+        val folderId = SlotKey.folderId(folderKey)
+        val app = activity.application as GhostGalleonApp
+        val slots = GridSlots.remove(app.settings.gridSlots, slot)
+        val folders = if (folderId != null) {
+            Folders.delete(app.settings.folders, folderId)
+        } else {
+            app.settings.folders
+        }
+        app.updateSettings(app.settings.copy(gridSlots = slots, folders = folders))
+        state.selectSlot(slot, null)
+    }
+
     // --- Slot menu (Move / Pin to dock / Rename / Custom icon / Remove) ---
 
     private fun openSlotMenu(slot: Int) {
         state.selectSlot(slot, settings.gridSlots.getOrNull(slot))
         val key = settings.gridSlots.getOrNull(slot)
-        // Rename/custom-icon entries are app-tile-only; the reset entries
-        // appear only while an override exists for the package.
-        val isApp = key != null && !SlotKey.isRom(key)
+        val isFolder = SlotKey.isFolder(key)
         val isRom = key != null && SlotKey.isRom(key)
+        val isApp = key != null && !isRom && !isFolder
         val fav = key != null && key in settings.favorites
         val choices = buildList {
-            add(SlotMenu.Choice.MOVE)
-            add(SlotMenu.Choice.PIN_TO_DOCK)
-            if (key != null) {
-                add(if (fav) SlotMenu.Choice.UNFAVORITE else SlotMenu.Choice.FAVORITE)
+            when {
+                key == null -> {
+                    add(SlotMenu.Choice.NEW_FOLDER)
+                    add(SlotMenu.Choice.CANCEL)
+                }
+                isFolder -> {
+                    add(SlotMenu.Choice.MOVE)
+                    add(SlotMenu.Choice.RENAME)
+                    add(SlotMenu.Choice.ADD_MEMBER)
+                    add(SlotMenu.Choice.REMOVE)
+                    add(SlotMenu.Choice.CANCEL)
+                }
+                else -> {
+                    add(SlotMenu.Choice.MOVE)
+                    add(SlotMenu.Choice.PIN_TO_DOCK)
+                    add(if (fav) SlotMenu.Choice.UNFAVORITE else SlotMenu.Choice.FAVORITE)
+                    if (isRom) {
+                        add(SlotMenu.Choice.OPEN_WITH)
+                        add(SlotMenu.Choice.PLAYER)
+                        add(SlotMenu.Choice.SET_ART)
+                    }
+                    if (isApp) {
+                        add(SlotMenu.Choice.RENAME)
+                        if (key in settings.customNames) add(SlotMenu.Choice.RESET_NAME)
+                        add(SlotMenu.Choice.CUSTOM_ICON)
+                        if (key in settings.customIcons) add(SlotMenu.Choice.RESET_ICON)
+                    }
+                    add(SlotMenu.Choice.REMOVE)
+                    add(SlotMenu.Choice.CANCEL)
+                }
             }
-            if (isRom) {
-                add(SlotMenu.Choice.OPEN_WITH)
-                add(SlotMenu.Choice.SET_ART)
-            }
-            if (isApp) {
-                add(SlotMenu.Choice.RENAME)
-                if (key in settings.customNames) add(SlotMenu.Choice.RESET_NAME)
-                add(SlotMenu.Choice.CUSTOM_ICON)
-                if (key in settings.customIcons) add(SlotMenu.Choice.RESET_ICON)
-            }
-            add(SlotMenu.Choice.REMOVE)
-            add(SlotMenu.Choice.CANCEL)
         }
         val menu = SlotMenu(activity, settings.accentColor, choices) { choice ->
             closeSlotMenu()
@@ -917,6 +1085,11 @@ class GridDeck(
                     val rom = roms.firstOrNull { it.id == id } ?: return@let
                     openWithForRom(rom)
                 }
+                SlotMenu.Choice.PLAYER -> key?.let { k ->
+                    val id = SlotKey.romId(k) ?: return@let
+                    val rom = roms.firstOrNull { it.id == id } ?: return@let
+                    showPlayerProfileMenu(rom)
+                }
                 SlotMenu.Choice.SET_ART -> key?.let { k ->
                     val id = SlotKey.romId(k) ?: return@let
                     (activity as? BaseDeckActivity)?.requestCustomIcon { uri ->
@@ -927,7 +1100,14 @@ class GridDeck(
                             artOverrides = app.settings.artOverrides + (id to uri.toString())))
                     }
                 }
-                SlotMenu.Choice.RENAME -> key?.let(::showRenameDialog)
+                SlotMenu.Choice.NEW_FOLDER -> createFolderAt(slot)
+                SlotMenu.Choice.ADD_MEMBER -> key?.let { k ->
+                    SlotKey.folderId(k)?.let(::addFolderMember)
+                }
+                SlotMenu.Choice.RENAME -> when {
+                    isFolder -> SlotKey.folderId(key)?.let(::renameFolder)
+                    else -> key?.let(::showRenameDialog)
+                }
                 SlotMenu.Choice.RESET_NAME -> key?.let { pkg ->
                     val app = activity.application as GhostGalleonApp
                     app.updateSettings(app.settings.copy(
@@ -946,8 +1126,10 @@ class GridDeck(
                     app.updateSettings(app.settings.copy(
                         customIcons = app.settings.customIcons - pkg))
                 }
-                SlotMenu.Choice.REMOVE ->
-                    updateGridSlots(GridSlots.remove(settings.gridSlots, slot), slot)
+                SlotMenu.Choice.REMOVE -> when {
+                    isFolder && key != null -> removeFolderSlot(slot, key)
+                    else -> updateGridSlots(GridSlots.remove(settings.gridSlots, slot), slot)
+                }
                 SlotMenu.Choice.CANCEL, SlotMenu.Choice.ADD_TO_GRID -> {}
             }
         }
@@ -1117,6 +1299,7 @@ class GridDeck(
 
     override fun handleAction(action: Action): Boolean {
         slotMenu?.let { return it.handleAction(action) }
+        folderPanel?.let { return it.handleAction(action) }
         picker?.let { return it.handleAction(action) }
         moveIndex?.let { return handleMoveAction(action, it) }
         dockMoveIndex?.let { return handleDockMoveAction(action, it) }
@@ -1125,8 +1308,11 @@ class GridDeck(
             Action.CONFIRM -> {
                 val slot = selectedIndex()
                 val key = settings.gridSlots.getOrNull(slot)
-                if (key != null) launchSlotKey(activity, state, roms, key)
-                else openPicker(slot)
+                when {
+                    key == null -> openPicker(slot)
+                    SlotKey.isFolder(key) -> openFolder(key)
+                    else -> launchSlotKey(activity, state, roms, key)
+                }
                 true
             }
             Action.NAV_UP, Action.NAV_DOWN, Action.NAV_LEFT, Action.NAV_RIGHT,
@@ -1193,10 +1379,18 @@ class GridDeck(
             frame.removeAllViews()
             val key = slotPackages().getOrNull(position)
             val romEntry = key?.takeIf(SlotKey::isRom)?.let { romByKey[it] }
-            val appEntry = key?.takeUnless(SlotKey::isRom)?.let { visibleByPkg[it] }
+            val isFolder = SlotKey.isFolder(key)
+            val appEntry = key
+                ?.takeUnless { SlotKey.isRom(it) || SlotKey.isFolder(it) }
+                ?.let { visibleByPkg[it] }
             when {
                 romEntry != null -> {
                     frame.addView(buildRomCell(romEntry), FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT))
+                }
+                isFolder && key != null -> {
+                    frame.addView(buildFolderCell(key), FrameLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT))
                 }
@@ -1229,21 +1423,90 @@ class GridDeck(
             }
             // Frame wrapper so pinned tiles can carry an accent badge dot at
             // their top-right corner; ROM and app keys pin identically.
-            if (key != null && (romEntry != null || appEntry != null) &&
-                key in settings.dockSlots
-            ) {
+            val filled = key != null && (romEntry != null || appEntry != null || isFolder)
+            if (filled && key in settings.dockSlots) {
                 val badge = View(context).apply {
                     background = GradientDrawable().apply {
                         shape = GradientDrawable.OVAL
                         setColor(settings.accentColor)
                     }
                 }
+                // When a favorite star is also shown, park the dock dot at
+                // top-start so it does not cover the ★ at top-end.
+                val dockGravity = if (key in settings.favorites) {
+                    Gravity.TOP or Gravity.START
+                } else {
+                    Gravity.TOP or Gravity.END
+                }
                 frame.addView(badge, FrameLayout.LayoutParams(
-                    dp(10), dp(10), Gravity.TOP or Gravity.END).apply {
-                    topMargin = dp(4); marginEnd = dp(4)
+                    dp(10), dp(10), dockGravity).apply {
+                    topMargin = dp(4)
+                    if (dockGravity and Gravity.END == Gravity.END) marginEnd = dp(4)
+                    else marginStart = dp(4)
+                })
+            }
+            // Favorite badge: small ★ at top-end on filled favorited slots.
+            if (filled && key in settings.favorites) {
+                frame.addView(TextView(context).apply {
+                    text = "★"
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                    setTextColor(0xFFFFD54F.toInt())
+                    gravity = Gravity.CENTER
+                    includeFontPadding = false
+                }, FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    Gravity.TOP or Gravity.END,
+                ).apply {
+                    topMargin = dp(2)
+                    marginEnd = dp(4)
                 })
             }
             applySelectionVisuals(frame, position == selectedIndex())
+        }
+
+        private fun buildFolderCell(key: String): View {
+            val folderId = SlotKey.folderId(key)
+            val spec = folderId?.let { settings.folders[it] }
+            val name = spec?.name ?: folderId ?: "Folder"
+            val count = spec?.members?.size ?: 0
+            val cell = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                setPadding(cellPadding, cellPadding, cellPadding, cellPadding)
+            }
+            val glyph = TextView(context).apply {
+                text = "📁"
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 28f)
+                gravity = Gravity.CENTER
+                background = GradientDrawable().apply {
+                    setColor(0xFF2A2A38.toInt())
+                    cornerRadius = 12 * context.resources.displayMetrics.density
+                }
+            }
+            cell.addView(glyph, LinearLayout.LayoutParams(iconSize, iconSize))
+            if (settings.showLabels) {
+                cell.addView(TextView(context).apply {
+                    text = name
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                    setTextColor(Color.WHITE)
+                    gravity = Gravity.CENTER
+                    maxLines = 1
+                    ellipsize = android.text.TextUtils.TruncateAt.END
+                }, LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT))
+            }
+            cell.addView(TextView(context).apply {
+                text = if (count == 1) "1 item" else "$count items"
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
+                setTextColor(0x88FFFFFF.toInt())
+                gravity = Gravity.CENTER
+                maxLines = 1
+            }, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT))
+            return cell
         }
 
         // ROM tile: cached artwork over the platform placeholder (async

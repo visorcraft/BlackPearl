@@ -28,6 +28,7 @@ object RomScanner {
             val rootPlatform = Platforms.platformForFolder(rootName)
             val docs = tree.walk()
             val media = LocalMedia.indexImages(docs, rootPlatform != null)
+            val videos = LocalMedia.indexVideos(docs, rootPlatform != null)
             docs.forEach docs@{ doc ->
                 // Dotfiles/junk anywhere in the path: .DS_Store, ._ AppleDouble
                 // files, hidden directories.
@@ -59,6 +60,7 @@ object RomScanner {
                         artUri = artUri,
                         screenshotUri = LocalMedia.screenshotUri(media, prefix, stem, artUri),
                         logoUri = LocalMedia.lookupLogo(media, prefix, stem),
+                        videoUri = LocalMedia.lookupVideo(videos, prefix, stem),
                     ),
                 )
             }

@@ -31,17 +31,21 @@ import com.visorcraft.ghostgalleon.art.ScrapeJob
 import com.visorcraft.ghostgalleon.art.SgdbScraper
 import com.visorcraft.ghostgalleon.library.AppLibrary
 import com.visorcraft.ghostgalleon.library.PackageManagerAppsSource
+import com.visorcraft.ghostgalleon.library.RetroAchievements
 import com.visorcraft.ghostgalleon.rom.Platforms
 import com.visorcraft.ghostgalleon.rom.RomLibrary
 import com.visorcraft.ghostgalleon.rom.TreeLabels
 import com.visorcraft.ghostgalleon.settings.Action
+import com.visorcraft.ghostgalleon.settings.CompanionRole
 import com.visorcraft.ghostgalleon.settings.SettingsBundle
 import com.visorcraft.ghostgalleon.settings.SettingsStore
 import com.visorcraft.ghostgalleon.settings.SlotKey
+import com.visorcraft.ghostgalleon.settings.ThemePack
 import com.visorcraft.ghostgalleon.settings.label
 import com.visorcraft.ghostgalleon.state.UIMode
 import com.visorcraft.ghostgalleon.system.SystemInfoCollector
 import com.visorcraft.ghostgalleon.system.SystemInfoFormat
+import com.visorcraft.ghostgalleon.ui.ControllerLabActivity
 import com.visorcraft.ghostgalleon.ui.deck.TileBackgrounds
 import com.visorcraft.ghostgalleon.ui.hideStatusBar
 
@@ -69,6 +73,7 @@ class SettingsActivity : AppCompatActivity() {
     private val remappable = listOf(
         Action.CONFIRM, Action.BACK, Action.SWAP_SCREENS,
         Action.TOGGLE_MODE, Action.OPEN_SETTINGS, Action.PAGE_PREV, Action.PAGE_NEXT,
+        Action.OPEN_QUICK_PANEL,
     )
 
     private var captureTarget: Action? = null
@@ -212,6 +217,31 @@ class SettingsActivity : AppCompatActivity() {
             .show()
     }
 
+    /** Pick an installed launcher app as the companion pin. */
+    private fun showPinnedCompanionPicker() {
+        val apps = appLibrary.visible(app.settings)
+            .sortedBy { it.label.lowercase() }
+        if (apps.isEmpty()) {
+            Toast.makeText(this, "No apps available", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val labels = apps.map { it.label }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("Pinned companion app")
+            .setItems(labels) { _, which ->
+                val pkg = apps[which].packageName
+                app.updateSettings(app.settings.copy(companionPinnedPackage = pkg))
+                // Rebuild settings so the pin row label refreshes.
+                recreate()
+            }
+            .setNeutralButton("Clear") { _, _ ->
+                app.updateSettings(app.settings.copy(companionPinnedPackage = null))
+                recreate()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
     // Dock management: current dock entries in order with a Remove chip.
     // Adding stays grid-side (slot menu "Pin to dock").
     private fun showDockDialog() {
@@ -331,6 +361,26 @@ class SettingsActivity : AppCompatActivity() {
                 }
                 app.updateSettings(app.settings.copy(wallpaperUri = uri.toString()))
                 refreshWallpaperRow()
+            }
+        }
+
+    private val themeJsonPicker =
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+            if (uri == null) return@registerForActivityResult
+            val text = runCatching {
+                contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+            }.getOrNull()
+            if (text == null) {
+                Toast.makeText(this, "Could not read theme file", Toast.LENGTH_SHORT).show()
+                return@registerForActivityResult
+            }
+            val tokens = ThemePack.parseJson(text)
+            if (tokens == null) {
+                Toast.makeText(this, "Invalid theme JSON", Toast.LENGTH_LONG).show()
+            } else {
+                app.updateSettings(ThemePack.applyCustom(app.settings, tokens, text))
+                Toast.makeText(this, "Theme: ${tokens.displayName}", Toast.LENGTH_SHORT).show()
+                recreate()
             }
         }
 
@@ -512,6 +562,89 @@ class SettingsActivity : AppCompatActivity() {
             }
             .setNegativeButton("Cancel", null)
             .show()
+    }
+
+    private fun showRaUsernameDialog() {
+        val input = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_TEXT
+            setText(app.settings.raUsername ?: "")
+            setSelectAllOnFocus(true)
+            setTextColor(Color.WHITE)
+            setHintTextColor(offTint)
+            hint = "RA username"
+        }
+        val container = FrameLayout(this).apply {
+            val margin = dp(20)
+            setPadding(margin, dp(12), margin, 0)
+            addView(input)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("RetroAchievements username")
+            .setView(container)
+            .setPositiveButton("Save") { _, _ ->
+                val name = input.text.toString().trim().ifEmpty { null }
+                app.updateSettings(app.settings.copy(raUsername = name))
+                recreate()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun showRaApiKeyDialog() {
+        val input = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_TEXT or
+                InputType.TYPE_TEXT_VARIATION_PASSWORD
+            setText(app.settings.raApiKey ?: "")
+            setSelectAllOnFocus(true)
+            setTextColor(Color.WHITE)
+            setHintTextColor(offTint)
+            hint = "Paste API key"
+        }
+        val container = FrameLayout(this).apply {
+            val margin = dp(20)
+            setPadding(margin, dp(12), margin, 0)
+            addView(input)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("RetroAchievements API key")
+            .setView(container)
+            .setPositiveButton("Save") { _, _ ->
+                val key = input.text.toString().trim().ifEmpty { null }
+                app.updateSettings(app.settings.copy(raApiKey = key))
+                recreate()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    /**
+     * Demo path: parse a tiny embedded RA progress payload for the currently
+     * selected ROM (or first library ROM) so the hero RA line can be verified.
+     */
+    private fun loadRaSampleForSelection() {
+        val romId = SlotKey.romId(app.deckState.selectedKey)
+            ?: app.romEntries.firstOrNull { it.visibleInUi }?.id
+        if (romId == null) {
+            Toast.makeText(this, "No ROM selected", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val sample = """
+            {"ID":1,"Title":"Sample","NumAwardedToUser":3,"NumAchievements":10,"HardcoreMode":0}
+        """.trimIndent()
+        // Ensure credentials flag so heroLine is eligible to show.
+        if (app.settings.raApiKey.isNullOrBlank()) {
+            app.updateSettings(app.settings.copy(raApiKey = "sample"), notify = false)
+        }
+        app.setRaProgress(romId, sample)
+        val line = RetroAchievements.heroLine(
+            app.raProgressFor(romId),
+            !app.settings.raApiKey.isNullOrBlank(),
+        )
+        Toast.makeText(
+            this,
+            line ?: "RA sample loaded",
+            Toast.LENGTH_SHORT,
+        ).show()
     }
 
     private fun onScrapeRowClicked() {
@@ -978,7 +1111,99 @@ class SettingsActivity : AppCompatActivity() {
         displayCard.addView(controlRow("Default mode", modeSegmented(s.defaultMode)),
             LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))
+        // Theme packs: built-in chips + optional import JSON.
+        val themeOptions = ThemePack.BUILTINS.map { it.id to it.displayName.uppercase() }
+        val themeCurrent = ThemePack.resolve(s).id.let { id ->
+            if (ThemePack.BUILTINS.any { it.id == id }) id else ThemePack.GHOST.id
+        }
+        displayCard.addView(controlRow(
+            "Theme",
+            segmented(themeOptions, themeCurrent) { packId ->
+                val tokens = ThemePack.byId(packId)
+                app.updateSettings(ThemePack.applyToSettings(app.settings, tokens))
+                recreate()
+            },
+        ), LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))
+        val themeImportRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            isFocusable = true
+            setOnClickListener { themeJsonPicker.launch(arrayOf("application/json", "text/*", "*/*")) }
+            setOnLongClickListener {
+                if (app.settings.themeCustomJson != null) {
+                    app.updateSettings(
+                        ThemePack.applyToSettings(app.settings, ThemePack.GHOST),
+                    )
+                    Toast.makeText(this@SettingsActivity,
+                        "Custom theme cleared", Toast.LENGTH_SHORT).show()
+                    recreate()
+                }
+                true
+            }
+        }
+        themeImportRow.addView(rowLabel("Import theme JSON"), LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        themeImportRow.addView(TextView(this).apply {
+            text = if (s.themeCustomJson != null) "Custom" else "SAF"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            setTextColor(if (s.themeCustomJson != null) accent else 0x66FFFFFF.toInt())
+        })
+        displayCard.addView(themeImportRow, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))
         addSection(SettingsPage.DISPLAY_GRID, "Display", displayCard)
+
+        // Companion panel role + pinned package (same page as Display).
+        val companionCard = sectionCard()
+        val roleOptions = listOf(
+            CompanionRole.HERO.name to "HERO",
+            CompanionRole.NOW_PLAYING.name to "NOW",
+            CompanionRole.PERF_HUD.name to "PERF",
+            CompanionRole.PINNED_APP.name to "PIN",
+        )
+        companionCard.addView(
+            controlRow(
+                "Companion role",
+                segmented(roleOptions, s.companionRole) { next ->
+                    app.updateSettings(app.settings.copy(companionRole = next))
+                },
+            ),
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(64)),
+        )
+        val pinRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            isFocusable = true
+            setOnClickListener { showPinnedCompanionPicker() }
+            setOnLongClickListener {
+                app.updateSettings(app.settings.copy(companionPinnedPackage = null))
+                Toast.makeText(this@SettingsActivity, "Pin cleared", Toast.LENGTH_SHORT).show()
+                true
+            }
+        }
+        pinRow.addView(rowLabel("Pinned companion app"), LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        pinRow.addView(TextView(this).apply {
+            text = s.companionPinnedPackage?.let { pkg ->
+                appLabel(pkg)
+            } ?: "None (long-press to clear)"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setTextColor(accent)
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            gravity = Gravity.END
+        }, LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.2f))
+        companionCard.addView(pinRow, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))
+        companionCard.addView(TextView(this).apply {
+            text = "Long-press the pin row to clear. Dual-screen games (NDS/3DS) degrade Pin automatically."
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            setTextColor(0x66FFFFFF.toInt())
+            setPadding(0, 0, 0, dp(4))
+        })
+        addSection(SettingsPage.DISPLAY_GRID, "Companion", companionCard)
 
         // Grid section (same page as Display).
         val gridCard = sectionCard()
@@ -1082,6 +1307,23 @@ class SettingsActivity : AppCompatActivity() {
         toggle(controlsCard, "Haptics", s.haptics) {
             app.updateSettings(app.settings.copy(haptics = it))
         }
+        val labRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            isFocusable = true
+            setOnClickListener {
+                startActivity(Intent(this@SettingsActivity, ControllerLabActivity::class.java))
+            }
+        }
+        labRow.addView(rowLabel("Controller lab"), LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        labRow.addView(TextView(this).apply {
+            text = "Open"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setTextColor(accent)
+        })
+        controlsCard.addView(labRow, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))
         remappable.forEach { action ->
             val bound = app.settings.keyMap.entries
                 .firstOrNull { it.value == action }?.key?.let { "keycode $it" } ?: "unbound"
@@ -1271,6 +1513,66 @@ class SettingsActivity : AppCompatActivity() {
         })
         libraryCard.addView(playersRow, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))
+        // RetroAchievements credentials (optional; hero shows cached progress).
+        val raUserRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            isFocusable = true
+            setOnClickListener { showRaUsernameDialog() }
+            setOnLongClickListener {
+                app.updateSettings(app.settings.copy(raUsername = null))
+                Toast.makeText(this@SettingsActivity,
+                    "RA username cleared", Toast.LENGTH_SHORT).show()
+                recreate()
+                true
+            }
+        }
+        raUserRow.addView(rowLabel("RetroAchievements username"), LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        raUserRow.addView(TextView(this).apply {
+            text = app.settings.raUsername?.takeIf { it.isNotBlank() } ?: "Not set"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setTextColor(accent)
+        })
+        libraryCard.addView(raUserRow, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))
+        val raKeyRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            isFocusable = true
+            setOnClickListener { showRaApiKeyDialog() }
+            setOnLongClickListener {
+                app.updateSettings(app.settings.copy(raApiKey = null))
+                Toast.makeText(this@SettingsActivity,
+                    "RA API key cleared", Toast.LENGTH_SHORT).show()
+                recreate()
+                true
+            }
+        }
+        raKeyRow.addView(rowLabel("RetroAchievements API key"), LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        raKeyRow.addView(TextView(this).apply {
+            text = if (!app.settings.raApiKey.isNullOrBlank()) "Set" else "Not set"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setTextColor(accent)
+        })
+        libraryCard.addView(raKeyRow, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))
+        val raSampleRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            isFocusable = true
+            setOnClickListener { loadRaSampleForSelection() }
+        }
+        raSampleRow.addView(rowLabel("Load RA sample (selected game)"), LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        raSampleRow.addView(TextView(this).apply {
+            text = "Demo"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            setTextColor(0x66FFFFFF.toInt())
+        })
+        libraryCard.addView(raSampleRow, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))
         // SteamGridDB gap-filler: key entry row (tap = paste dialog,
         // long-press = clear) and the batch download row.
         val keyRow = LinearLayout(this).apply {
@@ -1316,6 +1618,7 @@ class SettingsActivity : AppCompatActivity() {
         libraryCard.addView(downloadRow, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))
         refreshSgdbRows()
+
         // Export/import: one SAF JSON bundle carrying settings + ROM
         // library (SettingsBundle). Import validates before touching either
         // store and rejects malformed files with a Toast.

@@ -32,7 +32,7 @@ class SettingsStore(private val file: File) {
     }
 
     companion object {
-        const val CURRENT_SCHEMA = 6
+        const val CURRENT_SCHEMA = 7
 
         // Internal (not private) so SettingsBundle can pack/unpack settings
         // through the exact same codec the on-disk file uses; same-module
@@ -111,6 +111,35 @@ class SettingsStore(private val file: File) {
             collections = o.optJSONObject("collections").toStringListMap(),
             // Within schema v6: absent = show setup when library empty.
             setupDismissed = o.optBoolean("setupDismissed", false),
+            // Schema v7 fields (absent = defaults).
+            companionRole = o.optString("companionRole", CompanionRole.HERO.name)
+                .ifBlank { CompanionRole.HERO.name },
+            companionPinnedPackage = if (!o.isNull("companionPinnedPackage") &&
+                o.has("companionPinnedPackage")
+            ) {
+                o.getString("companionPinnedPackage")
+            } else {
+                null
+            },
+            romProfiles = o.optJSONObject("romProfiles").toStringMap(),
+            folders = o.optJSONObject("folders").toFolderMap(),
+            themePackId = o.optString("themePackId", ThemePack.GHOST.id)
+                .ifBlank { ThemePack.GHOST.id },
+            themeCustomJson = if (!o.isNull("themeCustomJson") && o.has("themeCustomJson")) {
+                o.getString("themeCustomJson")
+            } else {
+                null
+            },
+            raApiKey = if (!o.isNull("raApiKey") && o.has("raApiKey")) {
+                o.getString("raApiKey")
+            } else {
+                null
+            },
+            raUsername = if (!o.isNull("raUsername") && o.has("raUsername")) {
+                o.getString("raUsername")
+            } else {
+                null
+            },
             schemaVersion = CURRENT_SCHEMA,
         )
         }
@@ -170,6 +199,23 @@ class SettingsStore(private val file: File) {
                 }
             })
             .put("setupDismissed", s.setupDismissed)
+            .put("companionRole", s.companionRole)
+            .put("companionPinnedPackage", s.companionPinnedPackage ?: JSONObject.NULL)
+            .put("romProfiles", JSONObject().apply {
+                s.romProfiles.forEach { (k, v) -> put(k, v) }
+            })
+            .put("folders", JSONObject().apply {
+                s.folders.forEach { (id, spec) ->
+                    put(id, JSONObject()
+                        .put("id", spec.id)
+                        .put("name", spec.name)
+                        .put("members", JSONArray(spec.members)))
+                }
+            })
+            .put("themePackId", s.themePackId)
+            .put("themeCustomJson", s.themeCustomJson ?: JSONObject.NULL)
+            .put("raApiKey", s.raApiKey ?: JSONObject.NULL)
+            .put("raUsername", s.raUsername ?: JSONObject.NULL)
             .put("schemaVersion", CURRENT_SCHEMA)
         }
 
@@ -199,5 +245,21 @@ class SettingsStore(private val file: File) {
 
         private fun JSONArray.toNullableStringList(): List<String?> =
             (0 until length()).map { if (isNull(it)) null else getString(it) }
+
+        private fun JSONObject?.toFolderMap(): Map<String, FolderSpec> {
+            if (this == null) return emptyMap()
+            return keys().asSequence().mapNotNull { id ->
+                val child = optJSONObject(id) ?: return@mapNotNull null
+                val name = child.optString("name", id).ifBlank { id }
+                val membersArr = child.optJSONArray("members")
+                val members = if (membersArr == null) emptyList()
+                else (0 until membersArr.length()).map { membersArr.getString(it) }
+                id to FolderSpec(
+                    id = child.optString("id", id).ifBlank { id },
+                    name = name,
+                    members = members,
+                )
+            }.toMap()
+        }
     }
 }

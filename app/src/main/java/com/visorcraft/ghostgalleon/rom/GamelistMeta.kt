@@ -23,6 +23,10 @@ data class GamelistEntry(
     val description: String?,
     /** Optional relative/absolute art path from `<image>`, or null. */
     val image: String? = null,
+    val year: String? = null,
+    val genre: String? = null,
+    val developer: String? = null,
+    val rating: String? = null,
 )
 
 /** Conventional ES-DE-ish media subfolders under a platform's `media/`. */
@@ -76,6 +80,13 @@ object GamelistMeta {
                 description = tags["desc"]?.ifBlank { null }
                     ?: tags["description"]?.ifBlank { null },
                 image = tags["image"]?.ifBlank { null },
+                year = tags["releasedate"]?.take(4)?.ifBlank { null }
+                    ?: tags["year"]?.ifBlank { null },
+                genre = tags["genre"]?.ifBlank { null },
+                developer = tags["developer"]?.ifBlank { null }
+                    ?: tags["publisher"]?.ifBlank { null },
+                rating = tags["rating"]?.ifBlank { null }
+                    ?: tags["players"]?.ifBlank { null },
             )
         }.toList()
     }
@@ -153,6 +164,10 @@ object GamelistMeta {
                 },
                 description = hit.description?.takeIf { it.isNotBlank() }
                     ?: rom.description,
+                year = hit.year?.takeIf { it.isNotBlank() } ?: rom.year,
+                genre = hit.genre?.takeIf { it.isNotBlank() } ?: rom.genre,
+                developer = hit.developer?.takeIf { it.isNotBlank() } ?: rom.developer,
+                rating = hit.rating?.takeIf { it.isNotBlank() } ?: rom.rating,
             )
         }
     }

@@ -43,5 +43,9 @@
         <activity
             android:name=".ui.settings.SettingsActivity"
             android:exported="false" />
+        <activity
+            android:name=".ui.ControllerLabActivity"
+            android:exported="false"
+            android:label="Controller Lab" />
     </application>
 </manifest>

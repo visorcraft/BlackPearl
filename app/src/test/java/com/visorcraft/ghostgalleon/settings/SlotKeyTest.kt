@@ -56,4 +56,18 @@ class SlotKeyTest {
         // An id with no ':' segment has no platform prefix to recover.
         assertNull(SlotKey.platformIdOf("rom:noPlatformHere"))
     }
+
+    @Test
+    fun `folder key round trips`() {
+        val key = SlotKey.folder("f1")
+        assertTrue(SlotKey.isFolder(key))
+        assertEquals("f1", SlotKey.folderId(key))
+        assertFalse(SlotKey.isRom(key))
+    }
+
+    @Test
+    fun `folder prefix alone is not a valid folder id`() {
+        assertNull(SlotKey.folderId("folder:"))
+        assertFalse(SlotKey.isFolder(null))
+    }
 }

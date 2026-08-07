@@ -91,6 +91,12 @@ Ghost Galleon can:
   optional SteamGridDB key enables a polite background scraper - the only
   feature that uses the app's single INTERNET permission.
 - Export/import all settings and layout as JSON for backup or migration.
+- **Continue / Recent / Favorites** rails in Game Mode, plus Continue seed on cold start.
+- **Honest playtime** (session tracker pauses while the launcher is focused or the device sleeps).
+- **Companion roles** on the non-interactive panel: Hero, Now Playing, Perf HUD, or a pinned app.
+- **Themes** (built-in packs: Ghost, 3DS Teal, OLED, Neon) and optional custom theme JSON.
+- **Folders** for grouping apps/ROMs, plus a **Quick Panel** for system shortcuts.
+- Optional **RetroAchievements** credentials (API key + username) alongside SteamGridDB.
 
 ## ROM library
 

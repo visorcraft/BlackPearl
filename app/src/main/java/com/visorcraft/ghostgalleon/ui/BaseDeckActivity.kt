@@ -41,6 +41,7 @@ import com.visorcraft.ghostgalleon.ui.deck.CompanionPanel
 import com.visorcraft.ghostgalleon.ui.deck.Deck
 import com.visorcraft.ghostgalleon.ui.deck.GameDeck
 import com.visorcraft.ghostgalleon.ui.deck.GridDeck
+import com.visorcraft.ghostgalleon.ui.deck.QuickPanel
 import com.visorcraft.ghostgalleon.ui.deck.launchOnOtherDisplay
 import com.visorcraft.ghostgalleon.ui.deck.launchSlotKey
 import com.visorcraft.ghostgalleon.ui.settings.SettingsActivity
@@ -109,6 +110,9 @@ abstract class BaseDeckActivity : AppCompatActivity() {
     // the deck. Separate from the per-slot "Add to grid/dock" pickers.
     private var appDrawer: AppPicker? = null
 
+    // Select-button Quick Panel overlay (Wi‑Fi / Continue / theme / …).
+    private var quickPanel: QuickPanel? = null
+
     // Open drawer on next resume (set when a discarded SECONDARY_HOME
     // duplicate asks the surviving companion to show the drawer).
     private var pendingAppDrawer: Boolean = false
@@ -142,6 +146,7 @@ abstract class BaseDeckActivity : AppCompatActivity() {
         val epoch = app.contentEpoch
         if (!::currentDeck.isInitialized || appliedContentEpoch != epoch) {
             closeAppDrawer()
+            closeQuickPanel()
             renderFromState()
         }
         stoppedSinceResume = false
@@ -339,6 +344,7 @@ abstract class BaseDeckActivity : AppCompatActivity() {
     protected open fun renderFromState() {
         // Rebuilding the content view detaches any activity-level overlay.
         appDrawer = null
+        quickPanel = null
         // setContentView destroys the setup view; clear host + global flag so
         // we never leave input blocked when setup is no longer shown.
         setupOverlay = null
@@ -355,6 +361,47 @@ abstract class BaseDeckActivity : AppCompatActivity() {
         )
         appliedContentEpoch = app.contentEpoch
         if (role == DisplayRole.PRIMARY) maybeShowSetup()
+    }
+
+    fun openQuickPanel() {
+        val role = DisplayRole.roleFor(display?.displayId ?: 0, deckState)
+        if (role != DisplayRole.PRIMARY) {
+            app.primaryDeckActivity()?.takeIf { it !== this }?.openQuickPanel()
+            return
+        }
+        if (quickPanel != null) {
+            closeQuickPanel()
+            return
+        }
+        if (!::currentDeck.isInitialized) return
+        closeAppDrawer()
+        val content = findViewById<ViewGroup>(android.R.id.content) ?: return
+        val panel = QuickPanel(this, deckState, app.romEntries) { closeQuickPanel() }
+        quickPanel = panel
+        content.addView(
+            panel.view,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            ),
+        )
+    }
+
+    fun closeQuickPanel() {
+        val panel = quickPanel ?: return
+        findViewById<ViewGroup>(android.R.id.content)?.removeView(panel.view)
+        quickPanel = null
+    }
+
+    /** Feed an action into this activity's open quick panel (cross-display). */
+    fun routeQuickPanelAction(action: Action): Boolean {
+        val panel = quickPanel ?: return false
+        if (action == Action.OPEN_QUICK_PANEL) {
+            closeQuickPanel()
+            return true
+        }
+        panel.handleAction(action)
+        return true
     }
 
     private var setupOverlay: View? = null
@@ -471,6 +518,31 @@ abstract class BaseDeckActivity : AppCompatActivity() {
                     if (host !== this) host.runOnUiThread { host.dismissSetupPublic() }
                 }
             }
+            return true
+        }
+        // Quick Panel on this or the other display (global input).
+        if (quickPanel != null) {
+            if (action == Action.OPEN_QUICK_PANEL) {
+                closeQuickPanel()
+                return true
+            }
+            quickPanel!!.handleAction(action)
+            when (action) {
+                Action.NAV_UP, Action.NAV_DOWN, Action.NAV_LEFT, Action.NAV_RIGHT,
+                Action.CONFIRM ->
+                    haptic(HapticFeedbackConstants.KEYBOARD_TAP)
+                else -> {}
+            }
+            return true
+        }
+        for (other in app.liveDeckActivities()) {
+            if (other !== this && other.quickPanel != null) {
+                other.routeQuickPanelAction(action)
+                return true
+            }
+        }
+        if (action == Action.OPEN_QUICK_PANEL) {
+            openQuickPanel()
             return true
         }
         // Swipe-up drawer must eat input before the deck. Host may be the
@@ -641,6 +713,13 @@ abstract class BaseDeckActivity : AppCompatActivity() {
             }
             true
         }
+        Action.OPEN_QUICK_PANEL -> {
+            if (repeatCount == 0) {
+                haptic(HapticFeedbackConstants.KEYBOARD_TAP)
+                handleAction(action)
+            }
+            true
+        }
         Action.BACK -> when {
             // Decks get BACK first: an open picker/menu or an active tile
             // move consumes it (close/cancel). Otherwise the home-role
@@ -651,4 +730,5 @@ abstract class BaseDeckActivity : AppCompatActivity() {
         }
         else -> handleAction(action) || fallThrough()
     }
+
 }

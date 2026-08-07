@@ -145,11 +145,19 @@ class RomLibrary(private val file: File) {
                         .put("visibleInUi", e.visibleInUi)
                         .put("description", e.description ?: JSONObject.NULL)
                         .put("screenshotUri", e.screenshotUri ?: JSONObject.NULL)
-                        .put("logoUri", e.logoUri ?: JSONObject.NULL),
+                        .put("logoUri", e.logoUri ?: JSONObject.NULL)
+                        .put("videoUri", e.videoUri ?: JSONObject.NULL)
+                        .put("year", e.year ?: JSONObject.NULL)
+                        .put("genre", e.genre ?: JSONObject.NULL)
+                        .put("developer", e.developer ?: JSONObject.NULL)
+                        .put("rating", e.rating ?: JSONObject.NULL),
                 )
             }
             return arr
         }
+
+        private fun JSONObject.optNullableString(key: String): String? =
+            if (!has(key) || isNull(key)) null else getString(key)
 
         internal fun parseEntries(arr: JSONArray): List<RomEntry> =
             (0 until arr.length()).map { i ->
@@ -159,28 +167,17 @@ class RomLibrary(private val file: File) {
                     name = o.getString("name"),
                     platformId = o.getString("platformId"),
                     uri = o.getString("uri"),
-                    path = if (o.isNull("path")) null else o.getString("path"),
-                    artUri = if (!o.has("artUri") || o.isNull("artUri")) {
-                        null
-                    } else {
-                        o.getString("artUri")
-                    },
+                    path = o.optNullableString("path"),
+                    artUri = o.optNullableString("artUri"),
                     visibleInUi = o.optBoolean("visibleInUi", true),
-                    description = if (!o.has("description") || o.isNull("description")) {
-                        null
-                    } else {
-                        o.getString("description")
-                    },
-                    screenshotUri = if (!o.has("screenshotUri") || o.isNull("screenshotUri")) {
-                        null
-                    } else {
-                        o.getString("screenshotUri")
-                    },
-                    logoUri = if (!o.has("logoUri") || o.isNull("logoUri")) {
-                        null
-                    } else {
-                        o.getString("logoUri")
-                    },
+                    description = o.optNullableString("description"),
+                    screenshotUri = o.optNullableString("screenshotUri"),
+                    logoUri = o.optNullableString("logoUri"),
+                    videoUri = o.optNullableString("videoUri"),
+                    year = o.optNullableString("year"),
+                    genre = o.optNullableString("genre"),
+                    developer = o.optNullableString("developer"),
+                    rating = o.optNullableString("rating"),
                 )
             }
 

@@ -27,6 +27,7 @@ import com.visorcraft.ghostgalleon.rom.PlatformTile
 import com.visorcraft.ghostgalleon.rom.PlayerResolver
 import com.visorcraft.ghostgalleon.rom.RomEntry
 import com.visorcraft.ghostgalleon.rom.RomLauncher
+import com.visorcraft.ghostgalleon.rom.RomProfiles
 import com.visorcraft.ghostgalleon.settings.Action
 import com.visorcraft.ghostgalleon.settings.DockSlots
 import com.visorcraft.ghostgalleon.settings.GridSlots
@@ -559,6 +560,36 @@ class GameDeck(
             .show()
     }
 
+    /** Per-ROM preferred player profile (settings.romProfiles). */
+    private fun showPlayerProfileMenu(rom: RomEntry) {
+        val platform = Platforms.byId(rom.platformId) ?: return
+        val players = platform.players
+        if (players.isEmpty()) {
+            Toast.makeText(activity, "No players for platform", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val current = settings.romProfiles[rom.id]
+        val labels = players.map { p ->
+            val mark = if (p.id == current) " ✓" else ""
+            p.displayName + mark
+        } + listOf(
+            if (current == null) "Platform default ✓" else "Platform default",
+        )
+        android.app.AlertDialog.Builder(activity)
+            .setTitle("Player profile")
+            .setItems(labels.toTypedArray()) { _, which ->
+                val nextProfiles = if (which >= players.size) {
+                    RomProfiles.clearProfile(settings.romProfiles, rom.id)
+                } else {
+                    RomProfiles.setProfile(settings.romProfiles, rom.id, players[which].id)
+                }
+                app().updateSettings(settings.copy(romProfiles = nextProfiles))
+                Toast.makeText(activity, "Player saved", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
     private fun setArtOverride(rom: RomEntry) {
         val host = activity as? com.visorcraft.ghostgalleon.ui.BaseDeckActivity
         if (host == null) {
@@ -588,6 +619,7 @@ class GameDeck(
             add(if (fav) SlotMenu.Choice.UNFAVORITE else SlotMenu.Choice.FAVORITE)
             if (entry.rom != null) {
                 add(SlotMenu.Choice.OPEN_WITH)
+                add(SlotMenu.Choice.PLAYER)
                 add(SlotMenu.Choice.SET_ART)
                 add(SlotMenu.Choice.ADD_TO_GRID)
             }
@@ -598,6 +630,7 @@ class GameDeck(
             when (choice) {
                 SlotMenu.Choice.FAVORITE, SlotMenu.Choice.UNFAVORITE -> toggleFavorite(key)
                 SlotMenu.Choice.OPEN_WITH -> openWithMenu(entry)
+                SlotMenu.Choice.PLAYER -> entry.rom?.let { showPlayerProfileMenu(it) }
                 SlotMenu.Choice.SET_ART -> entry.rom?.let { setArtOverride(it) }
                 SlotMenu.Choice.ADD_TO_GRID -> addToGrid(key)
                 else -> {}

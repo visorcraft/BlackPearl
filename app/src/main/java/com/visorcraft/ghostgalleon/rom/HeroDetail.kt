@@ -46,4 +46,22 @@ object HeroDetail {
     /** Logo / wheel URI when present. */
     fun logoUri(rom: RomEntry): String? =
         rom.logoUri?.takeIf { it.isNotBlank() }
+
+    /** Video snap URI when present. */
+    fun videoUri(rom: RomEntry): String? =
+        rom.videoUri?.takeIf { it.isNotBlank() }
+
+    /**
+     * Compact metadata line: year · genre · developer (non-blank parts only).
+     * Null when nothing to show.
+     */
+    fun metadataLine(rom: RomEntry): String? {
+        val parts = listOfNotNull(
+            rom.year?.trim()?.takeIf { it.isNotEmpty() },
+            rom.genre?.trim()?.takeIf { it.isNotEmpty() },
+            rom.developer?.trim()?.takeIf { it.isNotEmpty() },
+            rom.rating?.trim()?.takeIf { it.isNotEmpty() }?.let { "★ $it" },
+        )
+        return parts.joinToString(" · ").ifEmpty { null }
+    }
 }

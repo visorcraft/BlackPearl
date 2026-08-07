@@ -179,13 +179,17 @@ object AboutPage {
         hero.addView(heroRow)
         addSection(null, hero, topMarginDp = 24)
 
-        // What's inside: four feature cards in a 2x2 arrangement.
+        // What's inside: feature cards in a 2-column arrangement.
         data class Feature(val title: String, val body: String)
         val features = listOf(
-            Feature("Grid Mode", "Curated 3DS/Wii-style icon grid with blank \"+\" slots and a dock."),
-            Feature("Game Mode", "Daijisho/GameDeck-style card carousel with platform filters."),
-            Feature("ROM library", "SAF-scanned folders launch straight into the right emulator."),
-            Feature("Dual screens", "The other panel previews your selection; X swaps them live."),
+            Feature("Grid Mode",
+                "Curated 3DS/Wii-style icon grid with blank \"+\" slots, dock, favorites, and folders."),
+            Feature("Game Mode",
+                "Card carousel with Recent / Continue / Favorites, platform filters, and playtime."),
+            Feature("ROM library",
+                "SAF-scanned folders launch into the right emulator; optional SteamGridDB & RA."),
+            Feature("Dual screens",
+                "Companion roles (Hero / Now Playing / Perf / Pin), themes, Quick Panel; X swaps live."),
         )
         val grid = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL

@@ -17,6 +17,8 @@ import com.visorcraft.ghostgalleon.library.DrawerListCache
 import com.visorcraft.ghostgalleon.library.DrawerListKey
 import com.visorcraft.ghostgalleon.library.OpenSession
 import com.visorcraft.ghostgalleon.library.PlayStats
+import com.visorcraft.ghostgalleon.library.RaProgress
+import com.visorcraft.ghostgalleon.library.RetroAchievements
 import com.visorcraft.ghostgalleon.library.SessionMath
 import com.visorcraft.ghostgalleon.library.SessionTracker
 import com.visorcraft.ghostgalleon.rom.PlatformPackStore
@@ -32,6 +34,7 @@ import com.visorcraft.ghostgalleon.ui.DisplayRole
 import com.visorcraft.ghostgalleon.ui.deck.PickerItem
 import com.visorcraft.ghostgalleon.ui.deck.PickerItems
 import com.visorcraft.ghostgalleon.library.AppEntry
+import org.json.JSONObject
 import java.io.File
 
 class GhostGalleonApp : Application() {
@@ -80,6 +83,57 @@ class GhostGalleonApp : Application() {
     @Volatile
     var openSession: OpenSession? = null
         private set
+
+    // Optional RetroAchievements progress by ROM id (filled by network fetch).
+    @Volatile
+    private var raProgressByRomId: Map<String, com.visorcraft.ghostgalleon.library.RaProgress> =
+        emptyMap()
+
+    /** Cached RA progress for a ROM, or null when unknown / not fetched. */
+    fun raProgressFor(romId: String): com.visorcraft.ghostgalleon.library.RaProgress? =
+        raProgressByRomId[romId]
+
+    fun putRaProgress(romId: String, progress: RaProgress) {
+        raProgressByRomId = raProgressByRomId + (romId to progress)
+        Handler(Looper.getMainLooper()).post { deckState.notifyChanged() }
+    }
+
+    /** Parse and store RA progress JSON for [romId]; empty/malformed clears. */
+    fun setRaProgress(romId: String, json: String?) {
+        val id = romId.trim()
+        if (id.isEmpty()) return
+        if (json.isNullOrBlank()) {
+            raProgressByRomId = raProgressByRomId - id
+        } else {
+            val parsed = RetroAchievements.parseProgress(json)
+            raProgressByRomId = if (parsed.isEmpty) raProgressByRomId - id
+            else raProgressByRomId + (id to parsed)
+        }
+        Handler(Looper.getMainLooper()).post { deckState.notifyChanged() }
+    }
+
+    /** Load optional filesDir/ra_cache.json: `{ "romId": {…progress…}, … }`. */
+    private fun loadRaCacheFile() {
+        val file = File(filesDir, "ra_cache.json")
+        if (!file.isFile) return
+        runCatching {
+            val root = JSONObject(file.readText())
+            val next = raProgressByRomId.toMutableMap()
+            val keys = root.keys()
+            while (keys.hasNext()) {
+                val romId = keys.next()
+                val value = root.opt(romId) ?: continue
+                val json = when (value) {
+                    is JSONObject -> value.toString()
+                    is String -> value
+                    else -> continue
+                }
+                val progress = RetroAchievements.parseProgress(json)
+                if (!progress.isEmpty) next[romId] = progress
+            }
+            raProgressByRomId = next
+        }
+    }
 
     private var sessionAwaitingReturn: Boolean = false
     private var liveDeckCount: Int = 0
@@ -240,12 +294,13 @@ class GhostGalleonApp : Application() {
         settings = settingsStore.load()
         // Install any persisted platform pack before ROM scans / launches.
         runCatching { platformPackStore.loadIntoRegistry() }
+        loadRaCacheFile()
         deckState = DeckState()
         deckState.setMode(settings.defaultMode)
         deckState.setPrimaryDisplayId(settings.primaryDisplay)
-        // Cold-start hero seed: select slot 0's content so the hero panel
-        // shows it at boot instead of the "Ghost Galleon" fallback.
-        settings.gridSlots.getOrNull(0)?.let { deckState.selectSlot(0, it) }
+        // Cold-start hero seed: prefer Continue key when known, else slot 0.
+        // Do not auto-launch — selection only so the companion shows the game.
+        seedColdStartSelection()
         reloadRomEntries()
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
             override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
@@ -315,6 +370,28 @@ class GhostGalleonApp : Application() {
     fun clearOpenSession(nowMs: Long = System.currentTimeMillis()) {
         endOpenSession(nowMs)
         deckState.notifyChanged()
+    }
+
+    /**
+     * Prefer Continue (most recent launch still known) for the first hero
+     * selection; fall back to grid slot 0. Never launches.
+     */
+    private fun seedColdStartSelection() {
+        val available = buildList {
+            addAll(settings.gridSlots.filterNotNull())
+            addAll(settings.dockSlots.filterNotNull())
+            addAll(settings.lastLaunchedMs.keys)
+        }
+        val cont = com.visorcraft.ghostgalleon.library.LibraryBrowse.continueKey(
+            available, settings.lastLaunchedMs,
+        )
+        if (cont != null) {
+            val idx = settings.gridSlots.indexOf(cont)
+            if (idx >= 0) deckState.selectSlot(idx, cont)
+            else deckState.select(cont)
+            return
+        }
+        settings.gridSlots.getOrNull(0)?.let { deckState.selectSlot(0, it) }
     }
 
     /** The currently live CompanionActivity, if any. */

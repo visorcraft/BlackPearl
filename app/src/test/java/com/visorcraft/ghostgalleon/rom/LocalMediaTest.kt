@@ -72,4 +72,27 @@ class LocalMediaTest {
         )
         assertEquals("content://logo/z.png", LocalMedia.lookupLogo(idx, "", "zelda"))
     }
+
+    @Test
+    fun `indexVideos matches flat and nested media paths`() {
+        val flat = listOf(
+            DocFile("chrono.mp4", "content://vid/chrono.mp4", "videos/chrono.mp4"),
+        )
+        val idxFlat = LocalMedia.indexVideos(flat, rootIsPlatform = true)
+        assertEquals("content://vid/chrono.mp4", LocalMedia.lookupVideo(idxFlat, "", "chrono"))
+
+        val nested = listOf(
+            DocFile(
+                "zelda.webm",
+                "content://vid/zelda.webm",
+                "snes/media/videos/zelda.webm",
+            ),
+        )
+        val idxNested = LocalMedia.indexVideos(nested, rootIsPlatform = false)
+        assertEquals(
+            "content://vid/zelda.webm",
+            LocalMedia.lookupVideo(idxNested, "snes", "zelda"),
+        )
+        assertNull(LocalMedia.lookupVideo(idxNested, "snes", "missing"))
+    }
 }

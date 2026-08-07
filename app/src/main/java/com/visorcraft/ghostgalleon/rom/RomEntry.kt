@@ -30,6 +30,16 @@ data class RomEntry(
     val screenshotUri: String? = null,
     /** Optional logo / wheel / marquee media URI. */
     val logoUri: String? = null,
+    /** Optional local video snap URI (mp4/webm beside tree). */
+    val videoUri: String? = null,
+    /** Optional release year from gamelist / scrape. */
+    val year: String? = null,
+    /** Optional genre from gamelist / scrape. */
+    val genre: String? = null,
+    /** Optional developer / publisher. */
+    val developer: String? = null,
+    /** Optional rating string (e.g. "4.5" or "ESRB E"). */
+    val rating: String? = null,
 )
 
 /** Pure helpers for SAF ExternalStorageProvider document-id shapes. */

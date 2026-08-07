@@ -10,6 +10,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.visorcraft.ghostgalleon.rom.RomEntry
 import com.visorcraft.ghostgalleon.rom.RomLauncher
+import com.visorcraft.ghostgalleon.rom.RomProfiles
 import com.visorcraft.ghostgalleon.settings.Action
 import com.visorcraft.ghostgalleon.settings.SlotKey
 import com.visorcraft.ghostgalleon.state.DeckState
@@ -51,12 +52,19 @@ internal fun launchSlotKey(
     key: String,
     playerId: String? = null,
 ) {
+    // Folder tiles are opened by GridDeck (member list), never launched.
+    if (SlotKey.isFolder(key)) return
     val app = activity.application as? com.visorcraft.ghostgalleon.GhostGalleonApp
     if (SlotKey.isRom(key)) {
         val id = SlotKey.romId(key)
         val entry = roms.firstOrNull { it.id == id }
         if (entry != null) {
-            val preferred = app?.settings?.defaultPlayers?.get(entry.platformId)
+            val settings = app?.settings
+            val preferred = RomProfiles.preferredPlayerId(
+                entry.id,
+                settings?.romProfiles.orEmpty(),
+                settings?.defaultPlayers?.get(entry.platformId),
+            )
             val ok = RomLauncher.launch(
                 activity, state, entry,
                 playerId = playerId,

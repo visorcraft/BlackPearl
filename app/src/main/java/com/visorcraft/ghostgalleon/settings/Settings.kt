@@ -62,7 +62,22 @@ data class Settings(
     val collections: Map<String, List<String>> = emptyMap(),
     // First-run / empty-library setup card dismissed (within schema v6).
     val setupDismissed: Boolean = false,
-    val schemaVersion: Int = 6,
+    // --- schema v7: companion roles, profiles, folders, themes, RA ---
+    // Companion panel role: HERO | NOW_PLAYING | PERF_HUD | PINNED_APP
+    val companionRole: String = CompanionRole.HERO.name,
+    val companionPinnedPackage: String? = null,
+    // rom entry id → PlayerTemplate.id override
+    val romProfiles: Map<String, String> = emptyMap(),
+    // folder id → FolderSpec (name + ordered member keys)
+    val folders: Map<String, FolderSpec> = emptyMap(),
+    // Built-in theme pack id (ghost | threeds | oled | neon) or custom id
+    val themePackId: String = ThemePack.GHOST.id,
+    // Optional imported theme JSON; when valid, overrides built-in tokens
+    val themeCustomJson: String? = null,
+    // Optional RetroAchievements API key + username (like sgdbApiKey)
+    val raApiKey: String? = null,
+    val raUsername: String? = null,
+    val schemaVersion: Int = 7,
 ) {
     companion object {
         val DEFAULT_KEY_MAP: Map<Int, Action> = mapOf(
@@ -80,6 +95,7 @@ data class Settings(
             108 to Action.OPEN_SETTINGS, // KEYCODE_BUTTON_START
             102 to Action.PAGE_PREV,   // KEYCODE_BUTTON_L1
             103 to Action.PAGE_NEXT,   // KEYCODE_BUTTON_R1
+            109 to Action.OPEN_QUICK_PANEL, // KEYCODE_BUTTON_SELECT
         )
         val DEFAULT = Settings()
     }
