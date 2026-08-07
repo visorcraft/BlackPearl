@@ -67,6 +67,13 @@ class RomLibrary(private val file: File) {
                     SafDocumentTree(appContext, Uri.parse(uriString)) to
                         (StoragePaths.treeRootName(uriString) ?: "")
                 },
+                readText = { uriString ->
+                    runCatching {
+                        appContext.contentResolver.openInputStream(Uri.parse(uriString))
+                            ?.bufferedReader()
+                            ?.use { it.readText() }
+                    }.getOrNull()
+                },
             )
             if (result is RescanResult.Success) save(result.entries)
             Handler(Looper.getMainLooper()).post { onDone(result) }
@@ -89,7 +96,8 @@ class RomLibrary(private val file: File) {
                         .put("uri", e.uri)
                         .put("path", e.path ?: JSONObject.NULL)
                         .put("artUri", e.artUri ?: JSONObject.NULL)
-                        .put("visibleInUi", e.visibleInUi),
+                        .put("visibleInUi", e.visibleInUi)
+                        .put("description", e.description ?: JSONObject.NULL),
                 )
             }
             return arr
@@ -112,6 +120,12 @@ class RomLibrary(private val file: File) {
                     },
                     // Added in Stage 3 Task 4: absent in old library files.
                     visibleInUi = o.optBoolean("visibleInUi", true),
+                    // Phase 3 gamelist offline meta: absent in older files.
+                    description = if (!o.has("description") || o.isNull("description")) {
+                        null
+                    } else {
+                        o.getString("description")
+                    },
                 )
             }
 
@@ -133,12 +147,16 @@ class RomLibrary(private val file: File) {
             prior: List<RomEntry>,
             isReadable: (String) -> Boolean,
             treeFor: (String) -> Pair<DocumentTree, String>,
+            readText: ((String) -> String?)? = null,
         ): RescanResult {
             if (treeUris.isNotEmpty() && treeUris.none(isReadable)) {
                 return RescanResult.Unreadable
             }
             val skipped = treeUris.filterNot(isReadable)
-            val fresh = RomScanner.scan(treeUris.filter(isReadable).map(treeFor))
+            val fresh = RomScanner.scan(
+                treeUris.filter(isReadable).map(treeFor),
+                readText = readText,
+            )
             val retained = prior.filter { entry ->
                 skipped.any { tree -> entry.uri.startsWith(tree) }
             }

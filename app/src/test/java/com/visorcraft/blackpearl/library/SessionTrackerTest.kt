@@ -39,6 +39,23 @@ class SessionTrackerTest {
     }
 
     @Test
+    fun `launcher unfocus while asleep does not resume until wake`() {
+        // Production pairs SCREEN_OFF with SCREEN_ON. If wake is missing,
+        // pausedForSleep sticks and playtime freezes forever.
+        var s = SessionTracker.onLaunch("k", 0L)
+        s = SessionTracker.onDeviceSleep(s, 10_000L)
+        s = SessionTracker.onLauncherUnfocused(s, 15_000L)
+        assertFalse(s.isActive)
+        assertTrue(s.pausedForSleep)
+        s = SessionTracker.onDeviceWake(s, 20_000L)
+        assertTrue(s.isActive)
+        assertFalse(s.pausedForSleep)
+        val played = SessionTracker.onReturn(s, 30_000L)
+        // 10s active before sleep + 10s after wake
+        assertEquals(20_000L, played)
+    }
+
+    @Test
     fun `activeElapsedMs includes open segment`() {
         val s = SessionTracker.onLaunch("k", 100L)
         assertEquals(50L, SessionTracker.activeElapsedMs(s, 150L))

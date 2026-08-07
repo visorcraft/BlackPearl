@@ -2,6 +2,11 @@ package com.visorcraft.blackpearl
 
 import android.app.Activity
 import android.app.Application
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -211,16 +216,26 @@ class BlackPearlApp : Application() {
             }
             override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
         })
-        // Pause accrual when the screen turns off.
-        registerComponentCallbacks(object : android.content.ComponentCallbacks2 {
-            override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {}
-            override fun onLowMemory() {}
-            override fun onTrimMemory(level: Int) {
-                if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN) {
-                    onSessionDeviceSleep()
+        // Honest sleep/wake: pair SCREEN_OFF with SCREEN_ON so pausedForSleep
+        // cannot stick forever (TRIM_MEMORY_UI_HIDDEN is NOT screen-off).
+        val screenFilter = IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_OFF)
+            addAction(Intent.ACTION_SCREEN_ON)
+        }
+        val screenReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                when (intent?.action) {
+                    Intent.ACTION_SCREEN_OFF -> onSessionDeviceSleep()
+                    Intent.ACTION_SCREEN_ON -> onSessionDeviceWake()
                 }
             }
-        })
+        }
+        if (Build.VERSION.SDK_INT >= 33) {
+            registerReceiver(screenReceiver, screenFilter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            registerReceiver(screenReceiver, screenFilter)
+        }
     }
 
     /** End the open session and commit playtime (e.g. user dismissed Now Playing). */

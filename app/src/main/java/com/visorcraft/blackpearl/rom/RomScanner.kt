@@ -22,9 +22,17 @@ object RomScanner {
      *  a container grant, or "snes" when the grant points straight at a
      *  platform folder). Platform is decided by the tree root name first,
      *  then by the first relative-path segment.
+     * @param readText optional reader for document URIs (SAF contentResolver
+     *  in production). When present, every `gamelist.xml` found during the
+     *  walk is parsed and [GamelistMeta.enrichRoms] applies offline titles
+     *  and descriptions before the list is returned.
      */
-    fun scan(trees: List<Pair<DocumentTree, String>>): List<RomEntry> {
+    fun scan(
+        trees: List<Pair<DocumentTree, String>>,
+        readText: ((uri: String) -> String?)? = null,
+    ): List<RomEntry> {
         val entries = mutableListOf<RomEntry>()
+        val gamelistDocs = mutableListOf<DocFile>()
         trees.forEach { (tree, rootName) ->
             val rootPlatform = Platforms.platformForFolder(rootName)
             val docs = tree.walk()
@@ -33,6 +41,10 @@ object RomScanner {
                 // Dotfiles/junk anywhere in the path: .DS_Store, ._ AppleDouble
                 // files, hidden directories.
                 if (doc.relativePath.split('/').any { it.startsWith('.') }) return@docs
+                if (doc.name.equals("gamelist.xml", ignoreCase = true)) {
+                    gamelistDocs.add(doc)
+                    return@docs
+                }
                 val dot = doc.name.lastIndexOf('.')
                 if (dot <= 0 || dot == doc.name.length - 1) return@docs
                 val ext = doc.name.substring(dot + 1).lowercase()
@@ -56,9 +68,16 @@ object RomScanner {
                 )
             }
         }
-        return entries.sortedWith(
+        val sorted = entries.sortedWith(
             compareBy({ it.platformId }, { it.name.lowercase() }, { it.id }),
         )
+        if (readText == null || gamelistDocs.isEmpty()) return sorted
+        val meta = gamelistDocs.flatMap { doc ->
+            val xml = readText(doc.uri) ?: return@flatMap emptyList()
+            GamelistMeta.parse(xml)
+        }
+        if (meta.isEmpty()) return sorted
+        return GamelistMeta.enrichRoms(sorted, meta)
     }
 
     // "prefix|lowercase-stem" -> art document uri.

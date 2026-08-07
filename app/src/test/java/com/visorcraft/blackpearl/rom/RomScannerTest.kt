@@ -280,4 +280,46 @@ class RomScannerTest {
         ))))
         assertEquals(docUri("7F7E-2949:roms/snes/images/smw.png"), entries[0].artUri)
     }
+
+    @Test
+    fun `scan enriches names and descriptions from gamelist xml via readText`() {
+        val gamelistUri = docUri("7F7E-2949:roms/snes/gamelist.xml")
+        val smc = doc("7F7E-2949:roms/snes/Chrono Trigger.smc")
+        val xml = """
+            <gameList>
+              <game>
+                <path>./Chrono Trigger.smc</path>
+                <name>Chrono Trigger</name>
+                <desc>Time-travel RPG classic.</desc>
+              </game>
+            </gameList>
+        """.trimIndent()
+        val entries = RomScanner.scan(
+            listOf(cardTree(listOf(
+                smc,
+                DocFile("gamelist.xml", gamelistUri, "snes/gamelist.xml"),
+            ))),
+            readText = { uri -> if (uri == gamelistUri) xml else null },
+        )
+        assertEquals(1, entries.size)
+        assertEquals("Chrono Trigger", entries[0].name)
+        assertEquals("Time-travel RPG classic.", entries[0].description)
+        // gamelist.xml itself is not a ROM entry
+        assertTrue(entries.none { it.name.equals("gamelist", ignoreCase = true) })
+    }
+
+    @Test
+    fun `scan without readText leaves filename titles when gamelist present`() {
+        val entries = RomScanner.scan(listOf(cardTree(listOf(
+            doc("7F7E-2949:roms/snes/Chrono Trigger.smc"),
+            DocFile(
+                "gamelist.xml",
+                docUri("7F7E-2949:roms/snes/gamelist.xml"),
+                "snes/gamelist.xml",
+            ),
+        ))))
+        assertEquals(1, entries.size)
+        assertEquals("Chrono Trigger", entries[0].name)
+        assertNull(entries[0].description)
+    }
 }
