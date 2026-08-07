@@ -21,6 +21,11 @@ import com.visorcraft.ghostgalleon.library.RaProgress
 import com.visorcraft.ghostgalleon.library.RetroAchievements
 import com.visorcraft.ghostgalleon.library.SessionMath
 import com.visorcraft.ghostgalleon.library.SessionTracker
+import com.visorcraft.ghostgalleon.display.AndroidDisplayProbe
+import com.visorcraft.ghostgalleon.display.DeviceProfileCatalog
+import com.visorcraft.ghostgalleon.display.DisplayTopology
+import com.visorcraft.ghostgalleon.display.ResolvedTopology
+import com.visorcraft.ghostgalleon.display.SurfaceMode
 import com.visorcraft.ghostgalleon.rom.PlatformPackStore
 import com.visorcraft.ghostgalleon.rom.RomEntry
 import com.visorcraft.ghostgalleon.rom.RomLibrary
@@ -34,6 +39,7 @@ import com.visorcraft.ghostgalleon.ui.DisplayRole
 import com.visorcraft.ghostgalleon.ui.deck.PickerItem
 import com.visorcraft.ghostgalleon.ui.deck.PickerItems
 import com.visorcraft.ghostgalleon.library.AppEntry
+import android.hardware.display.DisplayManager
 import org.json.JSONObject
 import java.io.File
 
@@ -45,8 +51,102 @@ class GhostGalleonApp : Application() {
     lateinit var settings: Settings
         private set
 
+    /**
+     * Last resolved display topology (SINGLE/DUAL roles + launch id).
+     * Refreshed via [refreshDisplayConfig]; safe default until first probe.
+     */
+    @Volatile
+    var displayConfig: ResolvedTopology = ResolvedTopology(
+        mode = SurfaceMode.SINGLE,
+        primaryDisplayId = 0,
+        companionDisplayId = null,
+        launchDisplayId = 0,
+        allIds = listOf(0),
+        reason = "uninitialized",
+    )
+        private set
+
+    private var lastDisplayRefreshUptimeMs: Long = 0L
+    private var displayListenerRegistered = false
+
     val settingsStore: SettingsStore by lazy {
         SettingsStore(File(filesDir, "settings.json"))
+    }
+
+    /**
+     * Probe displays, match profile, resolve topology, align DeckState.
+     * Debounced when [debounce] is true (resume path).
+     */
+    fun refreshDisplayConfig(debounce: Boolean = false): ResolvedTopology {
+        val now = android.os.SystemClock.uptimeMillis()
+        if (debounce && now - lastDisplayRefreshUptimeMs < 500L) {
+            return displayConfig
+        }
+        lastDisplayRefreshUptimeMs = now
+        val readings = AndroidDisplayProbe.read(this)
+        val profile = DeviceProfileCatalog.effective(settings.deviceProfileId, readings)
+        val topo = DisplayTopology.resolve(
+            readings = readings,
+            profile = profile,
+            interactiveDisplayMode = settings.interactiveDisplayMode,
+            userPinnedPrimaryId = settings.userPinnedPrimaryId,
+        )
+        displayConfig = topo
+        if (::deckState.isInitialized) {
+            // Prefer pin/topology primary; only rewrite if invalid.
+            if (settings.userPinnedPrimaryId != null &&
+                settings.userPinnedPrimaryId in topo.allIds
+            ) {
+                deckState.setPrimaryDisplayId(settings.userPinnedPrimaryId!!)
+            } else {
+                deckState.ensurePrimaryIn(topo.allIds, topo.primaryDisplayId)
+                if (deckState.primaryDisplayId != topo.primaryDisplayId &&
+                    settings.userPinnedPrimaryId == null
+                ) {
+                    deckState.setPrimaryDisplayId(topo.primaryDisplayId)
+                }
+            }
+        }
+        return topo
+    }
+
+    /** Topology-aware swap + sticky pin so Auto refresh does not undo it. */
+    fun swapInteractiveDisplay() {
+        val topo = refreshDisplayConfig()
+        if (topo.mode != SurfaceMode.DUAL) return
+        val companion = topo.allIds.firstOrNull { it != deckState.primaryDisplayId }
+            ?: return
+        val current = ResolvedTopology(
+            mode = SurfaceMode.DUAL,
+            primaryDisplayId = deckState.primaryDisplayId,
+            companionDisplayId = companion,
+            launchDisplayId = companion,
+            allIds = topo.allIds,
+            reason = topo.reason,
+        )
+        val swapped = DisplayTopology.swap(current)
+        val pin = DisplayTopology.pinAfterSwap(swapped)
+        deckState.setPrimaryDisplayId(pin)
+        settings = settings.copy(userPinnedPrimaryId = pin)
+        settingsStore.save(settings)
+        displayConfig = swapped
+    }
+
+    private fun registerDisplayListener() {
+        if (displayListenerRegistered) return
+        displayListenerRegistered = true
+        val dm = getSystemService(DisplayManager::class.java) ?: return
+        dm.registerDisplayListener(object : DisplayManager.DisplayListener {
+            override fun onDisplayAdded(displayId: Int) {
+                Handler(Looper.getMainLooper()).post { refreshDisplayConfig() }
+            }
+            override fun onDisplayRemoved(displayId: Int) {
+                Handler(Looper.getMainLooper()).post { refreshDisplayConfig() }
+            }
+            override fun onDisplayChanged(displayId: Int) {
+                Handler(Looper.getMainLooper()).post { refreshDisplayConfig(debounce = true) }
+            }
+        }, Handler(Looper.getMainLooper()))
     }
 
     val romLibrary: RomLibrary by lazy {
@@ -297,7 +397,9 @@ class GhostGalleonApp : Application() {
         loadRaCacheFile()
         deckState = DeckState()
         deckState.setMode(settings.defaultMode)
-        deckState.setPrimaryDisplayId(settings.primaryDisplay)
+        // Topology-driven primary (secondary prefer on Sugar Auto); not raw primaryDisplay.
+        refreshDisplayConfig()
+        registerDisplayListener()
         // Cold-start hero seed: prefer Continue key when known, else slot 0.
         // Do not auto-launch — selection only so the companion shows the game.
         seedColdStartSelection()
@@ -409,10 +511,16 @@ class GhostGalleonApp : Application() {
     }
 
     fun updateSettings(s: Settings, notify: Boolean = true) {
+        val displayPolicyChanged =
+            s.deviceProfileId != settings.deviceProfileId ||
+                s.interactiveDisplayMode != settings.interactiveDisplayMode ||
+                s.orientationMode != settings.orientationMode ||
+                s.userPinnedPrimaryId != settings.userPinnedPrimaryId
         settings = s
         settingsStore.save(s)
         contentEpoch++
         invalidateDrawerListCache()
+        if (displayPolicyChanged) refreshDisplayConfig()
         if (notify) {
             deckState.setMode(s.defaultMode)
             deckState.notifyChanged()

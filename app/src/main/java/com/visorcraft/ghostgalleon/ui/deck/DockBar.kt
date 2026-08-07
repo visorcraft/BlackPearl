@@ -78,14 +78,23 @@ class DockBar(
         val density = context.resources.displayMetrics.density
         fun dp(value: Int) = (value * density).toInt()
 
-        // Slot frames are sized off the screen so a full dock (CAPACITY
-        // slots + margins + bar padding) always fits the narrow bottom
-        // display; below 9 visible slots they keep the 48dp density.
-        val screenW = context.resources.displayMetrics.widthPixels
-        slotSize = minOf(
-            dp(48),
-            (screenW - dp(8) * 2) / DockSlots.CAPACITY - dp(12),
+        // Slot frames sized from window metrics (LayoutMetrics clamps) so
+        // a full dock always fits; not a fixed 2160×1080 table.
+        val metrics = context.resources.displayMetrics
+        val layout = com.visorcraft.ghostgalleon.display.LayoutMetricsResolver.fromWindow(
+            windowWidthPx = metrics.widthPixels,
+            windowHeightPx = metrics.heightPixels,
+            densityDpi = metrics.densityDpi,
+            topologyMode = (context.applicationContext as? com.visorcraft.ghostgalleon.GhostGalleonApp)
+                ?.displayConfig?.mode
+                ?: com.visorcraft.ghostgalleon.display.SurfaceMode.SINGLE,
+            isCompanionRole = false,
         )
+        val screenW = metrics.widthPixels
+        slotSize = minOf(
+            dp(layout.suggestedDockSlotDp),
+            (screenW - dp(8) * 2) / DockSlots.CAPACITY - dp(12),
+        ).coerceAtLeast(dp(40))
 
         val bar = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL

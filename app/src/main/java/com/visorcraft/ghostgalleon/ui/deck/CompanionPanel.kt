@@ -608,7 +608,10 @@ object CompanionPanel {
                 setTextColor(Color.BLACK)
                 background = TileBackgrounds.selected(context, settings.accentColor)
                 setPadding(dp(16), dp(8), dp(16), dp(8))
-                setOnClickListener { state.swapDisplays() }
+                setOnClickListener {
+                    (activity.application as? com.visorcraft.ghostgalleon.GhostGalleonApp)
+                        ?.swapInteractiveDisplay()
+                }
             })
             npActions.addView(View(context), LinearLayout.LayoutParams(dp(12), 1))
             npActions.addView(TextView(context).apply {
@@ -1022,7 +1025,8 @@ object CompanionPanel {
         }
         actions.addView(
             iconButton(context, R.drawable.ic_swap, "Swap screens") {
-                state.swapDisplays()
+                (activity.application as? com.visorcraft.ghostgalleon.GhostGalleonApp)
+                    ?.swapInteractiveDisplay()
             },
             LinearLayout.LayoutParams(dp(40), dp(40)))
         actions.addView(View(context), LinearLayout.LayoutParams(0, 1, 1f))
@@ -1246,7 +1250,10 @@ object CompanionPanel {
             setTextColor(Color.BLACK)
             background = TileBackgrounds.selected(activity, settings.accentColor)
             setPadding(dp(16), dp(8), dp(16), dp(8))
-            setOnClickListener { state.swapDisplays() }
+            setOnClickListener {
+                (activity.application as? com.visorcraft.ghostgalleon.GhostGalleonApp)
+                    ?.swapInteractiveDisplay()
+            }
         })
         actions.addView(View(activity), LinearLayout.LayoutParams(dp(12), 1))
         actions.addView(TextView(activity).apply {

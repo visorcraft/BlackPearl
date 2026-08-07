@@ -24,23 +24,31 @@ class DeckStateTest {
     }
 
     @Test
-    fun `swapDisplays flips primary between 0 and 1`() {
+    fun `swapDisplaysWith flips to other topology id`() {
         val s = DeckState()
-        s.swapDisplays()
+        s.swapDisplaysWith(1)
         assertEquals(1, s.primaryDisplayId)
-        s.swapDisplays()
+        s.swapDisplaysWith(0)
         assertEquals(0, s.primaryDisplayId)
+        s.swapDisplaysWith(20)
+        assertEquals(20, s.primaryDisplayId)
     }
 
     @Test
-    fun `setPrimaryDisplayId rejects invalid ids`() {
+    fun `setPrimaryDisplayId accepts any topology id`() {
         val s = DeckState()
-        try {
-            s.setPrimaryDisplayId(7)
-            org.junit.Assert.fail("expected IllegalArgumentException")
-        } catch (expected: IllegalArgumentException) {
-        }
-        assertEquals(0, s.primaryDisplayId)
+        s.setPrimaryDisplayId(7)
+        assertEquals(7, s.primaryDisplayId)
+        s.setPrimaryDisplayId(20)
+        assertEquals(20, s.primaryDisplayId)
+    }
+
+    @Test
+    fun `ensurePrimaryIn realigns when id not in topology`() {
+        val s = DeckState()
+        s.setPrimaryDisplayId(99)
+        s.ensurePrimaryIn(listOf(0, 1), preferred = 1)
+        assertEquals(1, s.primaryDisplayId)
     }
 
     @Test
@@ -60,10 +68,10 @@ class DeckStateTest {
     }
 
     @Test
-    fun `swapDisplays tags lastChange as DISPLAY`() {
+    fun `swapDisplaysWith tags lastChange as DISPLAY`() {
         val s = DeckState()
         s.select("com.example.app")
-        s.swapDisplays()
+        s.swapDisplaysWith(1)
         assertEquals(DeckState.Change.DISPLAY, s.lastChange)
     }
 
@@ -74,7 +82,7 @@ class DeckStateTest {
         val listener = DeckState.DeckStateListener { calls++ }
         s.addListener(listener)
         s.setMode(UIMode.GAME)
-        s.swapDisplays()
+        s.swapDisplaysWith(1)
         s.select("com.example.app")
         assertEquals(3, calls)
         assertEquals("com.example.app", s.selectedKey)

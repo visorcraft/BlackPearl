@@ -71,6 +71,10 @@ class SettingsStoreTest {
             themeCustomJson = """{"id":"neon","accentColor":"#FF2D95"}""",
             raApiKey = "ra-key",
             raUsername = "player1",
+            deviceProfileId = "onex-sugar",
+            interactiveDisplayMode = "secondary",
+            orientationMode = "sensor_landscape",
+            userPinnedPrimaryId = 1,
         )
         store.save(s)
         val loaded = SettingsStore(f).load()
@@ -84,6 +88,40 @@ class SettingsStoreTest {
         assertEquals("""{"id":"neon","accentColor":"#FF2D95"}""", loaded.themeCustomJson)
         assertEquals("ra-key", loaded.raApiKey)
         assertEquals("player1", loaded.raUsername)
+        assertEquals("onex-sugar", loaded.deviceProfileId)
+        assertEquals("secondary", loaded.interactiveDisplayMode)
+        assertEquals("sensor_landscape", loaded.orientationMode)
+        assertEquals(1, loaded.userPinnedPrimaryId)
+    }
+
+    @Test
+    fun `v7 primaryDisplay 1 migrates to interactive secondary`() {
+        val f = tmp.root.resolve("cfg-v7-pd/settings.json")
+        SettingsStore(f).save(Settings.DEFAULT.copy(primaryDisplay = 1, setupDismissed = true))
+        val raw = org.json.JSONObject(f.readText())
+        raw.put("schemaVersion", 7)
+        raw.put("primaryDisplay", 1)
+        raw.remove("interactiveDisplayMode")
+        raw.remove("deviceProfileId")
+        raw.remove("orientationMode")
+        raw.remove("userPinnedPrimaryId")
+        f.writeText(raw.toString())
+        val loaded = SettingsStore(f).load()
+        assertEquals("secondary", loaded.interactiveDisplayMode)
+        assertEquals("auto", loaded.deviceProfileId)
+        assertEquals(SettingsStore.CURRENT_SCHEMA, loaded.schemaVersion)
+    }
+
+    @Test
+    fun `v7 primaryDisplay 0 migrates to interactive default`() {
+        val f = tmp.root.resolve("cfg-v7-pd0/settings.json")
+        SettingsStore(f).save(Settings.DEFAULT.copy(primaryDisplay = 0))
+        val raw = org.json.JSONObject(f.readText())
+        raw.put("schemaVersion", 7)
+        raw.put("primaryDisplay", 0)
+        raw.remove("interactiveDisplayMode")
+        f.writeText(raw.toString())
+        assertEquals("default", SettingsStore(f).load().interactiveDisplayMode)
     }
 
     @Test

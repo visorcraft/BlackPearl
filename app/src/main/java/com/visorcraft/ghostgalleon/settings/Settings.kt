@@ -77,7 +77,16 @@ data class Settings(
     // Optional RetroAchievements API key + username (like sgdbApiKey)
     val raApiKey: String? = null,
     val raUsername: String? = null,
-    val schemaVersion: Int = 7,
+    // --- schema v8: portable display topology ---
+    // Device profile catalog id: auto | onex-sugar | generic-dual | single
+    val deviceProfileId: String = "auto",
+    // Interactive display: auto | default | secondary | id:<n>
+    val interactiveDisplayMode: String = "auto",
+    // Orientation: auto | sensor_landscape | lock_landscape
+    val orientationMode: String = "auto",
+    // Sticky pin after manual swap; null = follow profile/auto
+    val userPinnedPrimaryId: Int? = null,
+    val schemaVersion: Int = 8,
 ) {
     companion object {
         val DEFAULT_KEY_MAP: Map<Int, Action> = mapOf(

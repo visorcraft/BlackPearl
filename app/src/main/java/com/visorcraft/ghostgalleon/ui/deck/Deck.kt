@@ -26,14 +26,25 @@ interface Deck {
     fun handleAction(action: Action): Boolean
 }
 
-// Dual-screen launch model: apps open on the display NOT hosting the
-// interactive deck, so the launcher stays put and the app gets the free
-// screen. Falls back to a normal launch when only one display exists.
+// Dual-screen launch model: apps open on the topology launch display
+// (non-interactive panel) when dual; same-display fallback for single.
 internal fun launchOnOtherDisplay(activity: Activity, state: DeckState, intent: Intent) {
-    val otherDisplay = if (state.primaryDisplayId == 0) 1 else 0
+    val app = activity.application as? com.visorcraft.ghostgalleon.GhostGalleonApp
+    val topo = app?.displayConfig
+    val launchId = topo?.launchDisplayId
+        ?: run {
+            // Soft fallback without topology: any display that is not primary.
+            val dm = activity.getSystemService(DisplayManager::class.java)
+            dm.displays.map { it.displayId }
+                .firstOrNull { it != state.primaryDisplayId }
+        }
     val dm = activity.getSystemService(DisplayManager::class.java)
-    if (dm.displays.any { it.displayId == otherDisplay }) {
-        val options = ActivityOptions.makeBasic().setLaunchDisplayId(otherDisplay)
+    val current = activity.display?.displayId
+    if (launchId != null &&
+        launchId != current &&
+        dm.displays.any { it.displayId == launchId }
+    ) {
+        val options = ActivityOptions.makeBasic().setLaunchDisplayId(launchId)
         activity.startActivity(intent, options.toBundle())
     } else {
         activity.startActivity(intent)

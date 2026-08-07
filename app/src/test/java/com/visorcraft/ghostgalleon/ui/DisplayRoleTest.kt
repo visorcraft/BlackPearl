@@ -16,7 +16,7 @@ class DisplayRoleTest {
     @Test
     fun `roles invert after swap`() {
         val s = DeckState()
-        s.swapDisplays()
+        s.swapDisplaysWith(1)
         assertEquals(DisplayRole.COMPANION, DisplayRole.roleFor(0, s))
         assertEquals(DisplayRole.PRIMARY, DisplayRole.roleFor(1, s))
     }

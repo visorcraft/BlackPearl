@@ -2,8 +2,9 @@ package com.visorcraft.ghostgalleon.ui
 
 import android.app.ActivityOptions
 import android.content.Intent
-import android.hardware.display.DisplayManager
 import android.os.Bundle
+import com.visorcraft.ghostgalleon.display.AndroidDisplayProbe
+import com.visorcraft.ghostgalleon.display.SurfaceMode
 
 class CompanionActivity : BaseDeckActivity() {
 
@@ -28,46 +29,42 @@ class CompanionActivity : BaseDeckActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Quickstep SECONDARY_HOME uses FLAG_ACTIVITY_MULTIPLE_TASK, so
-        // singleInstance does NOT reuse the existing companion — every
-        // bottom swipe used to spawn a fresh activity and flash-reload the
-        // grid. Prefer the healthy companion already on display 1: ask it
-        // to open the all-apps drawer and finish this duplicate without
-        // painting. (Application onActivityCreated runs after onCreate, so
-        // liveCompanions() here only holds previously created instances.)
+        val topo = app.refreshDisplayConfig()
+        // Single-display: SECONDARY_HOME is rare; finish quietly without cascade.
+        if (topo.mode != SurfaceMode.DUAL || topo.companionDisplayId == null) {
+            selfClosing = true
+            super.onCreate(savedInstanceState)
+            finish()
+            return
+        }
+        val target = topo.companionDisplayId
+
+        // Prefer the healthy companion already on the topology target: ask it
+        // to open the all-apps drawer and finish this duplicate without painting.
         val existing = app.liveCompanions().filter { !it.isFinishing }
-        val keepOnBottom = existing.firstOrNull { it.display?.displayId == 1 }
-        if (keepOnBottom != null) {
+        val keepOnTarget = existing.firstOrNull { it.display?.displayId == target }
+        if (keepOnTarget != null) {
             absorbDuplicate = true
             selfClosing = true
             super.onCreate(savedInstanceState)
-            // Drop any other stale companions not on display 1.
-            existing.filter { it !== keepOnBottom }.forEach { it.closeQuietly() }
-            keepOnBottom.requestAppDrawer()
+            existing.filter { it !== keepOnTarget }.forEach { it.closeQuietly() }
+            keepOnTarget.requestAppDrawer()
             finish()
             return
         }
 
         super.onCreate(savedInstanceState)
 
-        // No healthy display-1 companion yet: we are the real one. Close any
-        // leftover companions stuck on the wrong display.
+        // No healthy target companion yet: we are the real one. Close leftovers.
         existing.forEach { it.closeQuietly() }
 
-        // SECONDARY_HOME starts land on whichever display is focused. This
-        // activity belongs on display 1; when it arrives anywhere else,
-        // relaunch it there and close the misplaced task. MULTIPLE_TASK is
-        // required HERE: a plain NEW_TASK start would resolve to this
-        // instance's own task (singleInstance task reuse) and never move
-        // displays.
+        // SECONDARY_HOME may land on the focused display; redirect to topology target.
         val currentDisplay = display?.displayId
-        if (currentDisplay != null && currentDisplay != 1) {
-            val dm = getSystemService(DisplayManager::class.java)
-            val hasSecond = dm.displays.any { it.displayId == 1 }
-            if (hasSecond) {
+        if (currentDisplay != null && currentDisplay != target) {
+            if (AndroidDisplayProbe.hasDisplay(this, target)) {
                 val intent = Intent(this, CompanionActivity::class.java)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
-                val options = ActivityOptions.makeBasic().setLaunchDisplayId(1)
+                val options = ActivityOptions.makeBasic().setLaunchDisplayId(target)
                 selfClosing = true
                 startActivity(intent, options.toBundle())
                 finish()

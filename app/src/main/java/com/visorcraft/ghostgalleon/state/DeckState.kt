@@ -60,14 +60,38 @@ class DeckState {
     fun toggleMode() = setMode(if (mode == UIMode.GRID) UIMode.GAME else UIMode.GRID)
 
     fun setPrimaryDisplayId(id: Int) {
-        require(id == 0 || id == 1) { "primaryDisplayId must be 0 or 1, was $id" }
         if (primaryDisplayId == id) return
         primaryDisplayId = id
         lastChange = Change.DISPLAY
         notifyListeners()
     }
 
-    fun swapDisplays() = setPrimaryDisplayId(if (primaryDisplayId == 0) 1 else 0)
+    /**
+     * Dual-only swap: flips between [primaryId] and [companionId] from the
+     * current topology. No-op if ids are invalid or equal.
+     */
+    fun swapDisplays(primaryId: Int, companionId: Int) {
+        if (primaryId == companionId) return
+        val next = if (primaryDisplayId == primaryId) companionId else primaryId
+        setPrimaryDisplayId(next)
+    }
+
+    /**
+     * Test helper: swap with an alternate id (does not assume 0/1 topology).
+     * Production UI uses GhostGalleonApp.swapInteractiveDisplay().
+     */
+    fun swapDisplaysWith(otherDisplayId: Int) {
+        if (otherDisplayId == primaryDisplayId) return
+        setPrimaryDisplayId(otherDisplayId)
+    }
+
+    /** Align primary to topology when current id is not in [validIds]. */
+    fun ensurePrimaryIn(validIds: Collection<Int>, preferred: Int) {
+        if (validIds.isEmpty()) return
+        if (primaryDisplayId in validIds) return
+        val next = if (preferred in validIds) preferred else validIds.first()
+        setPrimaryDisplayId(next)
+    }
 
     fun select(key: String?) {
         if (selectedKey == key && dockSlot == null) return

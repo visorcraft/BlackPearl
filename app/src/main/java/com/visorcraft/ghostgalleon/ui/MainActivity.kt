@@ -2,8 +2,8 @@ package com.visorcraft.ghostgalleon.ui
 
 import android.app.ActivityOptions
 import android.content.Intent
-import android.hardware.display.DisplayManager
 import android.os.Bundle
+import com.visorcraft.ghostgalleon.display.SurfaceMode
 
 class MainActivity : BaseDeckActivity() {
 
@@ -14,6 +14,7 @@ class MainActivity : BaseDeckActivity() {
 
     override fun onResume() {
         super.onResume()
+        app.refreshDisplayConfig(debounce = true)
         healCompanionIfMissing()
     }
 
@@ -42,14 +43,17 @@ class MainActivity : BaseDeckActivity() {
     }
 
     private fun launchCompanionIfPresent() {
-        val dm = getSystemService(DisplayManager::class.java)
-        val hasSecond = dm.displays.any { it.displayId == 1 }
-        if (!hasSecond) return
+        val topo = app.refreshDisplayConfig()
+        if (topo.mode != SurfaceMode.DUAL) return
+        val companionId = topo.companionDisplayId ?: return
+        if (!com.visorcraft.ghostgalleon.display.AndroidDisplayProbe.hasDisplay(this, companionId)) {
+            return
+        }
         // NEW_TASK without MULTIPLE_TASK: singleInstance then reuses the
         // existing companion task instead of leaking a new one per call.
         val intent = Intent(this, CompanionActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        val options = ActivityOptions.makeBasic().setLaunchDisplayId(1)
+        val options = ActivityOptions.makeBasic().setLaunchDisplayId(companionId)
         startActivity(intent, options.toBundle())
     }
 }

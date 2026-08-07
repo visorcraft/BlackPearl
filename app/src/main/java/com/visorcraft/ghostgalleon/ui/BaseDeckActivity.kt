@@ -692,7 +692,7 @@ abstract class BaseDeckActivity : AppCompatActivity() {
         Action.SWAP_SCREENS -> {
             if (repeatCount == 0) {
                 haptic(HapticFeedbackConstants.KEYBOARD_TAP)
-                deckState.swapDisplays()
+                app.swapInteractiveDisplay()
             }
             true
         }

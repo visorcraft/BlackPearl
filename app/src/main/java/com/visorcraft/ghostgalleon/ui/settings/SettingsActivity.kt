@@ -35,6 +35,7 @@ import com.visorcraft.ghostgalleon.library.RetroAchievements
 import com.visorcraft.ghostgalleon.rom.Platforms
 import com.visorcraft.ghostgalleon.rom.RomLibrary
 import com.visorcraft.ghostgalleon.rom.TreeLabels
+import com.visorcraft.ghostgalleon.display.DeviceProfileCatalog
 import com.visorcraft.ghostgalleon.settings.Action
 import com.visorcraft.ghostgalleon.settings.CompanionRole
 import com.visorcraft.ghostgalleon.settings.SettingsBundle
@@ -1151,6 +1152,78 @@ class SettingsActivity : AppCompatActivity() {
         })
         displayCard.addView(themeImportRow, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))
+        // Portable display topology (Auto / Sugar / dual / single).
+        val profileOptions = listOf(
+            "auto" to "AUTO",
+            "onex-sugar" to "SUGAR",
+            "generic-dual" to "DUAL",
+            "single" to "SINGLE",
+        )
+        displayCard.addView(controlRow(
+            "Device profile",
+            segmented(profileOptions, s.deviceProfileId) { id ->
+                app.updateSettings(app.settings.copy(
+                    deviceProfileId = id,
+                    userPinnedPrimaryId = null,
+                ))
+                app.refreshDisplayConfig()
+                recreate()
+            },
+        ), LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))
+        val interactiveOptions = listOf(
+            "auto" to "AUTO",
+            "default" to "DEFAULT",
+            "secondary" to "SECONDARY",
+        )
+        val interactiveCurrent = when {
+            s.interactiveDisplayMode.startsWith("id:") -> "auto"
+            else -> s.interactiveDisplayMode
+        }
+        displayCard.addView(controlRow(
+            "Interactive display",
+            segmented(interactiveOptions, interactiveCurrent) { mode ->
+                app.updateSettings(app.settings.copy(
+                    interactiveDisplayMode = mode,
+                    userPinnedPrimaryId = null,
+                ))
+                app.refreshDisplayConfig()
+                recreate()
+            },
+        ), LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))
+        val orientOptions = listOf(
+            "auto" to "AUTO",
+            "sensor_landscape" to "SENSOR",
+            "lock_landscape" to "LOCK",
+        )
+        displayCard.addView(controlRow(
+            "Orientation",
+            segmented(orientOptions, s.orientationMode) { mode ->
+                app.updateSettings(app.settings.copy(orientationMode = mode))
+                recreate()
+            },
+        ), LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))
+        val resetDisplayRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            isFocusable = true
+            setOnClickListener {
+                app.updateSettings(app.settings.copy(
+                    userPinnedPrimaryId = null,
+                    interactiveDisplayMode = "auto",
+                    deviceProfileId = "auto",
+                ))
+                app.refreshDisplayConfig()
+                Toast.makeText(this@SettingsActivity, "Display roles reset", Toast.LENGTH_SHORT).show()
+                recreate()
+            }
+        }
+        resetDisplayRow.addView(rowLabel("Reset display roles"), LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        displayCard.addView(resetDisplayRow, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))
         addSection(SettingsPage.DISPLAY_GRID, "Display", displayCard)
 
         // Companion panel role + pinned package (same page as Display).
@@ -1756,6 +1829,22 @@ class SettingsActivity : AppCompatActivity() {
 
         // System: live device hardware / RAM / CPU / storage / battery / power.
         val systemCard = sectionCard()
+        val topo = app.refreshDisplayConfig()
+        val systemCardExtra = systemCard
+        systemCardExtra.addView(statRow(
+            "Display mode",
+            "${topo.mode} · profile=${DeviceProfileCatalog.effective(app.settings.deviceProfileId, com.visorcraft.ghostgalleon.display.AndroidDisplayProbe.read(this)).id}",
+        ))
+        systemCardExtra.addView(statRow(
+            "Topology",
+            "primary=${topo.primaryDisplayId} companion=${topo.companionDisplayId} launch=${topo.launchDisplayId}",
+        ))
+        systemCardExtra.addView(TextView(this).apply {
+            text = topo.reason
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            setTextColor(0x66FFFFFF.toInt())
+            setPadding(0, 0, 0, dp(8))
+        })
         val readings = SystemInfoCollector.collect(this)
         SystemInfoFormat.rows(readings).forEach { (label, value) ->
             val row = LinearLayout(this).apply {

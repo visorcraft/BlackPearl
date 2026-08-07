@@ -32,7 +32,7 @@ class SettingsStore(private val file: File) {
     }
 
     companion object {
-        const val CURRENT_SCHEMA = 7
+        const val CURRENT_SCHEMA = 8
 
         // Internal (not private) so SettingsBundle can pack/unpack settings
         // through the exact same codec the on-disk file uses; same-module
@@ -140,8 +140,36 @@ class SettingsStore(private val file: File) {
             } else {
                 null
             },
+            // Schema v8: display topology policy. Migrate primaryDisplay when
+            // interactiveDisplayMode is absent.
+            deviceProfileId = o.optString("deviceProfileId", "auto").ifBlank { "auto" },
+            interactiveDisplayMode = migrateInteractiveDisplayMode(o, schemaVersion),
+            orientationMode = o.optString("orientationMode", "auto").ifBlank { "auto" },
+            userPinnedPrimaryId = if (o.has("userPinnedPrimaryId") && !o.isNull("userPinnedPrimaryId")) {
+                o.optInt("userPinnedPrimaryId")
+            } else {
+                null
+            },
             schemaVersion = CURRENT_SCHEMA,
         )
+        }
+
+        /**
+         * Map legacy [Settings.primaryDisplay] into interactiveDisplayMode when
+         * the v8 field is missing. 1 → "secondary", 0 → "default".
+         */
+        private fun migrateInteractiveDisplayMode(o: JSONObject, schemaVersion: Int): String {
+            if (o.has("interactiveDisplayMode") && !o.isNull("interactiveDisplayMode")) {
+                val m = o.optString("interactiveDisplayMode", "auto").trim()
+                if (m.isNotEmpty()) return m
+            }
+            // Pre-v8: derive from primaryDisplay
+            val pd = if (schemaVersion < 2) 1 else o.optInt("primaryDisplay", 1)
+            return when (pd) {
+                0 -> "default"
+                1 -> "secondary"
+                else -> "id:$pd"
+            }
         }
 
         internal fun toJson(s: Settings): JSONObject {
@@ -216,6 +244,13 @@ class SettingsStore(private val file: File) {
             .put("themeCustomJson", s.themeCustomJson ?: JSONObject.NULL)
             .put("raApiKey", s.raApiKey ?: JSONObject.NULL)
             .put("raUsername", s.raUsername ?: JSONObject.NULL)
+            .put("deviceProfileId", s.deviceProfileId)
+            .put("interactiveDisplayMode", s.interactiveDisplayMode)
+            .put("orientationMode", s.orientationMode)
+            .put(
+                "userPinnedPrimaryId",
+                s.userPinnedPrimaryId?.let { it } ?: JSONObject.NULL,
+            )
             .put("schemaVersion", CURRENT_SCHEMA)
         }
 

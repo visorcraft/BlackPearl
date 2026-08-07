@@ -1,0 +1,142 @@
+package com.visorcraft.ghostgalleon.display
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class DisplayTopologyTest {
+
+    private fun dualReadings(
+        defaultId: Int = 0,
+        secondaryId: Int = 1,
+    ) = DisplayReadings(
+        displays = listOf(
+            DisplayInfo(defaultId, 2160, 1080, 320, isDefault = true, name = "top"),
+            DisplayInfo(secondaryId, 1240, 1080, 320, isDefault = false, name = "bottom"),
+        ),
+        manufacturer = "ONEXSUGAR",
+        model = "SUGAR 1",
+    )
+
+    @Test
+    fun `single display yields SINGLE launch equals primary`() {
+        val r = DisplayReadings(
+            listOf(DisplayInfo(0, 1080, 1920, 420, isDefault = true)),
+        )
+        val t = DisplayTopology.resolve(r, DeviceProfileCatalog.AUTO)
+        assertEquals(SurfaceMode.SINGLE, t.mode)
+        assertEquals(0, t.primaryDisplayId)
+        assertNull(t.companionDisplayId)
+        assertEquals(0, t.launchDisplayId)
+    }
+
+    @Test
+    fun `prefer secondary makes secondary interactive`() {
+        val t = DisplayTopology.resolve(
+            dualReadings(),
+            DeviceProfileCatalog.ONEX_SUGAR,
+            interactiveDisplayMode = "auto",
+        )
+        assertEquals(SurfaceMode.DUAL, t.mode)
+        assertEquals(1, t.primaryDisplayId)
+        assertEquals(0, t.companionDisplayId)
+        assertEquals(0, t.launchDisplayId)
+    }
+
+    @Test
+    fun `prefer default interactive`() {
+        val t = DisplayTopology.resolve(
+            dualReadings(),
+            DeviceProfileCatalog.AUTO,
+            interactiveDisplayMode = "default",
+        )
+        assertEquals(0, t.primaryDisplayId)
+        assertEquals(1, t.companionDisplayId)
+        assertEquals(1, t.launchDisplayId)
+    }
+
+    @Test
+    fun `explicit id mode`() {
+        val t = DisplayTopology.resolve(
+            dualReadings(defaultId = 0, secondaryId = 5),
+            DeviceProfileCatalog.AUTO,
+            interactiveDisplayMode = "id:5",
+        )
+        assertEquals(5, t.primaryDisplayId)
+        assertEquals(0, t.companionDisplayId)
+    }
+
+    @Test
+    fun `invalid explicit id falls back to default`() {
+        val t = DisplayTopology.resolve(
+            dualReadings(),
+            DeviceProfileCatalog.AUTO,
+            interactiveDisplayMode = "id:99",
+        )
+        assertEquals(0, t.primaryDisplayId)
+    }
+
+    @Test
+    fun `non zero one ids dual`() {
+        val t = DisplayTopology.resolve(
+            dualReadings(defaultId = 10, secondaryId = 20),
+            DeviceProfileCatalog.ONEX_SUGAR,
+        )
+        assertEquals(20, t.primaryDisplayId)
+        assertEquals(10, t.companionDisplayId)
+        assertEquals(10, t.launchDisplayId)
+    }
+
+    @Test
+    fun `swap exchanges roles and launch`() {
+        val t = DisplayTopology.resolve(
+            dualReadings(),
+            DeviceProfileCatalog.ONEX_SUGAR,
+        )
+        val s = DisplayTopology.swap(t)
+        assertEquals(t.companionDisplayId, s.primaryDisplayId)
+        assertEquals(t.primaryDisplayId, s.companionDisplayId)
+        assertEquals(t.primaryDisplayId, s.launchDisplayId)
+    }
+
+    @Test
+    fun `swap on single is no-op`() {
+        val r = DisplayReadings(listOf(DisplayInfo(0, 800, 600, 240, true)))
+        val t = DisplayTopology.resolve(r, DeviceProfileCatalog.SINGLE)
+        assertEquals(t, DisplayTopology.swap(t))
+    }
+
+    @Test
+    fun `user pin overrides auto`() {
+        val t = DisplayTopology.resolve(
+            dualReadings(),
+            DeviceProfileCatalog.ONEX_SUGAR,
+            interactiveDisplayMode = "auto",
+            userPinnedPrimaryId = 0,
+        )
+        assertEquals(0, t.primaryDisplayId)
+        assertEquals(1, t.companionDisplayId)
+    }
+
+    @Test
+    fun `force single profile ignores second display`() {
+        val t = DisplayTopology.resolve(
+            dualReadings(),
+            DeviceProfileCatalog.SINGLE,
+        )
+        assertEquals(SurfaceMode.SINGLE, t.mode)
+        assertNull(t.companionDisplayId)
+    }
+
+    @Test
+    fun `empty displays synthetic single`() {
+        val t = DisplayTopology.resolve(
+            DisplayReadings(emptyList()),
+            DeviceProfileCatalog.AUTO,
+        )
+        assertEquals(SurfaceMode.SINGLE, t.mode)
+        assertEquals(0, t.primaryDisplayId)
+        assertTrue(t.reason.contains("synthetic") || t.reason.contains("no usable"))
+    }
+}
