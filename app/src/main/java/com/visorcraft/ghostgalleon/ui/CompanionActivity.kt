@@ -31,16 +31,26 @@ class CompanionActivity : BaseDeckActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         val topo = app.refreshDisplayConfig()
         // Single-display: SECONDARY_HOME is rare; finish quietly without cascade.
-        if (topo.mode != SurfaceMode.DUAL || topo.companionDisplayId == null) {
+        if (topo.mode != SurfaceMode.DUAL) {
             selfClosing = true
             super.onCreate(savedInstanceState)
             finish()
             return
         }
-        val target = topo.companionDisplayId
+        // SECONDARY_HOME activity must sit on the non-default panel (Sugar
+        // bottom). Content roles (grid vs hero) follow primaryDisplayId —
+        // stacking Companion on companionDisplayId when that equals the
+        // default display leaves the other panel empty (system wallpaper).
+        val target = topo.secondaryHomeDisplayId
+            ?: topo.allIds.firstOrNull { it != (display?.displayId ?: -1) }
+            ?: run {
+                selfClosing = true
+                super.onCreate(savedInstanceState)
+                finish()
+                return
+            }
 
-        // Prefer the healthy companion already on the topology target: ask it
-        // to open the all-apps drawer and finish this duplicate without painting.
+        // Prefer the healthy companion already on the secondary-home target.
         val existing = app.liveCompanions().filter { !it.isFinishing }
         val keepOnTarget = existing.firstOrNull { it.display?.displayId == target }
         if (keepOnTarget != null) {
@@ -58,11 +68,13 @@ class CompanionActivity : BaseDeckActivity() {
         // No healthy target companion yet: we are the real one. Close leftovers.
         existing.forEach { it.closeQuietly() }
 
-        // SECONDARY_HOME may land on the focused display; redirect to topology target.
+        // SECONDARY_HOME may land on the focused display; redirect to secondary panel.
         val currentDisplay = display?.displayId
         if (currentDisplay != null && currentDisplay != target) {
             if (AndroidDisplayProbe.hasDisplay(this, target)) {
-                val intent = Intent(this, CompanionActivity::class.java)
+                val intent = Intent(Intent.ACTION_MAIN)
+                    .setClass(this, CompanionActivity::class.java)
+                    .addCategory(Intent.CATEGORY_SECONDARY_HOME)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
                 val options = ActivityOptions.makeBasic().setLaunchDisplayId(target)
                 selfClosing = true

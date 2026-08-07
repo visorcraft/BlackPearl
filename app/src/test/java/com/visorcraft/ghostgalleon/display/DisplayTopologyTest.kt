@@ -42,6 +42,9 @@ class DisplayTopologyTest {
         assertEquals(1, t.primaryDisplayId)
         assertEquals(0, t.companionDisplayId)
         assertEquals(0, t.launchDisplayId)
+        // Activity placement stays on the non-default panel even when hero
+        // *content* lives on default (companionDisplayId=0).
+        assertEquals(1, t.secondaryHomeDisplayId)
     }
 
     @Test
@@ -54,6 +57,7 @@ class DisplayTopologyTest {
         assertEquals(0, t.primaryDisplayId)
         assertEquals(1, t.companionDisplayId)
         assertEquals(1, t.launchDisplayId)
+        assertEquals(1, t.secondaryHomeDisplayId)
     }
 
     @Test
@@ -98,6 +102,8 @@ class DisplayTopologyTest {
         assertEquals(t.companionDisplayId, s.primaryDisplayId)
         assertEquals(t.primaryDisplayId, s.companionDisplayId)
         assertEquals(t.primaryDisplayId, s.launchDisplayId)
+        // Activity placement is sticky: SECONDARY_HOME stays on the panel.
+        assertEquals(t.secondaryHomeDisplayId, s.secondaryHomeDisplayId)
     }
 
     @Test
@@ -117,6 +123,16 @@ class DisplayTopologyTest {
         )
         assertEquals(0, t.primaryDisplayId)
         assertEquals(1, t.companionDisplayId)
+        assertEquals(1, t.secondaryHomeDisplayId)
+    }
+
+    @Test
+    fun `single has null secondary home`() {
+        val t = DisplayTopology.resolve(
+            DisplayReadings(listOf(DisplayInfo(0, 1080, 1920, 420, isDefault = true))),
+            DeviceProfileCatalog.AUTO,
+        )
+        assertNull(t.secondaryHomeDisplayId)
     }
 
     @Test

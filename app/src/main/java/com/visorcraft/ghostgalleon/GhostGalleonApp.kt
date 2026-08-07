@@ -121,6 +121,7 @@ class GhostGalleonApp : Application() {
             primaryDisplayId = deckState.primaryDisplayId,
             companionDisplayId = companion,
             launchDisplayId = companion,
+            secondaryHomeDisplayId = topo.secondaryHomeDisplayId,
             allIds = topo.allIds,
             reason = topo.reason,
         )

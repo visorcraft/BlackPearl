@@ -3,6 +3,7 @@ package com.visorcraft.ghostgalleon.ui
 import android.app.ActivityOptions
 import android.content.Intent
 import android.os.Bundle
+import com.visorcraft.ghostgalleon.display.AndroidDisplayProbe
 import com.visorcraft.ghostgalleon.display.SurfaceMode
 
 class MainActivity : BaseDeckActivity() {
@@ -45,15 +46,23 @@ class MainActivity : BaseDeckActivity() {
     private fun launchCompanionIfPresent() {
         val topo = app.refreshDisplayConfig()
         if (topo.mode != SurfaceMode.DUAL) return
-        val companionId = topo.companionDisplayId ?: return
-        if (!com.visorcraft.ghostgalleon.display.AndroidDisplayProbe.hasDisplay(this, companionId)) {
-            return
-        }
-        // NEW_TASK without MULTIPLE_TASK: singleInstance then reuses the
-        // existing companion task instead of leaking a new one per call.
-        val intent = Intent(this, CompanionActivity::class.java)
+        // SECONDARY_HOME activity must land on the non-default panel.
+        // Content roles (grid vs hero) follow primaryDisplayId separately —
+        // do NOT use companionDisplayId here (that is the hero *content*
+        // surface, often the default display where Main already lives).
+        val secondaryHomeId = topo.secondaryHomeDisplayId
+            ?: topo.allIds.firstOrNull { it != (display?.displayId ?: -1) }
+            ?: return
+        if (!AndroidDisplayProbe.hasDisplay(this, secondaryHomeId)) return
+        // MAIN + SECONDARY_HOME so the task is typed as home on the secondary
+        // panel (not a free-floating standard task that launcher3 can cover).
+        // NEW_TASK without MULTIPLE_TASK: singleInstance reuses the existing
+        // companion task instead of leaking a new one per call.
+        val intent = Intent(Intent.ACTION_MAIN)
+            .setClass(this, CompanionActivity::class.java)
+            .addCategory(Intent.CATEGORY_SECONDARY_HOME)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        val options = ActivityOptions.makeBasic().setLaunchDisplayId(companionId)
+        val options = ActivityOptions.makeBasic().setLaunchDisplayId(secondaryHomeId)
         startActivity(intent, options.toBundle())
     }
 }

@@ -677,8 +677,13 @@ object CompanionPanel {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
         }
-        // Continue chip near hero when a continue target is known.
+        // Resume chip = jump to a *different* last-played title. Never show
+        // for the already-selected key (hero already is that game), and never
+        // when a session is open (Now Playing owns that state). lastLaunchedMs
+        // alone is not "running" — that misread as "Continue: Eden" while Eden
+        // sat idle as the cold-start selection.
         run {
+            if (app.openSession != null) return@run
             val available = buildList {
                 addAll(settings.gridSlots.filterNotNull())
                 addAll(settings.dockSlots.filterNotNull())
@@ -687,7 +692,7 @@ object CompanionPanel {
                 addAll(settings.lastLaunchedMs.keys)
             }
             val cont = LibraryBrowse.continueKey(available, settings.lastLaunchedMs)
-            if (cont != null) {
+            if (cont != null && cont != state.selectedKey) {
                 val contName = when {
                     SlotKey.isRom(cont) -> {
                         val id = SlotKey.romId(cont)
@@ -697,7 +702,7 @@ object CompanionPanel {
                         .firstOrNull { it.packageName == cont }?.label ?: cont
                 }
                 hero.addView(TextView(context).apply {
-                    text = "Continue: $contName"
+                    text = "Resume $contName"
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
                     setTextColor(Color.BLACK)
                     background = TileBackgrounds.selected(context, settings.accentColor)
@@ -716,6 +721,8 @@ object CompanionPanel {
                 ).apply {
                     gravity = Gravity.CENTER_HORIZONTAL
                     bottomMargin = dp(12)
+                    marginStart = dp(24)
+                    marginEnd = dp(24)
                 })
             }
         }
@@ -744,6 +751,8 @@ object CompanionPanel {
             artFrame.children.filterIsInstance<TextView>().first().tag = TAG_HERO_ICON
             hero.addView(artFrame, LinearLayout.LayoutParams(dp(240), dp(240)))
             bindRomHeroArt(banner, artFrame, cache, selectedRom, settings.artOverrides)
+            // MATCH_PARENT + horizontal pad so long names ellipsize inside the
+            // panel instead of drawing past the rounded display edge.
             hero.addView(TextView(context).apply {
                 tag = TAG_HERO_NAME
                 text = selectedRom.name
@@ -752,8 +761,11 @@ object CompanionPanel {
                 gravity = Gravity.CENTER
                 maxLines = 2
                 ellipsize = android.text.TextUtils.TruncateAt.END
-                setPadding(0, dp(24), 0, 0)
-            })
+                setPadding(dp(24), dp(24), dp(24), 0)
+            }, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ))
             hero.addView(TextView(context).apply {
                 tag = TAG_HERO_SUB
                 text = Platforms.byId(selectedRom.platformId)?.displayName
@@ -761,16 +773,22 @@ object CompanionPanel {
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
                 setTextColor(0x99FFFFFF.toInt())
                 gravity = Gravity.CENTER
-                setPadding(0, dp(6), 0, 0)
-            })
+                setPadding(dp(24), dp(6), dp(24), 0)
+            }, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ))
             hero.addView(TextView(context).apply {
                 tag = TAG_HERO_META
                 text = romMetaLine(settings, SlotKey.rom(selectedRom.id))
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
                 setTextColor(0x88FFFFFF.toInt())
                 gravity = Gravity.CENTER
-                setPadding(0, dp(4), 0, 0)
-            })
+                setPadding(dp(24), dp(4), dp(24), 0)
+            }, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ))
             val metadataText = HeroDetail.metadataLine(selectedRom)
             hero.addView(TextView(context).apply {
                 tag = TAG_HERO_METADATA
@@ -779,8 +797,11 @@ object CompanionPanel {
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
                 setTextColor(0x88FFFFFF.toInt())
                 gravity = Gravity.CENTER
-                setPadding(0, dp(2), 0, 0)
-            })
+                setPadding(dp(24), dp(2), dp(24), 0)
+            }, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ))
             val platform = Platforms.byId(selectedRom.platformId)
             val installed = { pkg: String ->
                 runCatching {
@@ -946,8 +967,13 @@ object CompanionPanel {
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 32f)
                 setTextColor(Color.WHITE)
                 gravity = Gravity.CENTER
-                setPadding(0, dp(24), 0, 0)
-            })
+                maxLines = 2
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                setPadding(dp(24), dp(24), dp(24), 0)
+            }, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ))
         } else {
             // Layered brand fallback, full-panel: clouds + sea behind the
             // content column (which goes transparent so the scene shows

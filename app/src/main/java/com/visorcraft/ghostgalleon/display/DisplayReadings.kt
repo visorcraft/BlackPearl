@@ -39,9 +39,19 @@ enum class SurfaceMode { SINGLE, DUAL }
  */
 data class ResolvedTopology(
     val mode: SurfaceMode,
+    /** Display that hosts the interactive deck (grid/carousel content). */
     val primaryDisplayId: Int,
+    /** Other dual surface (hero content); null in SINGLE. */
     val companionDisplayId: Int?,
+    /** Where apps/ROMs launch (non-interactive panel, or primary if single). */
     val launchDisplayId: Int,
+    /**
+     * Where [CompanionActivity] / SECONDARY_HOME must run in DUAL — the first
+     * non-default display. Android places [MainActivity] (HOME) on the default
+     * display; stacking both activities on the same display leaves the other
+     * panel empty (Sugar regression: bottom wallpaper). Null in SINGLE.
+     */
+    val secondaryHomeDisplayId: Int? = null,
     val allIds: List<Int>,
     val reason: String = "",
 ) {

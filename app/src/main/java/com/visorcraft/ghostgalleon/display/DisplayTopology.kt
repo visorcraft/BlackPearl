@@ -28,6 +28,7 @@ object DisplayTopology {
                 primaryDisplayId = 0,
                 companionDisplayId = null,
                 launchDisplayId = 0,
+                secondaryHomeDisplayId = null,
                 allIds = listOf(0),
                 reason = "no usable displays; synthetic id 0",
             )
@@ -50,12 +51,14 @@ object DisplayTopology {
                 primaryDisplayId = primary,
                 companionDisplayId = null,
                 launchDisplayId = primary,
+                secondaryHomeDisplayId = null,
                 allIds = allIds,
                 reason = "SINGLE profile=${profile.id} displays=${allIds.size} primary=$primary",
             )
         }
 
-        val companionCandidate = secondaries.first()
+        val secondaryHome = secondaries.first() // activity placement for SECONDARY_HOME
+        val companionCandidate = secondaryHome
 
         // Sticky pin wins when still present.
         if (userPinnedPrimaryId != null && userPinnedPrimaryId in allIds) {
@@ -66,8 +69,9 @@ object DisplayTopology {
                 primaryDisplayId = primary,
                 companionDisplayId = companion,
                 launchDisplayId = companion,
+                secondaryHomeDisplayId = secondaryHome.id,
                 allIds = allIds,
-                reason = "DUAL pinned primary=$primary companion=$companion",
+                reason = "DUAL pinned primary=$primary companion=$companion secondaryHome=${secondaryHome.id}",
             )
         }
 
@@ -104,6 +108,7 @@ object DisplayTopology {
                 primaryDisplayId = primary,
                 companionDisplayId = null,
                 launchDisplayId = primary,
+                secondaryHomeDisplayId = null,
                 allIds = allIds,
                 reason = "collapsed to SINGLE after resolve primary=$primary",
             )
@@ -114,8 +119,9 @@ object DisplayTopology {
             primaryDisplayId = primary,
             companionDisplayId = companionFinal,
             launchDisplayId = companionFinal,
+            secondaryHomeDisplayId = secondaryHome.id,
             allIds = allIds,
-            reason = "DUAL profile=${profile.id} mode=$mode primary=$primary companion=$companionFinal",
+            reason = "DUAL profile=${profile.id} mode=$mode primary=$primary companion=$companionFinal secondaryHome=${secondaryHome.id}",
         )
     }
 
@@ -126,6 +132,7 @@ object DisplayTopology {
             primaryDisplayId = companion,
             companionDisplayId = topology.primaryDisplayId,
             launchDisplayId = topology.primaryDisplayId,
+            // secondaryHomeDisplayId unchanged — activity still on non-default panel
             reason = "swapped primary=$companion companion=${topology.primaryDisplayId}",
         )
     }
