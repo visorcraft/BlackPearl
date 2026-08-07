@@ -1,0 +1,51 @@
+Credits and Attribution
+=======================
+
+Copyright
+---------
+
+BlackPearl is (c) VisorCraft LLC and contributors, distributed under the
+GNU General Public License v3.0 (see the BlackPearl License tab).
+
+Design inspiration
+------------------
+
+BlackPearl's dual-screen launcher model - an interactive deck on one
+panel with a hero preview on the other, plus SECONDARY_HOME handling for
+the bottom display - follows the trail blazed by Cocoon
+(https://github.com/inssekt/CocoonFE), the dual-screen shell for the
+One X Sugar. Game Mode's card carousel takes its cues from Daijisho
+(https://github.com/TapiocaFox/Daijishou) and GameDeck
+(https://play.google.com/store/apps/details?id=app.gamedeck). The Grid
+Mode layout is a loving homage to the Nintendo 3DS and Wii home menus.
+None of these projects' code is used; they inspired the design.
+
+Artwork
+-------
+
+Box art and hero images are fetched from SteamGridDB
+(https://www.steamgriddb.com) when the user supplies an API key, or read
+from local images next to the user's ROM library. Artwork belongs to its
+respective creators and is cached on-device only.
+
+Emulators
+---------
+
+BlackPearl launches - but never bundles or distributes - these emulator
+projects. We thank their authors: RetroArch, Azahar, Eden, melonDS /
+melonDualDS, Dolphin, NetherSX2 / AetherSX2, PPSSPP, Flycast, Cemu, and
+Winlator. Each is a separate app under its own license.
+
+Runtime
+-------
+
+Built with Kotlin and AndroidX on the Android platform. See the
+Third-party and Runtime components tabs for the full lists.
+
+Reporting attribution gaps
+--------------------------
+
+If you find code or assets in this app that we have failed to credit,
+please open an issue at
+https://github.com/visorcraft/BlackPearl/issues and we will correct the
+record.

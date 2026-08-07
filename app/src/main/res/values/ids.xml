@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- View tag key holding the package name a pending custom-icon decode
+         belongs to (CustomIcon stale-result guard). -->
+    <item name="custom_icon_key" type="id" />
+</resources>

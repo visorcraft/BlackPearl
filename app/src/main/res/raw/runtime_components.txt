@@ -1,0 +1,35 @@
+Runtime Components
+==================
+
+These are the system components and external services BlackPearl relies
+on at execution time. None of them are bundled with the app - the
+Android ones are provided by the OS, and the network service is operated
+by its own provider under its own terms.
+
+Android platform components (all Apache-2.0, part of the Android Open
+Source Project - https://source.android.com):
+
+- Android 14 platform framework (API level 34)
+  Window/input/display APIs BlackPearl is built on, including
+  multi-display Presentation and SECONDARY_HOME support.
+- Android Runtime (ART)
+  Executes the app and its bundled libraries.
+- Storage Access Framework (SAF / DocumentsUI)
+  Provides the ROM-folder tree grants; BlackPearl holds no storage
+  permissions of its own.
+- System media codecs (animated WebP / GIF via AnimatedImageDrawable)
+  Drive the layered hero-panel artwork.
+
+External services and apps:
+
+- SteamGridDB Web API - https://www.steamgriddb.com
+  Optional artwork lookups; a user-supplied API key is required. The
+  service is operated by its own provider under its own terms; no
+  SteamGridDB code or data is bundled.
+- Emulator apps (RetroArch, Azahar, Eden, melonDualDS, Dolphin,
+  NetherSX2, PPSSPP, Flycast, Cemu, Winlator)
+  Installed and updated separately by the user, each under its own
+  license. BlackPearl only sends launch intents to them.
+
+The full Apache-2.0 license text covering the Android platform
+components above is reproduced in the Third-party tab.

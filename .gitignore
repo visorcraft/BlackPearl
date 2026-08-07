@@ -1,0 +1,11 @@
+.gradle/
+build/
+local.properties
+*.iml
+.idea/
+app/build/
+release-signing.properties
+.superpowers/
+AGENTS.md
+CLAUDE.md
+GEMINI.md
