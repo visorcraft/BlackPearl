@@ -105,6 +105,11 @@ class RomLibrary(private val file: File) {
                 },
                 priorFingerprints = priorFp,
                 force = force,
+                // Pure meta fingerprint (count+basenames): one SAF walk, then
+                // skip expensive RomScanner.scan when unchanged. quickMeta
+                // walk-skip is available for injectors that can probe without
+                // a full DocumentTree; production uses a single walk here.
+                fingerprintOf = { TreeFingerprint.ofFilesMeta(it) },
                 readText = { uriString ->
                     runCatching {
                         appContext.contentResolver.openInputStream(Uri.parse(uriString))

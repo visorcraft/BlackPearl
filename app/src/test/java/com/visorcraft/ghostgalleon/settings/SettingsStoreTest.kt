@@ -60,9 +60,11 @@ class SettingsStoreTest {
             artOverrides = mapOf("snes:x.sfc" to "content://art/1"),
             favorites = setOf("rom:snes:x.sfc"),
             collections = mapOf("RPGs" to listOf("rom:snes:x.sfc", "rom:3ds:y")),
+            setupDismissed = true,
         )
         store.save(s)
         assertEquals(s, SettingsStore(f).load())
+        assertEquals(true, SettingsStore(f).load().setupDismissed)
     }
 
     @Test

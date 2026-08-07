@@ -41,4 +41,14 @@ class SetupNeedsTest {
         assertFalse(SetupNeeds.allRequiredDone(snap()))
         assertTrue(SetupNeeds.allRequiredDone(snap(trees = 1)))
     }
+
+    /**
+     * After granting a ROM tree, setup must hide so hosts clear
+     * setupBlockingInput (BaseDeckActivity.renderFromState / maybeShowSetup).
+     */
+    @Test
+    fun `granting a tree makes setup no longer required`() {
+        assertTrue(SetupNeeds.shouldShow(snap(trees = 0, roms = 0)))
+        assertFalse(SetupNeeds.shouldShow(snap(trees = 1, roms = 0)))
+    }
 }

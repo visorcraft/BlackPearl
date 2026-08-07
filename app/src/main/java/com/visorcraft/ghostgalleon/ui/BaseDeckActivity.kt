@@ -2,6 +2,7 @@ package com.visorcraft.ghostgalleon.ui
 
 import android.app.role.RoleManager
 import android.content.Intent
+import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.net.Uri
 import android.os.Build
@@ -9,6 +10,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.text.InputType
 import android.view.HapticFeedbackConstants
 import android.view.InputDevice
 import android.view.KeyEvent
@@ -16,15 +18,18 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.InputMethodManager
+import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import com.visorcraft.ghostgalleon.GhostGalleonApp
 import com.visorcraft.ghostgalleon.input.KeyMap
 import com.visorcraft.ghostgalleon.input.NavRepeater
 import com.visorcraft.ghostgalleon.library.AppLibrary
 import com.visorcraft.ghostgalleon.library.PackageManagerAppsSource
+import com.visorcraft.ghostgalleon.library.SetupNeeds
 import com.visorcraft.ghostgalleon.sensor.OrientationController
 import com.visorcraft.ghostgalleon.settings.Action
 import com.visorcraft.ghostgalleon.settings.Settings
@@ -39,6 +44,7 @@ import com.visorcraft.ghostgalleon.ui.deck.GridDeck
 import com.visorcraft.ghostgalleon.ui.deck.launchOnOtherDisplay
 import com.visorcraft.ghostgalleon.ui.deck.launchSlotKey
 import com.visorcraft.ghostgalleon.ui.settings.SettingsActivity
+import com.visorcraft.ghostgalleon.ui.settings.SetupCard
 
 // Stick hysteresis thresholds: engage at 0.7, stay engaged until under 0.5.
 private const val AXIS_ENGAGE_THRESHOLD = 0.7f
@@ -313,10 +319,30 @@ abstract class BaseDeckActivity : AppCompatActivity() {
             this, deckState, settings, appLibrary, appIconLoader, app.romEntries)
     }
 
+    // SAF tree picker for first-run setup (same grant model as Settings).
+    private val setupRomFolderPicker =
+        registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? ->
+            if (uri == null) return@registerForActivityResult
+            runCatching {
+                contentResolver.takePersistableUriPermission(
+                    uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            val trees = app.settings.romTreeUris
+            if (uri.toString() !in trees) {
+                app.updateSettings(app.settings.copy(romTreeUris = trees + uri.toString()))
+            }
+            Toast.makeText(this, "ROM folder added", Toast.LENGTH_SHORT).show()
+            // Settings update rebuilds decks; re-evaluate setup (may hide).
+            refreshSetupOverlay()
+        }
+
     protected open fun renderFromState() {
         // Rebuilding the content view detaches any activity-level overlay.
         appDrawer = null
+        // setContentView destroys the setup view; clear host + global flag so
+        // we never leave input blocked when setup is no longer shown.
         setupOverlay = null
+        app.setupBlockingInput = false
         val role = DisplayRole.roleFor(display?.displayId ?: 0, deckState)
         currentDeck = deckForMode()
         setContentView(
@@ -333,34 +359,44 @@ abstract class BaseDeckActivity : AppCompatActivity() {
 
     private var setupOverlay: View? = null
 
-    private fun maybeShowSetup() {
+    private fun setupSnapshot(): SetupNeeds.Snapshot {
         val installed = { pkg: String ->
             runCatching {
                 packageManager.getPackageInfo(pkg, 0)
                 true
             }.getOrDefault(false)
         }
-        val snap = com.visorcraft.ghostgalleon.ui.settings.SetupCard.snapshot(app, installed)
-        if (!com.visorcraft.ghostgalleon.library.SetupNeeds.shouldShow(snap)) return
+        return SetupCard.snapshot(app, installed)
+    }
+
+    private fun maybeShowSetup() {
+        val snap = setupSnapshot()
+        if (!SetupNeeds.shouldShow(snap)) {
+            // Configured or dismissed: never leave blocking stuck.
+            app.setupBlockingInput = false
+            setupOverlay = null
+            return
+        }
         val content = findViewById<ViewGroup>(android.R.id.content) ?: return
-        val card = com.visorcraft.ghostgalleon.ui.settings.SetupCard.build(
+        // Replace any stale overlay (e.g. after checklist refresh).
+        setupOverlay?.let { content.removeView(it) }
+        val card = SetupCard.build(
             this,
             settings.accentColor,
             snap,
-            onAddRomFolder = {
-                launchOnOtherDisplay(
-                    this, deckState, Intent(this, SettingsActivity::class.java))
-            },
+            onAddRomFolder = { setupRomFolderPicker.launch(null) },
+            onSgdbKey = { showSetupSgdbKeyDialog() },
             onOpenSettings = {
                 launchOnOtherDisplay(
                     this, deckState, Intent(this, SettingsActivity::class.java))
             },
             onDismiss = {
-                app.updateSettings(settings.copy(setupDismissed = true))
+                app.updateSettings(settings.copy(setupDismissed = true), notify = false)
                 dismissSetup()
             },
         )
         setupOverlay = card
+        app.setupBlockingInput = true
         content.addView(
             card,
             FrameLayout.LayoutParams(
@@ -370,18 +406,70 @@ abstract class BaseDeckActivity : AppCompatActivity() {
         )
     }
 
+    /** Rebuild or dismiss setup after a grant / key save without full deck flash when possible. */
+    private fun refreshSetupOverlay() {
+        val snap = setupSnapshot()
+        if (!SetupNeeds.shouldShow(snap)) {
+            dismissSetup()
+            return
+        }
+        // Still needed: repaint checklist on the primary content root.
+        maybeShowSetup()
+    }
+
+    private fun showSetupSgdbKeyDialog() {
+        val density = resources.displayMetrics.density
+        fun dp(v: Int) = (v * density).toInt()
+        val input = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            setText(app.settings.sgdbApiKey ?: "")
+            setSelectAllOnFocus(true)
+            setTextColor(Color.WHITE)
+            setHintTextColor(0x66FFFFFF)
+            hint = "Paste API key"
+        }
+        val container = FrameLayout(this).apply {
+            setPadding(dp(20), dp(12), dp(20), 0)
+            addView(input)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("SteamGridDB API key")
+            .setView(container)
+            .setPositiveButton("Save") { _, _ ->
+                val key = input.text.toString().trim().ifEmpty { null }
+                // notify=false: avoid full deck rebuild; refresh setup card only.
+                app.updateSettings(app.settings.copy(sgdbApiKey = key), notify = false)
+                refreshSetupOverlay()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
     private fun dismissSetup() {
-        val overlay = setupOverlay ?: return
-        findViewById<ViewGroup>(android.R.id.content)?.removeView(overlay)
+        val overlay = setupOverlay
+        if (overlay != null) {
+            findViewById<ViewGroup>(android.R.id.content)?.removeView(overlay)
+        }
         setupOverlay = null
+        app.setupBlockingInput = false
+    }
+
+    /** Cross-activity dismiss when BACK lands on the non-host display. */
+    fun dismissSetupPublic() {
+        dismissSetup()
     }
 
     protected open fun handleAction(action: Action): Boolean {
-        // First-run setup overlay: B dismisses; other keys are swallowed.
-        if (setupOverlay != null) {
+        // First-run setup: primary hosts the card; input may land elsewhere.
+        if (setupOverlay != null || app.setupBlockingInput) {
             if (action == Action.BACK) {
-                app.updateSettings(settings.copy(setupDismissed = true))
+                app.updateSettings(settings.copy(setupDismissed = true), notify = false)
+                // Dismiss on the host activity if we own the overlay.
                 dismissSetup()
+                // If companion received BACK, ask primary to drop the card.
+                app.primaryDeckActivity()?.let { host ->
+                    if (host !== this) host.runOnUiThread { host.dismissSetupPublic() }
+                }
             }
             return true
         }

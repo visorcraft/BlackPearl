@@ -102,6 +102,11 @@ class GhostGalleonApp : Application() {
     @Volatile
     var lastDrawerRequestUptimeMs: Long = 0L
 
+    // First-run setup overlay is primary-hosted; block deck input globally
+    // while it is showing (keys may land on the companion activity).
+    @Volatile
+    var setupBlockingInput: Boolean = false
+
     // All-apps drawer list reuse: avoid rebuilding thousands of PickerItems
     // on every swipe when contentEpoch + apps/hidden sets are unchanged.
     @Volatile

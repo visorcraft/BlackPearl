@@ -162,7 +162,8 @@ object LocalMedia {
         listOf("-logo", "_logo", "-wheel", "_wheel", "-marquee", "_marquee").forEach { suffix ->
             index["$prefix|$norm$suffix"]?.let { return it }
         }
-        return null
+        // Bare stem: ES-DE media/logos/Game.png indexes as prefix|game.
+        return index["$prefix|$norm"]
     }
 
     /**

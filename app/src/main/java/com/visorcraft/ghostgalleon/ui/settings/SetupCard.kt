@@ -39,6 +39,7 @@ object SetupCard {
         accent: Int,
         snap: SetupNeeds.Snapshot,
         onAddRomFolder: () -> Unit,
+        onSgdbKey: () -> Unit,
         onOpenSettings: () -> Unit,
         onDismiss: () -> Unit,
     ): View {
@@ -94,6 +95,16 @@ object SetupCard {
         card.addView(actionBtn("Add ROM folder", true, onAddRomFolder), LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
         ).apply { topMargin = dp(16) })
+        card.addView(
+            actionBtn(
+                if (snap.hasSgdbKey) "SteamGridDB key (set)" else "SteamGridDB API key (optional)",
+                false,
+                onSgdbKey,
+            ),
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply { topMargin = dp(8) },
+        )
         card.addView(actionBtn("Open Settings", false, onOpenSettings), LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
         ).apply { topMargin = dp(8) })
