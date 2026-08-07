@@ -20,11 +20,16 @@ android {
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.visorcraft.ghostgalleon"
+        // One-shot bridge: ./gradlew :app:assembleRelease -PbridgeBlackPearl=true
+        // installs as an update over com.visorcraft.blackpearl so private data
+        // can be exported before the Ghost Galleon package takes over.
+        val bridge = project.hasProperty("bridgeBlackPearl")
+        applicationId = if (bridge) "com.visorcraft.blackpearl" else "com.visorcraft.ghostgalleon"
         minSdk = 26
         targetSdk = 34
-        versionCode = 11
-        versionName = "0.3.0"
+        versionCode = if (bridge) 12 else 11
+        versionName = if (bridge) "0.3.0-migrate" else "0.3.0"
+        buildConfigField("boolean", "EXPORT_MIGRATE_ON_BOOT", if (bridge) "true" else "false")
     }
 
     kotlinOptions {

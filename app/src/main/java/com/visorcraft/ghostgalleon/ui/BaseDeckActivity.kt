@@ -7,12 +7,16 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.view.HapticFeedbackConstants
 import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.inputmethod.InputMethodManager
+import android.widget.FrameLayout
+import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import com.visorcraft.ghostgalleon.GhostGalleonApp
@@ -26,16 +30,21 @@ import com.visorcraft.ghostgalleon.settings.Settings
 import com.visorcraft.ghostgalleon.state.DeckState
 import com.visorcraft.ghostgalleon.state.UIMode
 import com.visorcraft.ghostgalleon.ui.deck.AppIconLoader
+import com.visorcraft.ghostgalleon.ui.deck.AppPicker
 import com.visorcraft.ghostgalleon.ui.deck.CompanionPanel
 import com.visorcraft.ghostgalleon.ui.deck.Deck
 import com.visorcraft.ghostgalleon.ui.deck.GameDeck
 import com.visorcraft.ghostgalleon.ui.deck.GridDeck
 import com.visorcraft.ghostgalleon.ui.deck.launchOnOtherDisplay
+import com.visorcraft.ghostgalleon.ui.deck.launchSlotKey
 import com.visorcraft.ghostgalleon.ui.settings.SettingsActivity
 
 // Stick hysteresis thresholds: engage at 0.7, stay engaged until under 0.5.
 private const val AXIS_ENGAGE_THRESHOLD = 0.7f
 private const val AXIS_RELEASE_THRESHOLD = 0.5f
+
+// One physical swipe often delivers HOME + SECONDARY_HOME within ~50ms.
+private const val DRAWER_REQUEST_DEBOUNCE_MS = 450L
 
 abstract class BaseDeckActivity : AppCompatActivity() {
 
@@ -76,17 +85,61 @@ abstract class BaseDeckActivity : AppCompatActivity() {
         }
     }
 
+    // True after onStop until the next onResume. Used to distinguish
+    // "still on home" HOME redelivery (open drawer) from returning from
+    // another app (land on grid). Does NOT force a UI rebuild by itself.
+    private var stoppedSinceResume: Boolean = false
+
+    /** Whether this activity left the foreground since the last resume. */
+    protected fun leftHomeSinceResume(): Boolean = stoppedSinceResume
+
+    // Content epoch applied by the last renderFromState(). Resume rebuilds
+    // only when settings/ROMs changed while we were backgrounded — not on
+    // every SECONDARY_HOME flash from Quickstep.
+    private var appliedContentEpoch: Int = -1
+
+    // Swipe-up / re-HOME drawer: launch any app or ROM without reloading
+    // the deck. Separate from the per-slot "Add to grid/dock" pickers.
+    private var appDrawer: AppPicker? = null
+
+    // Open drawer on next resume (set when a discarded SECONDARY_HOME
+    // duplicate asks the surviving companion to show the drawer).
+    private var pendingAppDrawer: Boolean = false
+
+    // Subclasses (CompanionActivity) can skip the initial render when they
+    // are about to finish immediately as a duplicate SECONDARY_HOME.
+    protected open fun shouldRenderOnCreate(): Boolean = true
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        renderFromState()
+        if (shouldRenderOnCreate()) {
+            renderFromState()
+        }
+    }
+
+    override fun onStop() {
+        stoppedSinceResume = true
+        super.onStop()
     }
 
     override fun onResume() {
         super.onResume()
         hideStatusBar(window)
         deckState.addListener(stateListener)
-        renderFromState()
+        // Rebuild only when nothing is painted yet, or settings/library
+        // changed while we were away. HOME / SECONDARY_HOME redelivery
+        // must not tear down the grid.
+        val epoch = app.contentEpoch
+        if (!::currentDeck.isInitialized || appliedContentEpoch != epoch) {
+            closeAppDrawer()
+            renderFromState()
+        }
+        stoppedSinceResume = false
         orientationController.start()
+        if (pendingAppDrawer) {
+            pendingAppDrawer = false
+            openAppDrawer()
+        }
     }
 
     override fun onPause() {
@@ -97,6 +150,109 @@ abstract class BaseDeckActivity : AppCompatActivity() {
         orientationController.stop()
         deckState.removeListener(stateListener)
         super.onPause()
+    }
+
+    /** True while the swipe-up all-apps drawer is showing. */
+    fun isAppDrawerOpen(): Boolean = appDrawer != null
+
+    /**
+     * Request the all-apps drawer from a HOME / SECONDARY_HOME redelivery.
+     * Debounced: a single swipe often fires multiple intents; only the first
+     * in a short window counts. A later deliberate request toggles closed.
+     * Safe across activity instances (pending open until resumed).
+     */
+    fun requestAppDrawer() {
+        // App-wide debounce: one swipe fires HOME + SECONDARY_HOME on both
+        // activities; per-instance timers would each open then toggle-close.
+        val now = SystemClock.uptimeMillis()
+        if (now - app.lastDrawerRequestUptimeMs < DRAWER_REQUEST_DEBOUNCE_MS) {
+            return
+        }
+        app.lastDrawerRequestUptimeMs = now
+
+        val primary = when (
+            DisplayRole.roleFor(display?.displayId ?: 0, deckState)
+        ) {
+            DisplayRole.PRIMARY -> this
+            DisplayRole.COMPANION ->
+                app.primaryDeckActivity()?.takeIf { it !== this } ?: return
+        }
+
+        // Second intentional swipe (after debounce) closes the drawer.
+        if (primary.isAppDrawerOpen()) {
+            primary.closeAppDrawer()
+            return
+        }
+
+        primary.pendingAppDrawer = true
+        if (primary.lifecycle.currentState.isAtLeast(
+                androidx.lifecycle.Lifecycle.State.RESUMED,
+            )
+        ) {
+            primary.pendingAppDrawer = false
+            primary.openAppDrawer()
+        }
+    }
+
+    /**
+     * Open the launch drawer (apps + ROMs) if not already open.
+     * Forwards to the interactive PRIMARY deck when this activity is the
+     * hero panel (primaryDisplay on the other screen).
+     */
+    fun openAppDrawer() {
+        val role = DisplayRole.roleFor(display?.displayId ?: 0, deckState)
+        if (role != DisplayRole.PRIMARY) {
+            app.primaryDeckActivity()?.takeIf { it !== this }?.openAppDrawer()
+            return
+        }
+        // Idempotent: multi-intent delivery must not toggle closed.
+        if (appDrawer != null) return
+        if (!::currentDeck.isInitialized) {
+            pendingAppDrawer = true
+            return
+        }
+
+        val picker = AppPicker(
+            this,
+            settings.accentColor,
+            appLibrary.visible(settings),
+            app.romEntries,
+            appIconLoader,
+            title = "All apps",
+            autoShowKeyboard = false,
+            heightFraction = 0.88f,
+            onPick = { key ->
+                closeAppDrawer()
+                launchSlotKey(this, deckState, app.romEntries, key)
+            },
+            onHide = { packageName ->
+                closeAppDrawer()
+                app.updateSettings(
+                    settings.copy(hiddenPackages = settings.hiddenPackages + packageName),
+                )
+                Toast.makeText(this, "App hidden", Toast.LENGTH_SHORT).show()
+            },
+            onClose = { closeAppDrawer() },
+        )
+        appDrawer = picker
+        val content = findViewById<ViewGroup>(android.R.id.content)
+        content.addView(
+            picker.view,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            ),
+        )
+    }
+
+    fun closeAppDrawer() {
+        val drawer = appDrawer ?: return
+        val content = findViewById<ViewGroup>(android.R.id.content)
+        content.removeView(drawer.view)
+        getSystemService(InputMethodManager::class.java)
+            ?.hideSoftInputFromWindow(content.windowToken, 0)
+        appDrawer = null
+        pendingAppDrawer = false
     }
 
     // A finish() triggered by an internal redirect (CompanionActivity
@@ -127,6 +283,8 @@ abstract class BaseDeckActivity : AppCompatActivity() {
     }
 
     protected open fun renderFromState() {
+        // Rebuilding the content view detaches any activity-level overlay.
+        appDrawer = null
         val role = DisplayRole.roleFor(display?.displayId ?: 0, deckState)
         currentDeck = deckForMode()
         setContentView(
@@ -137,9 +295,21 @@ abstract class BaseDeckActivity : AppCompatActivity() {
                         this, deckState, appLibrary, app.romEntries, settings)
             }
         )
+        appliedContentEpoch = app.contentEpoch
     }
 
     protected open fun handleAction(action: Action): Boolean {
+        // Swipe-up drawer is activity-owned and must eat input before the deck.
+        appDrawer?.let {
+            it.handleAction(action)
+            when (action) {
+                Action.NAV_UP, Action.NAV_DOWN, Action.NAV_LEFT, Action.NAV_RIGHT,
+                Action.PAGE_PREV, Action.PAGE_NEXT, Action.CONFIRM ->
+                    haptic(HapticFeedbackConstants.KEYBOARD_TAP)
+                else -> {}
+            }
+            return true
+        }
         if (!::currentDeck.isInitialized) return true
         val handled = currentDeck.handleAction(action)
         // Central haptics hook (settings.haptics): one subtle KEYBOARD_TAP

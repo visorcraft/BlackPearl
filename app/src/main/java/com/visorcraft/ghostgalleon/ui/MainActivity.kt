@@ -22,6 +22,13 @@ class MainActivity : BaseDeckActivity() {
         // HOME redelivery lands here when MainActivity never paused; the
         // companion may have been reaped meanwhile, so heal here too.
         healCompanionIfMissing()
+        // Still on home (never onStop'd): swipe-up / re-HOME opens the
+        // all-apps drawer (forwards to the PRIMARY deck if the interactive
+        // grid lives on the other display). Returning from another app
+        // just lands on the existing grid.
+        if (!leftHomeSinceResume()) {
+            requestAppDrawer()
+        }
     }
 
     // Self-heal a lost companion (its activity reaped or its task removed

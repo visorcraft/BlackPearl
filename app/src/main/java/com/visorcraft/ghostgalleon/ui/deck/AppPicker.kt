@@ -26,23 +26,28 @@ import com.visorcraft.ghostgalleon.rom.RomEntry
 import com.visorcraft.ghostgalleon.settings.Action
 import com.visorcraft.ghostgalleon.settings.SlotKey
 
-// Full-screen "Add to grid" overlay: centered dark card with a live-filter
-// search field above a two-section list — "Apps" (installed launchable,
-// non-hidden) then "ROMs" (the scanned library, sorted by platform then
-// name). ROM rows show a platform tile thumb, the ROM name, and the
-// platform label; picking one writes its "rom:<id>" key into the grid slot.
-// Long-press hide stays apps-only. Touch (tap a row) and gamepad (d-pad
-// highlight, A pick, B cancel) both work; d-pad/A/B keys are intercepted by
-// BaseDeckActivity before the focused search field can see them, letters
-// fall through to the field.
+// Full-screen picker overlay: centered dark card with a live-filter search
+// field above a two-section list — "Apps" (installed launchable, non-hidden)
+// then "ROMs" (the scanned library, sorted by platform then name).
+// Used for "Add to grid/dock" (pick fills a slot) and the swipe-up
+// "All apps" drawer (pick launches). ROM rows show a platform tile thumb,
+// the ROM name, and the platform label. Long-press hide stays apps-only.
+// Touch (tap a row) and gamepad (d-pad highlight, A pick, B cancel) both
+// work; d-pad/A/B keys are intercepted by BaseDeckActivity before the
+// focused search field can see them, letters fall through to the field.
 class AppPicker(
     private val activity: AppCompatActivity,
     private val accentColor: Int,
     private val allEntries: List<AppEntry>,
     private val roms: List<RomEntry>,
     private val iconLoader: AppIconLoader,
-    // "Add to grid" from grid slots, "Add to dock" from dock placeholders.
+    // "Add to grid" / "Add to dock" / "All apps" (launch drawer).
     private val title: String = "Add to grid",
+    // Swipe-up drawer must not pop the IME (keyboard flash); slot pickers
+    // still focus search so typing to filter is one tap less.
+    private val autoShowKeyboard: Boolean = true,
+    // Fraction of screen height for the card (drawer wants taller).
+    private val heightFraction: Float = 0.62f,
     private val onPick: (String) -> Unit,
     private val onHide: (String) -> Unit,
     private val onClose: () -> Unit,
@@ -142,21 +147,30 @@ class AppPicker(
         adapter = pickerAdapter
         overlayView = overlay
         val metrics = context.resources.displayMetrics
-        // Top-anchored and short enough that the title, search field, and
-        // first results stay above the IME when it opens (the keyboard
-        // covers the lower half of the Sugar's bottom panel).
+        // Top-anchored. Slot pickers stay short so the IME does not cover
+        // results; the swipe-up drawer uses a taller card and no auto-IME.
         overlay.addView(card, FrameLayout.LayoutParams(
             minOf(dp(600), (metrics.widthPixels * 0.85f).toInt()),
-            (metrics.heightPixels * 0.62f).toInt(),
+            (metrics.heightPixels * heightFraction).toInt(),
             Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply {
             topMargin = dp(16)
         })
-        // Focus the search field and offer the IME; gamepad keys keep
-        // routing to the deck either way.
-        search.post {
-            search.requestFocus()
-            activity.getSystemService(InputMethodManager::class.java)
-                ?.showSoftInput(search, InputMethodManager.SHOW_IMPLICIT)
+        // Only auto-focus search when requested (slot "Add to …" pickers).
+        // The all-apps drawer leaves focus on the list so the keyboard does
+        // not flash open/closed on every swipe-up.
+        if (autoShowKeyboard) {
+            search.post {
+                search.requestFocus()
+                activity.getSystemService(InputMethodManager::class.java)
+                    ?.showSoftInput(search, InputMethodManager.SHOW_IMPLICIT)
+            }
+        } else {
+            // Prevent the EditText from stealing focus on attach.
+            search.isFocusable = true
+            search.isFocusableInTouchMode = true
+            list.isFocusable = true
+            list.isFocusableInTouchMode = true
+            list.post { list.requestFocus() }
         }
         overlay
     }

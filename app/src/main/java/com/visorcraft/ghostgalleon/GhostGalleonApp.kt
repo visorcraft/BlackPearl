@@ -19,11 +19,13 @@ import com.visorcraft.ghostgalleon.library.SessionMath
 import com.visorcraft.ghostgalleon.library.SessionTracker
 import com.visorcraft.ghostgalleon.rom.RomEntry
 import com.visorcraft.ghostgalleon.rom.RomLibrary
+import com.visorcraft.ghostgalleon.settings.DataMigrator
 import com.visorcraft.ghostgalleon.settings.Settings
 import com.visorcraft.ghostgalleon.settings.SettingsStore
 import com.visorcraft.ghostgalleon.state.DeckState
 import com.visorcraft.ghostgalleon.ui.BaseDeckActivity
 import com.visorcraft.ghostgalleon.ui.CompanionActivity
+import com.visorcraft.ghostgalleon.ui.DisplayRole
 import java.io.File
 
 class GhostGalleonApp : Application() {
@@ -80,10 +82,21 @@ class GhostGalleonApp : Application() {
         }
     }
 
+    // Bumped when settings or the ROM index change so decks can skip a full
+    // rebuild on resume when nothing actually changed (HOME / SECONDARY_HOME
+    // redelivery used to flash-rebuild every swipe).
+    var contentEpoch: Int = 0
+        private set
+
+    // Shared across Main + Companion: one swipe delivers intents to both.
+    @Volatile
+    var lastDrawerRequestUptimeMs: Long = 0L
+
     // A fresh scan result: swap the snapshot and rebuild the decks so the
     // picker/carousel/grid see the new entries immediately.
     fun publishRomEntries(entries: List<RomEntry>) {
         romEntries = entries
+        contentEpoch++
         deckState.notifyChanged()
     }
 
@@ -166,6 +179,14 @@ class GhostGalleonApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // Package-rename bridge: BlackPearl update with EXPORT_MIGRATE_ON_BOOT
+        // dumps private data to external files; Ghost Galleon then imports
+        // from migrate-import/ before the first settings load.
+        if (BuildConfig.EXPORT_MIGRATE_ON_BOOT) {
+            runCatching { DataMigrator.exportToExternal(this) }
+        } else {
+            runCatching { DataMigrator.tryImportFromExternal(this) }
+        }
         settings = settingsStore.load()
         deckState = DeckState()
         deckState.setMode(settings.defaultMode)
@@ -261,11 +282,26 @@ class GhostGalleonApp : Application() {
     fun updateSettings(s: Settings, notify: Boolean = true) {
         settings = s
         settingsStore.save(s)
+        contentEpoch++
         if (notify) {
             deckState.setMode(s.defaultMode)
             deckState.notifyChanged()
         }
     }
+
+    /** Interactive (PRIMARY-role) deck activity, if any is live. */
+    fun primaryDeckActivity(): BaseDeckActivity? =
+        liveDeckActivities.firstOrNull { activity ->
+            !activity.isFinishing &&
+                DisplayRole.roleFor(
+                    activity.display?.displayId ?: -1,
+                    deckState,
+                ) == DisplayRole.PRIMARY
+        }
+
+    /** All live deck activities (Main + Companion). */
+    fun liveDeckActivities(): List<BaseDeckActivity> =
+        liveDeckActivities.filter { !it.isFinishing }
 
     private companion object {
         val ROM_IO = java.util.concurrent.Executors.newSingleThreadExecutor()

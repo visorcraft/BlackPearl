@@ -8,39 +8,58 @@ import android.os.Bundle
 class CompanionActivity : BaseDeckActivity() {
 
     // True while this instance is closing itself for an internal reason
-    // (display redirect or superseded by a newer instance). Such a finish()
-    // is not the user leaving home and must not cascade into
+    // (display redirect or absorbed duplicate SECONDARY_HOME). Such a
+    // finish() is not the user leaving home and must not cascade into
     // requestExitAll().
     private var selfClosing = false
 
+    // Set before super.onCreate when this start is a duplicate swipe-up
+    // redelivery and we will finish without painting a full deck.
+    private var absorbDuplicate = false
+
     override fun skipExitCascade(): Boolean = selfClosing
 
-    /** Internal close without the exit cascade (superseded instance). */
+    override fun shouldRenderOnCreate(): Boolean = !absorbDuplicate
+
+    /** Internal close without the exit cascade. */
     fun closeQuietly() {
         selfClosing = true
         finish()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Quickstep SECONDARY_HOME uses FLAG_ACTIVITY_MULTIPLE_TASK, so
+        // singleInstance does NOT reuse the existing companion — every
+        // bottom swipe used to spawn a fresh activity and flash-reload the
+        // grid. Prefer the healthy companion already on display 1: ask it
+        // to open the all-apps drawer and finish this duplicate without
+        // painting. (Application onActivityCreated runs after onCreate, so
+        // liveCompanions() here only holds previously created instances.)
+        val existing = app.liveCompanions().filter { !it.isFinishing }
+        val keepOnBottom = existing.firstOrNull { it.display?.displayId == 1 }
+        if (keepOnBottom != null) {
+            absorbDuplicate = true
+            selfClosing = true
+            super.onCreate(savedInstanceState)
+            // Drop any other stale companions not on display 1.
+            existing.filter { it !== keepOnBottom }.forEach { it.closeQuietly() }
+            keepOnBottom.requestAppDrawer()
+            finish()
+            return
+        }
+
         super.onCreate(savedInstanceState)
-        // The ROM fires SECONDARY_HOME with FLAG_ACTIVITY_MULTIPLE_TASK on
-        // every bottom HOME/swipe, spawning a fresh instance+task despite
-        // singleInstance. Do NOT finish that fresh instance here — the
-        // ROM's dual-display watcher notices and re-fires HOME, looping
-        // (verified 2026-08-06: one press -> ~90 STARTs). Instead the
-        // newest instance wins: supersede every OTHER live companion so old
-        // instances finish and their tasks are reaped. Application
-        // onActivityCreated fires after onCreate, so liveCompanions() here
-        // can only hold previously created instances.
-        app.liveCompanions().filter { it !== this && !it.isFinishing }
-            .forEach { it.closeQuietly() }
+
+        // No healthy display-1 companion yet: we are the real one. Close any
+        // leftover companions stuck on the wrong display.
+        existing.forEach { it.closeQuietly() }
+
         // SECONDARY_HOME starts land on whichever display is focused. This
         // activity belongs on display 1; when it arrives anywhere else,
         // relaunch it there and close the misplaced task. MULTIPLE_TASK is
         // required HERE: a plain NEW_TASK start would resolve to this
         // instance's own task (singleInstance task reuse) and never move
-        // displays. Duplicates spawned by the new task converge through the
-        // supersede rule above.
+        // displays.
         val currentDisplay = display?.displayId
         if (currentDisplay != null && currentDisplay != 1) {
             val dm = getSystemService(DisplayManager::class.java)
@@ -53,6 +72,15 @@ class CompanionActivity : BaseDeckActivity() {
                 startActivity(intent, options.toBundle())
                 finish()
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        // If singleInstance ever reuses us without MULTIPLE_TASK, treat
+        // re-HOME as open-drawer (same as MainActivity).
+        if (!leftHomeSinceResume()) {
+            requestAppDrawer()
         }
     }
 }
