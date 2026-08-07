@@ -2,6 +2,7 @@ package com.visorcraft.ghostgalleon.ui
 
 import android.app.role.RoleManager
 import android.content.Intent
+import android.graphics.drawable.ColorDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -112,6 +113,9 @@ abstract class BaseDeckActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Opaque window so a dual-display HOME transition cannot peek the
+        // system/Quickstep wallpaper (robot-with-box) through Ghost Galleon.
+        window.setBackgroundDrawable(ColorDrawable(0xFF000000.toInt()))
         if (shouldRenderOnCreate()) {
             renderFromState()
         }
@@ -152,8 +156,31 @@ abstract class BaseDeckActivity : AppCompatActivity() {
         super.onPause()
     }
 
-    /** True while the swipe-up all-apps drawer is showing. */
+    /** True while the swipe-up all-apps drawer is showing on this activity. */
     fun isAppDrawerOpen(): Boolean = appDrawer != null
+
+    /**
+     * Feed a key/stick action into this activity's all-apps drawer.
+     * Returns false when this activity is not hosting an open drawer.
+     */
+    fun routeAppDrawerAction(action: Action): Boolean {
+        val drawer = appDrawer ?: return false
+        drawer.handleAction(action)
+        return true
+    }
+
+    /**
+     * Resolve the open all-apps drawer across both deck activities.
+     * Input can land on either display (topResumed is often Main while the
+     * PRIMARY-role Companion hosts the drawer); never gate on isPrimary.
+     */
+    private fun routeOpenAppDrawerAction(action: Action): Boolean {
+        if (routeAppDrawerAction(action)) return true
+        for (other in app.liveDeckActivities()) {
+            if (other !== this && other.routeAppDrawerAction(action)) return true
+        }
+        return false
+    }
 
     /**
      * Request the all-apps drawer from a HOME / SECONDARY_HOME redelivery.
@@ -212,15 +239,19 @@ abstract class BaseDeckActivity : AppCompatActivity() {
             return
         }
 
+        val apps = appLibrary.visible(settings)
+        // Reuse cached empty-query rows when contentEpoch/apps/hidden unchanged.
+        val cached = app.drawerPickerItems(apps)
         val picker = AppPicker(
             this,
             settings.accentColor,
-            appLibrary.visible(settings),
+            apps,
             app.romEntries,
             appIconLoader,
             title = "All apps",
             autoShowKeyboard = false,
             heightFraction = 0.88f,
+            prebuiltItems = cached,
             onPick = { key ->
                 closeAppDrawer()
                 launchSlotKey(this, deckState, app.romEntries, key)
@@ -285,6 +316,7 @@ abstract class BaseDeckActivity : AppCompatActivity() {
     protected open fun renderFromState() {
         // Rebuilding the content view detaches any activity-level overlay.
         appDrawer = null
+        setupOverlay = null
         val role = DisplayRole.roleFor(display?.displayId ?: 0, deckState)
         currentDeck = deckForMode()
         setContentView(
@@ -296,12 +328,66 @@ abstract class BaseDeckActivity : AppCompatActivity() {
             }
         )
         appliedContentEpoch = app.contentEpoch
+        if (role == DisplayRole.PRIMARY) maybeShowSetup()
+    }
+
+    private var setupOverlay: View? = null
+
+    private fun maybeShowSetup() {
+        val installed = { pkg: String ->
+            runCatching {
+                packageManager.getPackageInfo(pkg, 0)
+                true
+            }.getOrDefault(false)
+        }
+        val snap = com.visorcraft.ghostgalleon.ui.settings.SetupCard.snapshot(app, installed)
+        if (!com.visorcraft.ghostgalleon.library.SetupNeeds.shouldShow(snap)) return
+        val content = findViewById<ViewGroup>(android.R.id.content) ?: return
+        val card = com.visorcraft.ghostgalleon.ui.settings.SetupCard.build(
+            this,
+            settings.accentColor,
+            snap,
+            onAddRomFolder = {
+                launchOnOtherDisplay(
+                    this, deckState, Intent(this, SettingsActivity::class.java))
+            },
+            onOpenSettings = {
+                launchOnOtherDisplay(
+                    this, deckState, Intent(this, SettingsActivity::class.java))
+            },
+            onDismiss = {
+                app.updateSettings(settings.copy(setupDismissed = true))
+                dismissSetup()
+            },
+        )
+        setupOverlay = card
+        content.addView(
+            card,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            ),
+        )
+    }
+
+    private fun dismissSetup() {
+        val overlay = setupOverlay ?: return
+        findViewById<ViewGroup>(android.R.id.content)?.removeView(overlay)
+        setupOverlay = null
     }
 
     protected open fun handleAction(action: Action): Boolean {
-        // Swipe-up drawer is activity-owned and must eat input before the deck.
-        appDrawer?.let {
-            it.handleAction(action)
+        // First-run setup overlay: B dismisses; other keys are swallowed.
+        if (setupOverlay != null) {
+            if (action == Action.BACK) {
+                app.updateSettings(settings.copy(setupDismissed = true))
+                dismissSetup()
+            }
+            return true
+        }
+        // Swipe-up drawer must eat input before the deck. Host may be the
+        // other display's activity (global input); still consume here.
+        if (routeOpenAppDrawerAction(action)) {
             when (action) {
                 Action.NAV_UP, Action.NAV_DOWN, Action.NAV_LEFT, Action.NAV_RIGHT,
                 Action.PAGE_PREV, Action.PAGE_NEXT, Action.CONFIRM ->

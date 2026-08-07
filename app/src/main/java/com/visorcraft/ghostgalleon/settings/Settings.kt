@@ -17,8 +17,8 @@ data class Settings(
     val haptics: Boolean = true,
     val showHints: Boolean = true,
     val showLabels: Boolean = true,
-    // Grid scroll axis: "vertical" (default) or "horizontal" (3DS/Cocoon
-    // style left-to-right page flipping).
+    // Grid scroll axis: "vertical" (default) or "horizontal" (3DS-style
+    // left-to-right page flipping).
     val gridDirection: String = "vertical",
     // SAF-persisted image URI drawn dimmed behind the grid; null = black.
     val wallpaperUri: String? = null,
@@ -60,6 +60,8 @@ data class Settings(
     val favorites: Set<String> = emptySet(),
     // Named collections: name -> ordered slot keys
     val collections: Map<String, List<String>> = emptyMap(),
+    // First-run / empty-library setup card dismissed (within schema v6).
+    val setupDismissed: Boolean = false,
     val schemaVersion: Int = 6,
 ) {
     companion object {

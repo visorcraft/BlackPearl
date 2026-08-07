@@ -31,6 +31,7 @@ import com.visorcraft.ghostgalleon.art.ScrapeJob
 import com.visorcraft.ghostgalleon.art.SgdbScraper
 import com.visorcraft.ghostgalleon.library.AppLibrary
 import com.visorcraft.ghostgalleon.library.PackageManagerAppsSource
+import com.visorcraft.ghostgalleon.rom.Platforms
 import com.visorcraft.ghostgalleon.rom.RomLibrary
 import com.visorcraft.ghostgalleon.rom.TreeLabels
 import com.visorcraft.ghostgalleon.settings.Action
@@ -39,6 +40,8 @@ import com.visorcraft.ghostgalleon.settings.SettingsStore
 import com.visorcraft.ghostgalleon.settings.SlotKey
 import com.visorcraft.ghostgalleon.settings.label
 import com.visorcraft.ghostgalleon.state.UIMode
+import com.visorcraft.ghostgalleon.system.SystemInfoCollector
+import com.visorcraft.ghostgalleon.system.SystemInfoFormat
 import com.visorcraft.ghostgalleon.ui.deck.TileBackgrounds
 import com.visorcraft.ghostgalleon.ui.hideStatusBar
 
@@ -52,6 +55,8 @@ class SettingsActivity : AppCompatActivity() {
         APPS("Apps"),
         CONTROLS("Controls"),
         LIBRARY("Library"),
+        STATS("Stats"),
+        SYSTEM("System"),
         ABOUT("About"),
     }
 
@@ -93,6 +98,44 @@ class SettingsActivity : AppCompatActivity() {
             app.romEntries.firstOrNull { it.id == romId }?.name ?: key
         } else {
             appLabel(key)
+        }
+    }
+
+    private fun labelForStatsKey(key: String): String = dockEntryLabel(key)
+
+    private fun statRow(label: String, value: String): LinearLayout =
+        LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(6), 0, dp(6))
+            addView(rowLabel(label), LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            addView(TextView(this@SettingsActivity).apply {
+                text = value
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                setTextColor(0xCCFFFFFF.toInt())
+                gravity = Gravity.END
+            })
+        }
+
+    private fun loadBundledExamplePack() {
+        val text = runCatching {
+            assets.open("platform_packs/pcengine.json").bufferedReader().use { it.readText() }
+        }.getOrNull()
+        if (text == null) {
+            Toast.makeText(this, "Example pack missing from APK", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val parsed = app.platformPackStore.importJson(text)
+        if (parsed == null) {
+            Toast.makeText(this, "Invalid example pack", Toast.LENGTH_LONG).show()
+        } else {
+            Toast.makeText(
+                this,
+                "Loaded example: ${parsed.platforms.joinToString { it.id }}",
+                Toast.LENGTH_LONG,
+            ).show()
+            recreate()
         }
     }
 
@@ -203,6 +246,30 @@ class SettingsActivity : AppCompatActivity() {
             .setNegativeButton("Close", null)
             .show()
     }
+
+    // Platform pack import (Library): JSON platforms/players overlay.
+    private val platformPackLauncher =
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+            if (uri == null) return@registerForActivityResult
+            val text = runCatching {
+                contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+            }.getOrNull()
+            if (text == null) {
+                Toast.makeText(this, "Could not read pack file", Toast.LENGTH_SHORT).show()
+                return@registerForActivityResult
+            }
+            val parsed = app.platformPackStore.importJson(text)
+            if (parsed == null) {
+                Toast.makeText(this, "Invalid platform pack", Toast.LENGTH_LONG).show()
+            } else {
+                Toast.makeText(
+                    this,
+                    "Imported ${parsed.platforms.size} platform(s)",
+                    Toast.LENGTH_LONG,
+                ).show()
+                recreate()
+            }
+        }
 
     // Settings export/import (Library section): one JSON bundle holding the
     // settings object and the ROM library array (SettingsBundle). Import
@@ -1093,35 +1160,56 @@ class SettingsActivity : AppCompatActivity() {
         // are ignored; completion toasts are dropped once the activity is
         // gone (the scan can outlive the settings screen).
         val rescanLabel = rowLabel("Rescan library")
+        fun startRescan(force: Boolean) {
+            if (scanning) return
+            scanning = true
+            rescanLabel.text = if (force) "Full scan…" else "Scanning…"
+            app.romLibrary.rescan(
+                this@SettingsActivity,
+                app.settings,
+                force = force,
+            ) { result ->
+                scanning = false
+                rescanLabel.text = "Rescan library"
+                if (result is RomLibrary.RescanResult.Success) {
+                    app.publishRomEntries(result.entries)
+                }
+                if (isFinishing || isDestroyed) return@rescan
+                when (result) {
+                    is RomLibrary.RescanResult.Success -> {
+                        val skip = result.skippedCleanTrees
+                        val msg = if (skip > 0) {
+                            "${result.entries.size} ROMs ($skip tree(s) unchanged)"
+                        } else {
+                            "${result.entries.size} ROMs found"
+                        }
+                        Toast.makeText(this@SettingsActivity, msg, Toast.LENGTH_LONG).show()
+                    }
+                    RomLibrary.RescanResult.Unreadable ->
+                        Toast.makeText(this@SettingsActivity,
+                            "Card unreadable - library unchanged",
+                            Toast.LENGTH_LONG).show()
+                }
+            }
+        }
         val rescanRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             isFocusable = true
-            setOnClickListener {
-                if (scanning) return@setOnClickListener
-                scanning = true
-                rescanLabel.text = "Scanning…"
-                app.romLibrary.rescan(this@SettingsActivity, app.settings) { result ->
-                    scanning = false
-                    rescanLabel.text = "Rescan library"
-                    if (result is RomLibrary.RescanResult.Success) {
-                        app.publishRomEntries(result.entries)
-                    }
-                    if (isFinishing || isDestroyed) return@rescan
-                    when (result) {
-                        is RomLibrary.RescanResult.Success ->
-                            Toast.makeText(this@SettingsActivity,
-                                "${result.entries.size} ROMs found", Toast.LENGTH_LONG).show()
-                        RomLibrary.RescanResult.Unreadable ->
-                            Toast.makeText(this@SettingsActivity,
-                                "Card unreadable - library unchanged",
-                                Toast.LENGTH_LONG).show()
-                    }
-                }
+            // Tap: incremental (skip clean trees). Long-press: force full.
+            setOnClickListener { startRescan(force = false) }
+            setOnLongClickListener {
+                startRescan(force = true)
+                true
             }
         }
         rescanRow.addView(rescanLabel, LinearLayout.LayoutParams(
             0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        rescanRow.addView(TextView(this).apply {
+            text = "hold=full"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            setTextColor(0x66FFFFFF.toInt())
+        })
         libraryCard.addView(rescanRow, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))
         // Bulk-pin favorites into empty curated-grid slots (E).
@@ -1251,7 +1339,157 @@ class SettingsActivity : AppCompatActivity() {
             0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         libraryCard.addView(importRow, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))
+        val packRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            isFocusable = true
+            setOnClickListener {
+                platformPackLauncher.launch(arrayOf("application/json", "text/*", "*/*"))
+            }
+            setOnLongClickListener {
+                app.platformPackStore.clear()
+                Toast.makeText(
+                    this@SettingsActivity,
+                    "Platform pack cleared",
+                    Toast.LENGTH_SHORT,
+                ).show()
+                recreate()
+                true
+            }
+        }
+        packRow.addView(rowLabel("Import platform pack"), LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        packRow.addView(TextView(this).apply {
+            text = if (app.platformPackStore.hasPack()) {
+                "${Platforms.packOverlay().size} pack"
+            } else {
+                "None"
+            }
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setTextColor(accent)
+        })
+        libraryCard.addView(packRow, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))
+        // Bundled example: assets/platform_packs/pcengine.json
+        val examplePackRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            isFocusable = true
+            setOnClickListener { loadBundledExamplePack() }
+        }
+        examplePackRow.addView(rowLabel("Load example pack (PC Engine)"), LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        examplePackRow.addView(TextView(this).apply {
+            text = "assets"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            setTextColor(0x66FFFFFF.toInt())
+        })
+        libraryCard.addView(examplePackRow, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))
+        // Re-show setup card on next empty boot.
+        val setupRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            isFocusable = true
+            setOnClickListener {
+                app.updateSettings(app.settings.copy(setupDismissed = false))
+                Toast.makeText(this@SettingsActivity,
+                    "Setup will show when library is empty", Toast.LENGTH_SHORT).show()
+            }
+        }
+        setupRow.addView(rowLabel("Reset first-run setup card"), LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        libraryCard.addView(setupRow, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))
         addSection(SettingsPage.LIBRARY, "Library", libraryCard)
+
+        // Light stats: most played + recently played from stored maps.
+        val statsCard = sectionCard()
+        val most = com.visorcraft.ghostgalleon.library.LibraryStats.mostPlayed(
+            app.settings.playtimeMs, limit = 12,
+        )
+        val recent = com.visorcraft.ghostgalleon.library.LibraryStats.recentlyPlayed(
+            app.settings.lastLaunchedMs, limit = 12,
+        )
+        if (!com.visorcraft.ghostgalleon.library.LibraryStats.hasAnySessions(
+                app.settings.playtimeMs, app.settings.lastLaunchedMs,
+            )
+        ) {
+            statsCard.addView(TextView(this).apply {
+                text = "No play sessions yet. Launch a game from the grid or carousel."
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                setTextColor(0x99FFFFFF.toInt())
+                setPadding(0, dp(8), 0, dp(8))
+            })
+        } else {
+            statsCard.addView(sectionHeader("Most played"))
+            most.forEach { row ->
+                statsCard.addView(statRow(labelForStatsKey(row.key),
+                    com.visorcraft.ghostgalleon.library.SessionMath.formatPlaytime(row.score)))
+            }
+            if (most.isEmpty()) {
+                statsCard.addView(TextView(this).apply {
+                    text = "No playtime recorded yet"
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                    setTextColor(0x66FFFFFF.toInt())
+                })
+            }
+            statsCard.addView(sectionHeader("Recently played"))
+            recent.forEach { row ->
+                val whenLabel = com.visorcraft.ghostgalleon.library.SessionMath.formatLastPlayed(
+                    row.score, System.currentTimeMillis(),
+                ) ?: "—"
+                statsCard.addView(statRow(labelForStatsKey(row.key), whenLabel))
+            }
+            if (recent.isEmpty()) {
+                statsCard.addView(TextView(this).apply {
+                    text = "No launches recorded yet"
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                    setTextColor(0x66FFFFFF.toInt())
+                })
+            }
+        }
+        addSection(SettingsPage.STATS, "Stats", statsCard)
+
+        // System: live device hardware / RAM / CPU / storage / battery / power.
+        val systemCard = sectionCard()
+        val readings = SystemInfoCollector.collect(this)
+        SystemInfoFormat.rows(readings).forEach { (label, value) ->
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, dp(4), 0, dp(4))
+            }
+            row.addView(rowLabel(label), LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            row.addView(TextView(this).apply {
+                text = value
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                setTextColor(0xCCFFFFFF.toInt())
+                gravity = Gravity.END
+                maxLines = 2
+                ellipsize = android.text.TextUtils.TruncateAt.END
+            }, LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.2f,
+            ))
+            systemCard.addView(row, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                topMargin = dp(6)
+                bottomMargin = dp(6)
+            })
+        }
+        val refreshSys = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            isFocusable = true
+            setOnClickListener { recreate() }
+        }
+        refreshSys.addView(rowLabel("Refresh readings"), LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        systemCard.addView(refreshSys, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(56)))
+        addSection(SettingsPage.SYSTEM, "System", systemCard)
 
         // About page (Grexa-style): hero card with the dynamic version,
         // feature cards, project link, Licenses/Credits dialogs. Built by

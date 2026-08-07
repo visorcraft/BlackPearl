@@ -109,6 +109,8 @@ class SettingsStore(private val file: File) {
             artOverrides = o.optJSONObject("artOverrides").toStringMap(),
             favorites = o.optJSONArray("favorites").toStringList().toSet(),
             collections = o.optJSONObject("collections").toStringListMap(),
+            // Within schema v6: absent = show setup when library empty.
+            setupDismissed = o.optBoolean("setupDismissed", false),
             schemaVersion = CURRENT_SCHEMA,
         )
         }
@@ -167,6 +169,7 @@ class SettingsStore(private val file: File) {
                     put(name, JSONArray(keys))
                 }
             })
+            .put("setupDismissed", s.setupDismissed)
             .put("schemaVersion", CURRENT_SCHEMA)
         }
 

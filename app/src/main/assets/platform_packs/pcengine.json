@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "platforms": [
+    {
+      "id": "pcengine",
+      "displayName": "PC Engine / TurboGrafx-16",
+      "shortName": "PCE",
+      "folderNames": ["pce", "pcengine", "tg16", "turbografx"],
+      "extensions": ["pce", "sgx", "cue", "chd"],
+      "players": [
+        {
+          "id": "ra-pce-fast",
+          "displayName": "RetroArch (Beetle PCE Fast)",
+          "component": "com.retroarch.aarch64/com.retroarch.browser.retroactivity.RetroActivityFuture",
+          "action": "android.intent.action.MAIN",
+          "uriStyle": "PATH",
+          "extras": {
+            "ROM": "{file.path}",
+            "LIBRETRO": "/data/data/com.retroarch.aarch64/cores/mednafen_pce_fast_libretro_android.so",
+            "CONFIGFILE": "/storage/emulated/0/Android/data/com.retroarch.aarch64/files/retroarch.cfg",
+            "IME": "com.android.inputmethod.latin/.LatinIME",
+            "DATADIR": "/data/data/com.retroarch.aarch64",
+            "SDCARD": "/storage/emulated/0",
+            "EXTERNAL": "/storage/emulated/0/Android/data/com.retroarch.aarch64/files"
+          },
+          "grantRead": false
+        }
+      ]
+    },
+    {
+      "id": "snes",
+      "displayName": "Super Nintendo",
+      "shortName": "SNES",
+      "folderNames": ["snes"],
+      "extensions": ["smc", "sfc", "fig"],
+      "players": [
+        {
+          "id": "ra-bsnes",
+          "displayName": "RetroArch (bsnes)",
+          "component": "com.retroarch.aarch64/com.retroarch.browser.retroactivity.RetroActivityFuture",
+          "action": "android.intent.action.MAIN",
+          "uriStyle": "PATH",
+          "extras": {
+            "ROM": "{file.path}",
+            "LIBRETRO": "/data/data/com.retroarch.aarch64/cores/bsnes_libretro_android.so",
+            "CONFIGFILE": "/storage/emulated/0/Android/data/com.retroarch.aarch64/files/retroarch.cfg",
+            "IME": "com.android.inputmethod.latin/.LatinIME",
+            "DATADIR": "/data/data/com.retroarch.aarch64",
+            "SDCARD": "/storage/emulated/0",
+            "EXTERNAL": "/storage/emulated/0/Android/data/com.retroarch.aarch64/files"
+          },
+          "grantRead": false
+        }
+      ]
+    }
+  ]
+}

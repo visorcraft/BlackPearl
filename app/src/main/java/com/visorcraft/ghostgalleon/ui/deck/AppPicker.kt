@@ -48,11 +48,15 @@ class AppPicker(
     private val autoShowKeyboard: Boolean = true,
     // Fraction of screen height for the card (drawer wants taller).
     private val heightFraction: Float = 0.62f,
+    // Prebuilt empty-query list (all-apps drawer cache). Null → build now.
+    private val prebuiltItems: List<PickerItem>? = null,
     private val onPick: (String) -> Unit,
     private val onHide: (String) -> Unit,
     private val onClose: () -> Unit,
 ) {
-    private var items: List<PickerItem> = PickerItems.build(allEntries, roms, "")
+    private var emptyQueryItems: List<PickerItem> =
+        prebuiltItems ?: PickerItems.build(allEntries, roms, "")
+    private var items: List<PickerItem> = emptyQueryItems
     private val app get() = activity.application as GhostGalleonApp
     // The highlight only ever rests on data rows, never section headers.
     private var highlight: Int =
@@ -105,7 +109,11 @@ class AppPicker(
                 override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
                 override fun afterTextChanged(s: Editable?) {
                     query = s?.toString() ?: ""
-                    items = PickerItems.build(allEntries, roms, query)
+                    items = if (query.isBlank()) {
+                        emptyQueryItems
+                    } else {
+                        PickerItems.build(allEntries, roms, query)
+                    }
                     highlight =
                         items.indexOfFirst { it !is PickerItem.Header }.coerceAtLeast(0)
                     // Dataset actually changed here: a full notify is correct

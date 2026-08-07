@@ -143,8 +143,15 @@ class GameDeck(
 
         // FrameLayout root so modals (dock slot menu, app picker) can sit
         // on top of the whole deck.
+        val platformFilter = state.libraryBrowse.platformId
         val root = FrameLayout(context).apply {
-            setBackgroundColor(Color.BLACK)
+            // Per-platform visual cue when a platform chip is active.
+            setBackgroundColor(
+                platformFilter
+                    ?.takeIf { com.visorcraft.ghostgalleon.rom.PlatformLook.hasFilter(it) }
+                    ?.let { com.visorcraft.ghostgalleon.rom.PlatformLook.panelTint(it) }
+                    ?: Color.BLACK,
+            )
             clipChildren = false
             clipToPadding = false
         }
@@ -153,6 +160,19 @@ class GameDeck(
             orientation = LinearLayout.VERTICAL
             clipChildren = false
             clipToPadding = false
+        }
+        platformFilter?.takeIf { com.visorcraft.ghostgalleon.rom.PlatformLook.hasFilter(it) }?.let { pid ->
+            content.addView(TextView(context).apply {
+                text = "Platform · " +
+                    com.visorcraft.ghostgalleon.rom.PlatformLook.filterBadge(pid)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                setTextColor(com.visorcraft.ghostgalleon.rom.PlatformLook.accentColor(pid))
+                gravity = Gravity.CENTER
+                setPadding(0, dp(6), 0, 0)
+            }, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ))
         }
         content.addView(
             buildBrowseBar(context, ::dp),
@@ -243,7 +263,13 @@ class GameDeck(
         state.dockSlot?.let { return handleDockAction(action, it) }
         return when (action) {
             Action.CONFIRM -> {
-                entries.getOrNull(selectedIndex())?.let { launch(it) }
+                // Launch the DeckState selection, not merely carousel index 0
+                // when selectedKey is outside the current filter (Random /
+                // Continue / chip changes can select a key not in entries).
+                val key = state.selectedKey
+                if (key != null) {
+                    launchSlotKey(activity, state, roms, key)
+                }
                 true
             }
             Action.NAV_LEFT, Action.NAV_RIGHT, Action.PAGE_PREV, Action.PAGE_NEXT -> {
@@ -288,6 +314,28 @@ class GameDeck(
         row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
         row.addView(chip("Recent", q.mode == LibraryBrowse.Mode.RECENT) {
             setQuery(q.copy(mode = LibraryBrowse.Mode.RECENT, platformId = null))
+        })
+        row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
+        row.addView(chip("Continue", false) {
+            // Jump to the most recently launched key still in the library
+            // without requiring a curated-grid pin.
+            val keys = entries.map { it.key }
+            val cont = LibraryBrowse.continueKey(keys, settings.lastLaunchedMs)
+                ?: LibraryBrowse.continueKey(
+                    roms.filter { it.visibleInUi }.map { SlotKey.rom(it.id) } +
+                        library.curated(settings).map { it.packageName },
+                    settings.lastLaunchedMs,
+                )
+            if (cont == null) {
+                Toast.makeText(activity, "Nothing to continue", Toast.LENGTH_SHORT).show()
+            } else {
+                setQuery(LibraryBrowse.BrowseQuery(mode = LibraryBrowse.Mode.RECENT))
+                state.select(cont)
+            }
+        })
+        row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
+        row.addView(chip("Random", false) {
+            pickRandomEntry()
         })
         row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
         row.addView(chip("Fav", q.mode == LibraryBrowse.Mode.FAVORITES) {
@@ -407,6 +455,29 @@ class GameDeck(
                 }
             }
             .show()
+    }
+
+    /**
+     * Select a random visible library item. Switches browse mode to ALL so
+     * the pick lands in the carousel and A/CONFIRM launches the same key
+     * (not a stale filter list).
+     */
+    private fun pickRandomEntry() {
+        val pool = buildList {
+            addAll(library.curated(settings).map { it.packageName })
+            addAll(roms.filter { it.visibleInUi }.map { SlotKey.rom(it.id) })
+        }
+        val key = LibraryBrowse.pickRandom(pool) { size ->
+            java.util.concurrent.ThreadLocalRandom.current().nextInt(size)
+        }
+        if (key == null) {
+            Toast.makeText(activity, "Library empty", Toast.LENGTH_SHORT).show()
+            return
+        }
+        // Full library view so the selection is present in entries after rebuild.
+        state.setLibraryBrowse(LibraryBrowse.BrowseQuery(mode = LibraryBrowse.Mode.ALL))
+        state.select(key)
+        Toast.makeText(activity, "Random pick", Toast.LENGTH_SHORT).show()
     }
 
     private fun openSearchDialog() {

@@ -30,6 +30,7 @@ import com.visorcraft.ghostgalleon.library.AppLibrary
 import com.visorcraft.ghostgalleon.library.CollectionsOps
 import com.visorcraft.ghostgalleon.library.SessionMath
 import com.visorcraft.ghostgalleon.library.SessionTracker
+import com.visorcraft.ghostgalleon.rom.HeroDetail
 import com.visorcraft.ghostgalleon.rom.PlatformTile
 import com.visorcraft.ghostgalleon.rom.Platforms
 import com.visorcraft.ghostgalleon.rom.RomEntry
@@ -44,6 +45,9 @@ object CompanionPanel {
     private const val TAG_HERO_NAME = "hero_name"
     private const val TAG_HERO_SUB = "hero_sub"
     private const val TAG_HERO_META = "hero_meta"
+    private const val TAG_HERO_PLAYER = "hero_player"
+    private const val TAG_HERO_DESC = "hero_desc"
+    private const val TAG_HERO_SHOT = "hero_shot"
     private const val TAG_HERO_BANNER = "hero_banner"
     private const val TAG_PANEL_ROOT = "panel_root"
 
@@ -142,9 +146,37 @@ object CompanionPanel {
                 settings.artOverrides,
             )
             name.text = rom.name
-            sub.text = Platforms.byId(rom.platformId)?.displayName ?: rom.platformId
+            val platform = Platforms.byId(rom.platformId)
+            sub.text = HeroDetail.platformLine(platform, rom.platformId)
             view.findViewWithTag<TextView>(TAG_HERO_META)?.text =
                 romMetaLine(settings, SlotKey.rom(rom.id))
+            val installed = { pkg: String ->
+                runCatching {
+                    context.packageManager.getPackageInfo(pkg, 0)
+                    true
+                }.getOrDefault(false)
+            }
+            view.findViewWithTag<TextView>(TAG_HERO_PLAYER)?.text =
+                HeroDetail.playerLine(
+                    platform,
+                    settings.defaultPlayers[rom.platformId],
+                    installed,
+                ) ?: ""
+            val desc = HeroDetail.descriptionText(rom.description)
+            view.findViewWithTag<TextView>(TAG_HERO_DESC)?.let { tv ->
+                if (desc != null) {
+                    tv.visibility = View.VISIBLE
+                    tv.text = desc
+                } else {
+                    tv.visibility = View.GONE
+                    tv.text = ""
+                }
+            }
+            bindScreenshot(
+                view.findViewWithTag(TAG_HERO_SHOT),
+                (context.applicationContext as GhostGalleonApp).artCache,
+                rom,
+            )
             view.findViewWithTag<View>(TAG_PANEL_ROOT)?.background =
                 panelBackground(context, PlatformTile.colorFor(rom.platformId))
             return true
@@ -237,6 +269,39 @@ object CompanionPanel {
         val played = settings.playtimeMs[slotKey] ?: 0L
         if (played > 0L) parts.add("Played ${SessionMath.formatPlaytime(played)}")
         return parts.joinToString(" · ").ifEmpty { "Never played" }
+    }
+
+    // Async screenshot under the meta block when [RomEntry.screenshotUri] is set.
+    private fun bindScreenshot(
+        image: ImageView?,
+        cache: ArtCache,
+        rom: RomEntry,
+    ) {
+        if (image == null) return
+        val uri = HeroDetail.screenshotUri(rom)
+        if (uri == null) {
+            image.visibility = View.GONE
+            image.setImageDrawable(null)
+            image.tag = null
+            return
+        }
+        image.visibility = View.VISIBLE
+        image.tag = uri
+        image.setImageDrawable(null)
+        val targetPx = (320 * image.resources.displayMetrics.density).toInt()
+        cache.loadUri(
+            image.context,
+            key = "shot:${rom.id}",
+            uriString = uri,
+            maxDimension = targetPx,
+            isStillValid = { image.tag == uri },
+        ) { bmp ->
+            image.post {
+                if (bmp != null && image.tag == uri && image.isAttachedToWindow) {
+                    image.setImageBitmap(bmp)
+                }
+            }
+        }
     }
 
     // ROM hero art chain: wide cached HERO art wins and swaps the square
@@ -474,17 +539,54 @@ object CompanionPanel {
                 gravity = Gravity.CENTER
                 setPadding(0, dp(4), 0, 0)
             })
-            selectedRom.description?.takeIf { it.isNotBlank() }?.let { desc ->
-                hero.addView(TextView(context).apply {
-                    text = desc
-                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-                    setTextColor(0x77FFFFFF.toInt())
-                    gravity = Gravity.CENTER
-                    maxLines = 3
-                    ellipsize = android.text.TextUtils.TruncateAt.END
-                    setPadding(dp(16), dp(6), dp(16), 0)
-                })
+            val platform = Platforms.byId(selectedRom.platformId)
+            val installed = { pkg: String ->
+                runCatching {
+                    context.packageManager.getPackageInfo(pkg, 0)
+                    true
+                }.getOrDefault(false)
             }
+            hero.addView(TextView(context).apply {
+                tag = TAG_HERO_PLAYER
+                text = HeroDetail.playerLine(
+                    platform,
+                    settings.defaultPlayers[selectedRom.platformId],
+                    installed,
+                ).orEmpty()
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                setTextColor(0x99FFFFFF.toInt())
+                gravity = Gravity.CENTER
+                setPadding(0, dp(2), 0, 0)
+            })
+            val descText = HeroDetail.descriptionText(selectedRom.description)
+            hero.addView(TextView(context).apply {
+                tag = TAG_HERO_DESC
+                text = descText.orEmpty()
+                visibility = if (descText != null) View.VISIBLE else View.GONE
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                setTextColor(0xA0FFFFFF.toInt())
+                gravity = Gravity.START
+                // Scrollable multi-line blurb (up to ~8 lines before ellipsis).
+                maxLines = 8
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                setPadding(dp(16), dp(8), dp(16), 0)
+            })
+            val shot = ImageView(context).apply {
+                tag = TAG_HERO_SHOT
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                visibility = View.GONE
+                clipToOutline = true
+                outlineProvider = object : ViewOutlineProvider() {
+                    override fun getOutline(view: View, outline: Outline) {
+                        outline.setRoundRect(0, 0, view.width, view.height, dp(12).toFloat())
+                    }
+                }
+            }
+            hero.addView(shot, LinearLayout.LayoutParams(dp(320), dp(180)).apply {
+                topMargin = dp(10)
+                gravity = Gravity.CENTER_HORIZONTAL
+            })
+            bindScreenshot(shot, cache, selectedRom)
             // Hero quick actions for the selected ROM (Phase 3).
             val quick = LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL
@@ -528,8 +630,8 @@ object CompanionPanel {
             quick.addView(View(context), LinearLayout.LayoutParams(dp(8), 1))
             quick.addView(quickChip("Open with") {
                 // Reuse grid's player picker via a small inline dialog.
-                val platform = Platforms.byId(selectedRom.platformId)
-                val players = platform?.players.orEmpty()
+                val openPlatform = Platforms.byId(selectedRom.platformId)
+                val players = openPlatform?.players.orEmpty()
                 if (players.isEmpty()) {
                     android.widget.Toast.makeText(
                         activity, "No players", android.widget.Toast.LENGTH_SHORT).show()

@@ -10,9 +10,11 @@ import java.net.URLDecoder
  * volume (needed by path-only players like RetroArch), else null.
  * `artUri` is the SAF document URI of locally discovered box art (a
  * sibling `images/`/`media/`/`art/` file matched by stem during the scan),
- * else null. `visibleInUi` is false for Switch update/DLC entries whose
- * base game is also in the library (see SwitchDedupe): they stay stored
- * and addressable by id but are excluded from the picker/carousel lists.
+ * else null. `screenshotUri` is a local screenshot match (suffix or
+ * dedicated media), else null. `visibleInUi` is false for Switch
+ * update/DLC entries whose base game is also in the library (see
+ * SwitchDedupe): they stay stored and addressable by id but are excluded
+ * from the picker/carousel lists.
  */
 data class RomEntry(
     val id: String,
@@ -24,6 +26,10 @@ data class RomEntry(
     val visibleInUi: Boolean = true,
     /** Optional description from local gamelist.xml (offline meta). */
     val description: String? = null,
+    /** Optional local screenshot document URI. */
+    val screenshotUri: String? = null,
+    /** Optional logo / wheel / marquee media URI. */
+    val logoUri: String? = null,
 )
 
 /** Pure helpers for SAF ExternalStorageProvider document-id shapes. */

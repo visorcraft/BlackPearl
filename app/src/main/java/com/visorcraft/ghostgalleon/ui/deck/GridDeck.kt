@@ -46,8 +46,8 @@ import com.visorcraft.ghostgalleon.ui.BaseDeckActivity
 // and offer Move/Remove on long-press.
 //
 // settings.gridDirection picks the viewport axis: "vertical" (default) is
-// one scrolling GridView; "horizontal" (3DS/Cocoon style) lays fixed-size
-// page panels left to right in a page-aligned horizontal scroller. Slot
+// one scrolling GridView; "horizontal" (3DS-style) lays fixed-size page
+// panels left to right in a page-aligned horizontal scroller. Slot
 // indices, GridNavigation math, and page-dot semantics are identical in
 // both — only the scroll axis changes.
 class GridDeck(
@@ -355,8 +355,8 @@ class GridDeck(
             clipChildren = false
             clipToPadding = false
         }
-        // Cocoon-style page dots live in the dock bar center; the layout
-        // listener below repopulates them once the page geometry is known.
+        // Page dots live in the dock bar center; the layout listener below
+        // repopulates them once the page geometry is known.
         val pageDots = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
@@ -375,7 +375,7 @@ class GridDeck(
         content.addView(gridFrame, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         // Bottom stack: HintBar above the dock bar, so the dock sits at the
-        // very bottom edge (Cocoon-like). The hint text follows focus —
+        // very bottom edge. The hint text follows focus —
         // grid actions normally, dock actions while the dock is focused.
         if (settings.showHints) {
             val hints = HintBar.build(context) as TextView
@@ -490,8 +490,8 @@ class GridDeck(
         return grid
     }
 
-    // "horizontal" mode (3DS/Cocoon style): fixed-size page panels laid out
-    // left to right inside a horizontal scroller. Each page panel is a
+    // "horizontal" mode (3DS-style): fixed-size page panels laid out left
+    // to right inside a horizontal scroller. Each page panel is a
     // GridView of columns x visibleRows cells, exactly viewport-sized and
     // non-scrolling. Selection changes snap the viewport a whole page so
     // the selected slot's page is in view. Touch scrolling is disabled: the

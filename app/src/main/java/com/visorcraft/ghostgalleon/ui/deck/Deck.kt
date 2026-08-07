@@ -25,7 +25,7 @@ interface Deck {
     fun handleAction(action: Action): Boolean
 }
 
-// Cocoon's model: launched apps open on the display NOT hosting the
+// Dual-screen launch model: apps open on the display NOT hosting the
 // interactive deck, so the launcher stays put and the app gets the free
 // screen. Falls back to a normal launch when only one display exists.
 internal fun launchOnOtherDisplay(activity: Activity, state: DeckState, intent: Intent) {

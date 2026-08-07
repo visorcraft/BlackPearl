@@ -93,4 +93,32 @@ object LibraryBrowse {
     /** Named collection titles suitable for Game Mode rails (stable sort). */
     fun presentCollectionRails(collections: Map<String, List<String>>): List<String> =
         collections.keys.filter { it.isNotBlank() }.sortedBy { it.lowercase() }
+
+    /**
+     * Pick one item at random from [items]. [nextIndex] is called with the
+     * list size and must return an index in `0 until size` (injectable RNG
+     * for host tests). Empty list → null.
+     */
+    fun <T> pickRandom(items: List<T>, nextIndex: (size: Int) -> Int): T? {
+        if (items.isEmpty()) return null
+        val i = nextIndex(items.size)
+        if (i !in items.indices) return null
+        return items[i]
+    }
+
+    /**
+     * Continue target: the most recently launched key that still exists in
+     * [availableKeys], or null when none.
+     */
+    fun continueKey(
+        availableKeys: List<String>,
+        lastLaunchedMs: Map<String, Long>,
+    ): String? {
+        if (availableKeys.isEmpty() || lastLaunchedMs.isEmpty()) return null
+        val present = availableKeys.toSet()
+        return orderByRecent(
+            lastLaunchedMs.keys.filter { it in present },
+            lastLaunchedMs,
+        ).firstOrNull()
+    }
 }

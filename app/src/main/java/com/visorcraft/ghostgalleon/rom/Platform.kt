@@ -19,10 +19,11 @@ private const val CLEAR_FLAGS =
  * launch registry (.superpowers/sdd/stage2-launch-registry.md). `component`
  * is `am -n` notation ("pkg/class"); `extras` values may contain the
  * placeholders {file.uri} / {file.path} — Task 3's RomLauncher substitutes
- * them. The CocoonFE template's `APK` extra is omitted deliberately: its
- * `/data/app/...-1/base.apk` value is a guess and RetroArch launches fine
- * without it. PPSSPP's registry `--activity-no-history` is also omitted
- * deliberately: it would finish the game activity on every HOME press.
+ * them. An absolute `APK` path extra used by some third-party launcher
+ * templates is omitted deliberately: `/data/app/...-1/base.apk` is a guess
+ * and RetroArch launches fine without it. PPSSPP's registry
+ * `--activity-no-history` is also omitted deliberately: it would finish
+ * the game activity on every HOME press.
  */
 data class PlayerTemplate(
     // Stable id within a platform (e.g. "melondualds", "retroarch-snes9x").
@@ -380,8 +381,8 @@ object Platforms {
         shortName = "Wii",
         folderNames = listOf("wii"),
         extensions = listOf("iso", "gcm", "rvz", "wbfs", "wad", "dol", "elf"),
-        // Same Dolphin entry as GameCube, but CocoonFE's Wii template uses
-        // MAIN instead of VIEW.
+        // Same Dolphin entry as GameCube, but the Wii player uses MAIN
+        // instead of VIEW.
         players = listOf(
             PlayerTemplate(
                 id = "dolphin",
@@ -413,10 +414,30 @@ object Platforms {
         ),
     )
 
-    val ALL: List<Platform> = listOf(
+    /** Built-in registry only (no imported pack overlay). */
+    val BUILTIN: List<Platform> = listOf(
         GB, GBC, GBA, NES, SNES, GENESIS, N64, NDS, N3DS, SWITCH,
         PS1, PSP, PS2, SATURN, DREAMCAST, ARCADE, GAMECUBE, WII, WIIU,
     )
+
+    // Imported pack platforms merged at read time via [PlatformPack.merge].
+    @Volatile
+    private var packOverlay: List<Platform> = emptyList()
+
+    /** Built-ins merged with any installed platform pack. */
+    val ALL: List<Platform>
+        get() = PlatformPack.merge(BUILTIN, packOverlay)
+
+    /** Install (or replace) the imported pack overlay. Empty clears it. */
+    fun setPackOverlay(platforms: List<Platform>) {
+        packOverlay = platforms
+    }
+
+    fun clearPackOverlay() {
+        packOverlay = emptyList()
+    }
+
+    fun packOverlay(): List<Platform> = packOverlay
 
     fun byId(id: String): Platform? = ALL.firstOrNull { it.id == id }
 

@@ -13,10 +13,13 @@ import android.os.Looper
 import com.visorcraft.ghostgalleon.art.HttpSgdbTransport
 import com.visorcraft.ghostgalleon.art.ScrapeJob
 import com.visorcraft.ghostgalleon.art.SgdbScraper
+import com.visorcraft.ghostgalleon.library.DrawerListCache
+import com.visorcraft.ghostgalleon.library.DrawerListKey
 import com.visorcraft.ghostgalleon.library.OpenSession
 import com.visorcraft.ghostgalleon.library.PlayStats
 import com.visorcraft.ghostgalleon.library.SessionMath
 import com.visorcraft.ghostgalleon.library.SessionTracker
+import com.visorcraft.ghostgalleon.rom.PlatformPackStore
 import com.visorcraft.ghostgalleon.rom.RomEntry
 import com.visorcraft.ghostgalleon.rom.RomLibrary
 import com.visorcraft.ghostgalleon.settings.DataMigrator
@@ -26,6 +29,9 @@ import com.visorcraft.ghostgalleon.state.DeckState
 import com.visorcraft.ghostgalleon.ui.BaseDeckActivity
 import com.visorcraft.ghostgalleon.ui.CompanionActivity
 import com.visorcraft.ghostgalleon.ui.DisplayRole
+import com.visorcraft.ghostgalleon.ui.deck.PickerItem
+import com.visorcraft.ghostgalleon.ui.deck.PickerItems
+import com.visorcraft.ghostgalleon.library.AppEntry
 import java.io.File
 
 class GhostGalleonApp : Application() {
@@ -42,6 +48,10 @@ class GhostGalleonApp : Application() {
 
     val romLibrary: RomLibrary by lazy {
         RomLibrary(File(filesDir, "rom_library.json"))
+    }
+
+    val platformPackStore: PlatformPackStore by lazy {
+        PlatformPackStore(File(filesDir, "platform_pack.json"))
     }
 
     val artCache: com.visorcraft.ghostgalleon.art.ArtCache by lazy {
@@ -92,11 +102,46 @@ class GhostGalleonApp : Application() {
     @Volatile
     var lastDrawerRequestUptimeMs: Long = 0L
 
+    // All-apps drawer list reuse: avoid rebuilding thousands of PickerItems
+    // on every swipe when contentEpoch + apps/hidden sets are unchanged.
+    @Volatile
+    private var drawerListKey: DrawerListKey? = null
+    @Volatile
+    private var drawerListItems: List<PickerItem>? = null
+
+    /**
+     * Cached empty-query drawer rows for [apps] + current [romEntries].
+     * Rebuilds only when [DrawerListCache.key] changes.
+     */
+    fun drawerPickerItems(apps: List<AppEntry>): List<PickerItem> {
+        val current = DrawerListCache.key(
+            contentEpoch = contentEpoch,
+            romCount = romEntries.size,
+            hiddenPackages = settings.hiddenPackages,
+            appPackageNames = apps.map { it.packageName },
+        )
+        val cachedKey = drawerListKey
+        val cachedItems = drawerListItems
+        if (DrawerListCache.matches(cachedKey, current) && cachedItems != null) {
+            return cachedItems
+        }
+        val built = PickerItems.build(apps, romEntries, "")
+        drawerListKey = current
+        drawerListItems = built
+        return built
+    }
+
+    fun invalidateDrawerListCache() {
+        drawerListKey = null
+        drawerListItems = null
+    }
+
     // A fresh scan result: swap the snapshot and rebuild the decks so the
     // picker/carousel/grid see the new entries immediately.
     fun publishRomEntries(entries: List<RomEntry>) {
         romEntries = entries
         contentEpoch++
+        invalidateDrawerListCache()
         deckState.notifyChanged()
     }
 
@@ -188,6 +233,8 @@ class GhostGalleonApp : Application() {
             runCatching { DataMigrator.tryImportFromExternal(this) }
         }
         settings = settingsStore.load()
+        // Install any persisted platform pack before ROM scans / launches.
+        runCatching { platformPackStore.loadIntoRegistry() }
         deckState = DeckState()
         deckState.setMode(settings.defaultMode)
         deckState.setPrimaryDisplayId(settings.primaryDisplay)
@@ -283,6 +330,7 @@ class GhostGalleonApp : Application() {
         settings = s
         settingsStore.save(s)
         contentEpoch++
+        invalidateDrawerListCache()
         if (notify) {
             deckState.setMode(s.defaultMode)
             deckState.notifyChanged()

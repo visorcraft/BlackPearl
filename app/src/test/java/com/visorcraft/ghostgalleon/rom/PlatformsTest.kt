@@ -10,6 +10,7 @@ class PlatformsTest {
 
     @Test
     fun `registry covers exactly the ROM-launchable platforms`() {
+        Platforms.clearPackOverlay()
         assertEquals(
             listOf(
                 "gb", "gbc", "gba", "nes", "snes", "genesis", "n64", "nds", "3ds",
@@ -18,6 +19,7 @@ class PlatformsTest {
             ),
             Platforms.ALL.map { it.id },
         )
+        assertEquals(Platforms.BUILTIN.map { it.id }, Platforms.ALL.map { it.id })
     }
 
     @Test
