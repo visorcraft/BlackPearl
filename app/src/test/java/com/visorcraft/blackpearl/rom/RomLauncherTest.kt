@@ -123,10 +123,13 @@ class RomLauncherTest {
         // RetroArch (all cores), Eden, melonDualDS, Dolphin, Flycast launch
         // with NEW_TASK only — RetroArch deliberately deviates from the
         // registry: clear-task hangs its warm relaunch on this device.
+        // Note: PSP primary is PPSSPP (clearing); PS1/NES/Saturn/Arcade are
+        // RetroArch-primary (plain). Dreamcast primary is standalone Flycast.
         val plain = setOf(
-            Platforms.GB, Platforms.GBC, Platforms.GBA, Platforms.SNES,
+            Platforms.GB, Platforms.GBC, Platforms.GBA, Platforms.NES, Platforms.SNES,
             Platforms.GENESIS, Platforms.N64, Platforms.NDS, Platforms.SWITCH,
-            Platforms.DREAMCAST, Platforms.GAMECUBE, Platforms.WII,
+            Platforms.PS1, Platforms.SATURN, Platforms.DREAMCAST, Platforms.ARCADE,
+            Platforms.GAMECUBE, Platforms.WII,
         )
         assertEquals(clearing.size + plain.size, Platforms.ALL.size)
         clearing.forEach { p ->

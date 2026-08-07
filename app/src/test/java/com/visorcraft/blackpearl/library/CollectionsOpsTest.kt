@@ -47,4 +47,21 @@ class CollectionsOpsTest {
     fun `emptySlotCount counts nulls`() {
         assertEquals(2, CollectionsOps.emptySlotCount(listOf(null, "a", null)))
     }
+
+    @Test
+    fun `create rename delete collection`() {
+        val c0 = CollectionsOps.createCollection(emptyMap(), "RPGs")
+        assertTrue(c0.containsKey("RPGs"))
+        val c1 = CollectionsOps.addToCollection(c0, "RPGs", "rom:a")
+        val c2 = CollectionsOps.renameCollection(c1, "RPGs", "Story")
+        assertFalse(c2.containsKey("RPGs"))
+        assertEquals(listOf("rom:a"), c2["Story"])
+        assertTrue(CollectionsOps.deleteCollection(c2, "Story").isEmpty())
+    }
+
+    @Test
+    fun `bulkAddToCollection creates and fills`() {
+        val c = CollectionsOps.bulkAddToCollection(emptyMap(), "Co-op", listOf("a", "b", "a"))
+        assertEquals(listOf("a", "b"), c["Co-op"])
+    }
 }

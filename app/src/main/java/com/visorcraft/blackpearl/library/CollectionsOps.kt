@@ -68,4 +68,52 @@ object CollectionsOps {
 
     /** Count of null slots that bulkFill could fill without appending. */
     fun emptySlotCount(slots: List<String?>): Int = slots.count { it == null }
+
+    fun renameCollection(
+        collections: Map<String, List<String>>,
+        from: String,
+        to: String,
+    ): Map<String, List<String>> {
+        val src = from.trim()
+        val dest = to.trim()
+        if (src.isEmpty() || dest.isEmpty() || src == dest) return collections
+        val members = collections[src] ?: return collections
+        val merged = (collections[dest].orEmpty() + members).distinct()
+        return collections - src + (dest to merged)
+    }
+
+    fun deleteCollection(
+        collections: Map<String, List<String>>,
+        name: String,
+    ): Map<String, List<String>> = collections - name.trim()
+
+    fun createCollection(
+        collections: Map<String, List<String>>,
+        name: String,
+    ): Map<String, List<String>> {
+        val n = name.trim()
+        if (n.isEmpty() || n in collections) return collections
+        return collections + (n to emptyList())
+    }
+
+    /** Add every key in [keys] to favorites. */
+    fun bulkAddFavorites(favorites: Set<String>, keys: List<String>): Set<String> =
+        favorites + keys.filter { it.isNotBlank() }
+
+    /** Remove every key in [keys] from favorites. */
+    fun bulkRemoveFavorites(favorites: Set<String>, keys: List<String>): Set<String> =
+        favorites - keys.toSet()
+
+    /** Add every key to a named collection (creating the list if needed). */
+    fun bulkAddToCollection(
+        collections: Map<String, List<String>>,
+        name: String,
+        keys: List<String>,
+    ): Map<String, List<String>> {
+        var c = collections
+        keys.filter { it.isNotBlank() }.forEach { k ->
+            c = addToCollection(c, name, k)
+        }
+        return c
+    }
 }

@@ -87,4 +87,29 @@ class LibraryBrowseTest {
     fun `presentPlatforms lists distinct sorted ids`() {
         assertEquals(listOf("3ds", "snes", "switch"), LibraryBrowse.presentPlatforms(library))
     }
+
+    @Test
+    fun `browseRoms COLLECTION filters to named membership`() {
+        val cols = mapOf(
+            "RPGs" to listOf(SlotKey.rom("snes:Zelda.rom"), SlotKey.rom("3ds:Pokemon.rom")),
+            "Empty" to emptyList(),
+        )
+        val out = LibraryBrowse.browseRoms(
+            library,
+            LibraryBrowse.BrowseQuery(
+                mode = LibraryBrowse.Mode.COLLECTION,
+                collectionName = "RPGs",
+            ),
+            collections = cols,
+        )
+        assertEquals(setOf("Zelda", "Pokemon"), out.map { it.name }.toSet())
+    }
+
+    @Test
+    fun `presentCollectionRails sorts names`() {
+        val rails = LibraryBrowse.presentCollectionRails(
+            mapOf("Zebra" to listOf("a"), "alpha" to listOf("b")),
+        )
+        assertEquals(listOf("alpha", "Zebra"), rails)
+    }
 }

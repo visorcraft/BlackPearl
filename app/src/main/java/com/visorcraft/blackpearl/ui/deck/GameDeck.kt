@@ -62,10 +62,24 @@ class GameDeck(
             roms, q,
             lastLaunchedMs = settings.lastLaunchedMs,
             favorites = settings.favorites,
+            collections = settings.collections,
         ).map {
             CarouselEntry(SlotKey.rom(it.id), it.name, null, it)
         }
         when {
+            q.mode == LibraryBrowse.Mode.COLLECTION -> {
+                // Collection members may include apps (package keys).
+                val name = q.collectionName.orEmpty()
+                val keys = settings.collections[name].orEmpty()
+                val byPkg = library.curated(settings).associateBy { it.packageName }
+                val apps = keys.mapNotNull { k ->
+                    if (SlotKey.isRom(k)) null
+                    else byPkg[k]?.let {
+                        CarouselEntry(it.packageName, it.label, it.packageName, null)
+                    }
+                }
+                apps + browsed
+            }
             q.mode == LibraryBrowse.Mode.RECENT &&
                 q.platformId == null && q.text.isBlank() -> {
                 val byPkg = library.curated(settings)
@@ -277,8 +291,22 @@ class GameDeck(
         })
         row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
         row.addView(chip("Fav", q.mode == LibraryBrowse.Mode.FAVORITES) {
-            setQuery(q.copy(mode = LibraryBrowse.Mode.FAVORITES, platformId = null))
+            setQuery(q.copy(mode = LibraryBrowse.Mode.FAVORITES, platformId = null, collectionName = null))
         })
+        LibraryBrowse.presentCollectionRails(settings.collections).forEach { name ->
+            if (name.equals("Favorites", ignoreCase = true)) return@forEach
+            row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
+            val selected = q.mode == LibraryBrowse.Mode.COLLECTION &&
+                q.collectionName == name
+            row.addView(chip(name, selected) {
+                setQuery(
+                    LibraryBrowse.BrowseQuery(
+                        mode = LibraryBrowse.Mode.COLLECTION,
+                        collectionName = name,
+                    ),
+                )
+            })
+        }
         LibraryBrowse.presentPlatforms(roms).forEach { pid ->
             row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
             val label = Platforms.byId(pid)?.shortName ?: pid
@@ -287,6 +315,7 @@ class GameDeck(
                     q.copy(
                         mode = LibraryBrowse.Mode.ALL,
                         platformId = if (q.platformId == pid) null else pid,
+                        collectionName = null,
                     ),
                 )
             })
@@ -295,11 +324,89 @@ class GameDeck(
         row.addView(chip(if (q.text.isBlank()) "Search" else "\"${q.text}\"", q.text.isNotBlank()) {
             openSearchDialog()
         })
+        row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
+        row.addView(chip(
+            if (state.multiSelectEnabled) "Select (${state.multiSelectKeys.size})" else "Select",
+            state.multiSelectEnabled,
+        ) {
+            if (state.multiSelectEnabled) {
+                showBulkActions()
+            } else {
+                state.setMultiSelectEnabled(true)
+            }
+        })
         // Horizontal scroll so many platforms don't crush the bar.
         return android.widget.HorizontalScrollView(context).apply {
             isHorizontalScrollBarEnabled = false
             addView(row)
         }
+    }
+
+    private fun showBulkActions() {
+        val n = state.multiSelectKeys.size
+        val labels = arrayOf(
+            "Favorite selected ($n)",
+            "Pin selected to grid ($n)",
+            "Add to collection…",
+            "Clear selection",
+            "Cancel select mode",
+        )
+        android.app.AlertDialog.Builder(activity)
+            .setTitle("Bulk actions")
+            .setItems(labels) { _, which ->
+                when (which) {
+                    0 -> {
+                        val fav = com.visorcraft.blackpearl.library.MultiSelectOps.bulkFavorite(
+                            settings.favorites, state.multiSelectKeys, add = true)
+                        app().updateSettings(settings.copy(favorites = fav))
+                        state.clearMultiSelect()
+                    }
+                    1 -> {
+                        val slots = com.visorcraft.blackpearl.library.MultiSelectOps.bulkPinToGrid(
+                            settings.gridSlots, state.multiSelectKeys)
+                        app().updateSettings(settings.copy(gridSlots = slots))
+                        state.clearMultiSelect()
+                        Toast.makeText(activity, "Pinned to grid", Toast.LENGTH_SHORT).show()
+                    }
+                    2 -> promptAddSelectionToCollection()
+                    3 -> state.setMultiSelectKeys(emptySet())
+                    4 -> state.clearMultiSelect()
+                }
+            }
+            .setNegativeButton("Close", null)
+            .show()
+    }
+
+    private fun promptAddSelectionToCollection() {
+        val names = LibraryBrowse.presentCollectionRails(settings.collections).toMutableList()
+        names.add(0, "+ New collection")
+        android.app.AlertDialog.Builder(activity)
+            .setTitle("Add to collection")
+            .setItems(names.toTypedArray()) { _, which ->
+                if (which == 0) {
+                    val input = android.widget.EditText(activity).apply { hint = "Name" }
+                    android.app.AlertDialog.Builder(activity)
+                        .setTitle("New collection")
+                        .setView(input)
+                        .setPositiveButton("Create") { _, _ ->
+                            val name = input.text?.toString().orEmpty()
+                            var cols = CollectionsOps.createCollection(settings.collections, name)
+                            cols = CollectionsOps.bulkAddToCollection(
+                                cols, name, state.multiSelectKeys.toList())
+                            app().updateSettings(settings.copy(collections = cols))
+                            state.clearMultiSelect()
+                        }
+                        .setNegativeButton("Cancel", null)
+                        .show()
+                } else {
+                    val name = names[which]
+                    val cols = CollectionsOps.bulkAddToCollection(
+                        settings.collections, name, state.multiSelectKeys.toList())
+                    app().updateSettings(settings.copy(collections = cols))
+                    state.clearMultiSelect()
+                }
+            }
+            .show()
     }
 
     private fun openSearchDialog() {
@@ -702,21 +809,33 @@ class GameDeck(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT,
             ))
-            // Tap-to-focus: first tap on an unfocused card only moves the
-            // selection; tapping the already-selected card launches it.
-            // The slot stays non-focusable so d-pad routing is unchanged.
+            // Multi-select: tap toggles membership. Otherwise tap-to-focus /
+            // second tap launches. Long-press opens the entry menu (or
+            // enters multi-select with this key).
             holder.root.setOnClickListener {
+                if (state.multiSelectEnabled) {
+                    state.toggleMultiSelectKey(entry.key)
+                    return@setOnClickListener
+                }
                 if (state.selectedKey == entry.key && state.dockSlot == null) {
                     launch(entry)
                 } else {
                     state.select(entry.key)
                 }
             }
-            // Long-press: favorite / open with / set art / add to grid.
             holder.root.setOnLongClickListener {
-                state.select(entry.key)
-                openEntryMenu(entry)
+                if (state.multiSelectEnabled) {
+                    state.toggleMultiSelectKey(entry.key)
+                } else {
+                    state.select(entry.key)
+                    openEntryMenu(entry)
+                }
                 true
+            }
+            // Selection ring for multi-select.
+            if (state.multiSelectEnabled && entry.key in state.multiSelectKeys) {
+                card.alpha = 1f
+                card.foreground = android.graphics.drawable.ColorDrawable(0x4400AAFF)
             }
         }
     }

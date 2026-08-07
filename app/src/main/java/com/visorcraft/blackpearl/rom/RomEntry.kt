@@ -22,6 +22,8 @@ data class RomEntry(
     val path: String?,
     val artUri: String? = null,
     val visibleInUi: Boolean = true,
+    /** Optional description from local gamelist.xml (offline meta). */
+    val description: String? = null,
 )
 
 /** Pure helpers for SAF ExternalStorageProvider document-id shapes. */

@@ -8,7 +8,10 @@ import android.os.Looper
 import com.visorcraft.blackpearl.art.HttpSgdbTransport
 import com.visorcraft.blackpearl.art.ScrapeJob
 import com.visorcraft.blackpearl.art.SgdbScraper
+import com.visorcraft.blackpearl.library.OpenSession
+import com.visorcraft.blackpearl.library.PlayStats
 import com.visorcraft.blackpearl.library.SessionMath
+import com.visorcraft.blackpearl.library.SessionTracker
 import com.visorcraft.blackpearl.rom.RomEntry
 import com.visorcraft.blackpearl.rom.RomLibrary
 import com.visorcraft.blackpearl.settings.Settings
@@ -55,12 +58,14 @@ class BlackPearlApp : Application() {
     var romEntries: List<RomEntry> = emptyList()
         private set
 
-    // Open play session: key + wall-clock start. Accrues when a deck
-    // activity resumes after having been stopped (left for a game), or
-    // when a new launch supersedes the previous session.
-    private var openSessionKey: String? = null
-    private var openSessionStartMs: Long = 0L
+    // Honest open session (pause while launcher focused / device asleep).
+    // Exposed for Now Playing companion UI.
+    @Volatile
+    var openSession: OpenSession? = null
+        private set
+
     private var sessionAwaitingReturn: Boolean = false
+    private var liveDeckCount: Int = 0
 
     private fun reloadRomEntries() {
         ROM_IO.execute {
@@ -80,18 +85,15 @@ class BlackPearlApp : Application() {
     /** Stamp last-launched and open a play session for [key]. */
     fun noteLaunch(key: String, nowMs: Long = System.currentTimeMillis()) {
         endOpenSession(nowMs)
-        openSessionKey = key
-        openSessionStartMs = nowMs
+        openSession = SessionTracker.onLaunch(key, nowMs)
         val stamped = SessionMath.recordLaunch(
-            com.visorcraft.blackpearl.library.PlayStats(
+            PlayStats(
                 lastLaunchedMs = settings.lastLaunchedMs,
                 totalPlaytimeMs = settings.playtimeMs,
             ),
             key,
             nowMs,
         )
-        // Persist without full notify storm: updateSettings still rebuilds,
-        // which is fine after a launch (deck is leaving focus).
         updateSettings(
             settings.copy(
                 lastLaunchedMs = stamped.lastLaunchedMs,
@@ -99,30 +101,53 @@ class BlackPearlApp : Application() {
             ),
             notify = false,
         )
+        // Now Playing: companion should rebuild when session opens.
+        Handler(Looper.getMainLooper()).post { deckState.notifyChanged() }
     }
 
-    /** Accrue playtime when returning to a deck activity. */
+    /** Accrue honest active playtime when returning to a deck activity. */
     fun noteReturnToLauncher(nowMs: Long = System.currentTimeMillis()) {
         endOpenSession(nowMs)
+        Handler(Looper.getMainLooper()).post { deckState.notifyChanged() }
+    }
+
+    fun onSessionLauncherFocused(nowMs: Long = System.currentTimeMillis()) {
+        val s = openSession ?: return
+        openSession = SessionTracker.onLauncherFocused(s, nowMs)
+    }
+
+    fun onSessionLauncherUnfocused(nowMs: Long = System.currentTimeMillis()) {
+        val s = openSession ?: return
+        openSession = SessionTracker.onLauncherUnfocused(s, nowMs)
+    }
+
+    fun onSessionDeviceSleep(nowMs: Long = System.currentTimeMillis()) {
+        val s = openSession ?: return
+        openSession = SessionTracker.onDeviceSleep(s, nowMs)
+    }
+
+    fun onSessionDeviceWake(nowMs: Long = System.currentTimeMillis()) {
+        val s = openSession ?: return
+        openSession = SessionTracker.onDeviceWake(s, nowMs)
     }
 
     private fun endOpenSession(nowMs: Long) {
-        val key = openSessionKey ?: return
-        val start = openSessionStartMs
-        openSessionKey = null
-        openSessionStartMs = 0L
-        val stamped = SessionMath.recordReturn(
-            com.visorcraft.blackpearl.library.PlayStats(
+        val s = openSession ?: return
+        openSession = null
+        sessionAwaitingReturn = false
+        val activeMs = SessionTracker.onReturn(s, nowMs)
+        val stamped = SessionTracker.commitPlaytime(
+            PlayStats(
                 lastLaunchedMs = settings.lastLaunchedMs,
                 totalPlaytimeMs = settings.playtimeMs,
             ),
-            key,
-            start,
-            nowMs,
+            s.key,
+            activeMs,
         )
+        // Keep last-launched from noteLaunch; only merge playtime.
         updateSettings(
             settings.copy(
-                lastLaunchedMs = stamped.lastLaunchedMs,
+                lastLaunchedMs = settings.lastLaunchedMs,
                 playtimeMs = stamped.totalPlaytimeMs,
             ),
             notify = false,
@@ -153,21 +178,55 @@ class BlackPearlApp : Application() {
                 if (activity is BaseDeckActivity) liveDeckActivities.remove(activity)
             }
 
-            override fun onActivityStarted(activity: Activity) {}
+            override fun onActivityStarted(activity: Activity) {
+                if (activity is BaseDeckActivity) {
+                    liveDeckCount++
+                    if (liveDeckCount == 1 && openSession != null) {
+                        // Returning to launcher after all decks were stopped.
+                        sessionAwaitingReturn = true
+                    }
+                }
+            }
             override fun onActivityResumed(activity: Activity) {
-                if (activity is BaseDeckActivity && sessionAwaitingReturn) {
-                    noteReturnToLauncher()
-                    sessionAwaitingReturn = false
+                if (activity is BaseDeckActivity) {
+                    onSessionLauncherFocused()
+                    if (sessionAwaitingReturn && openSession != null) {
+                        // Still in session but launcher is focused again:
+                        // keep session open for Now Playing; only end when
+                        // the user starts a new launch or we explicitly clear.
+                        // Honest pause already applied via onSessionLauncherFocused.
+                        sessionAwaitingReturn = false
+                    }
                 }
             }
             override fun onActivityPaused(activity: Activity) {}
             override fun onActivityStopped(activity: Activity) {
-                if (activity is BaseDeckActivity && openSessionKey != null) {
-                    sessionAwaitingReturn = true
+                if (activity is BaseDeckActivity) {
+                    liveDeckCount = (liveDeckCount - 1).coerceAtLeast(0)
+                    if (liveDeckCount == 0 && openSession != null) {
+                        onSessionLauncherUnfocused()
+                        sessionAwaitingReturn = true
+                    }
                 }
             }
             override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
         })
+        // Pause accrual when the screen turns off.
+        registerComponentCallbacks(object : android.content.ComponentCallbacks2 {
+            override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {}
+            override fun onLowMemory() {}
+            override fun onTrimMemory(level: Int) {
+                if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN) {
+                    onSessionDeviceSleep()
+                }
+            }
+        })
+    }
+
+    /** End the open session and commit playtime (e.g. user dismissed Now Playing). */
+    fun clearOpenSession(nowMs: Long = System.currentTimeMillis()) {
+        endOpenSession(nowMs)
+        deckState.notifyChanged()
     }
 
     /** The currently live CompanionActivity, if any. */

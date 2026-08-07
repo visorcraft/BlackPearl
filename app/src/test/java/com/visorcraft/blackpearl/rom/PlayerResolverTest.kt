@@ -60,4 +60,24 @@ class PlayerResolverTest {
         assertTrue(Platforms.SNES.players.size >= 2)
         assertEquals("ra-snes9x", Platforms.SNES.player.id)
     }
+
+    @Test
+    fun `resolve picks preferred RetroArch core id when package is installed`() {
+        val t = PlayerResolver.resolve(Platforms.SNES, "ra-bsnes") {
+            it == "com.retroarch.aarch64"
+        }!!
+        assertEquals("ra-bsnes", t.id)
+    }
+
+    @Test
+    fun `NES and PS1 multi-core platforms resolve defaults first`() {
+        assertEquals("ra-fceumm", Platforms.NES.player.id)
+        assertEquals("ra-pcsx", Platforms.PS1.player.id)
+        val nesAlt = PlayerResolver.byId(Platforms.NES, "ra-nestopia")!!
+        assertTrue(nesAlt.extras.getValue("LIBRETRO").contains("nestopia"))
+        val arcade = PlayerResolver.resolve(Platforms.ARCADE, null) {
+            it == "com.retroarch.aarch64"
+        }!!
+        assertEquals("ra-fbneo", arcade.id)
+    }
 }

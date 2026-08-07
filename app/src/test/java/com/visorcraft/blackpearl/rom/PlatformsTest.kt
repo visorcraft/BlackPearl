@@ -9,11 +9,12 @@ import org.junit.Test
 class PlatformsTest {
 
     @Test
-    fun `registry covers exactly the 15 ROM-launchable platforms`() {
+    fun `registry covers exactly the ROM-launchable platforms`() {
         assertEquals(
             listOf(
-                "gb", "gbc", "gba", "snes", "genesis", "n64", "nds", "3ds",
-                "switch", "psp", "ps2", "dreamcast", "gamecube", "wii", "wiiu",
+                "gb", "gbc", "gba", "nes", "snes", "genesis", "n64", "nds", "3ds",
+                "switch", "ps1", "psp", "ps2", "saturn", "dreamcast", "arcade",
+                "gamecube", "wii", "wiiu",
             ),
             Platforms.ALL.map { it.id },
         )
@@ -37,15 +38,21 @@ class PlatformsTest {
         assertEquals("$dir/gambatte_libretro_android.so", core(Platforms.GB))
         assertEquals("$dir/gambatte_libretro_android.so", core(Platforms.GBC))
         assertEquals("$dir/mgba_libretro_android.so", core(Platforms.GBA))
+        assertEquals("$dir/fceumm_libretro_android.so", core(Platforms.NES))
         assertEquals("$dir/snes9x_libretro_android.so", core(Platforms.SNES))
         assertEquals("$dir/genesis_plus_gx_libretro_android.so", core(Platforms.GENESIS))
         assertEquals("$dir/mupen64plus_next_gles3_libretro_android.so", core(Platforms.N64))
+        assertEquals("$dir/pcsx_rearmed_libretro_android.so", core(Platforms.PS1))
+        assertEquals("$dir/yabause_libretro_android.so", core(Platforms.SATURN))
+        assertEquals("$dir/fbneo_libretro_android.so", core(Platforms.ARCADE))
     }
 
     @Test
     fun `retroarch players are path-only with the ROM extra`() {
-        listOf(Platforms.GB, Platforms.GBC, Platforms.GBA, Platforms.SNES,
-            Platforms.GENESIS, Platforms.N64).forEach { p ->
+        listOf(
+            Platforms.GB, Platforms.GBC, Platforms.GBA, Platforms.NES, Platforms.SNES,
+            Platforms.GENESIS, Platforms.N64, Platforms.PS1, Platforms.SATURN, Platforms.ARCADE,
+        ).forEach { p ->
             assertEquals(UriStyle.PATH, p.player.uriStyle)
             assertFalse(p.player.grantRead)
             assertEquals("{file.path}", p.player.extras.getValue("ROM"))
@@ -54,6 +61,26 @@ class PlatformsTest {
                 p.player.component,
             )
         }
+    }
+
+    @Test
+    fun `new platforms match common folder aliases`() {
+        assertEquals(Platforms.NES, Platforms.platformForFolder("nes"))
+        assertEquals(Platforms.NES, Platforms.platformForFolder("Famicom"))
+        assertEquals(Platforms.PS1, Platforms.platformForFolder("psx"))
+        assertEquals(Platforms.PS1, Platforms.platformForFolder("ps1"))
+        assertEquals(Platforms.ARCADE, Platforms.platformForFolder("mame"))
+        assertEquals(Platforms.ARCADE, Platforms.platformForFolder("arcade"))
+        assertEquals(Platforms.SATURN, Platforms.platformForFolder("saturn"))
+    }
+
+    @Test
+    fun `existing platforms keep multi-player defaults`() {
+        assertEquals("ra-snes9x", Platforms.SNES.player.id)
+        assertTrue(Platforms.SNES.players.size >= 2)
+        assertEquals("melondualds", Platforms.NDS.player.id)
+        assertTrue(Platforms.NDS.players.any { it.id == "drastic" })
+        assertTrue(Platforms.NDS.players.any { it.id == "melonds" })
     }
 
     @Test

@@ -27,7 +27,9 @@ import com.visorcraft.blackpearl.R
 import com.visorcraft.blackpearl.art.ArtCache
 import com.visorcraft.blackpearl.art.ArtTile
 import com.visorcraft.blackpearl.library.AppLibrary
+import com.visorcraft.blackpearl.library.CollectionsOps
 import com.visorcraft.blackpearl.library.SessionMath
+import com.visorcraft.blackpearl.library.SessionTracker
 import com.visorcraft.blackpearl.rom.PlatformTile
 import com.visorcraft.blackpearl.rom.Platforms
 import com.visorcraft.blackpearl.rom.RomEntry
@@ -301,6 +303,76 @@ object CompanionPanel {
             setPadding(dp(24), dp(20), dp(24), 0)
         }
 
+        // Now Playing banner when a session is open (game on other display).
+        val app = activity.application as BlackPearlApp
+        app.openSession?.let { session ->
+            val nowPlaying = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER_HORIZONTAL
+                background = TileBackgrounds.card(context)
+                setPadding(dp(16), dp(12), dp(16), dp(12))
+            }
+            nowPlaying.addView(TextView(context).apply {
+                text = "NOW PLAYING"
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                setTextColor(
+                    (settings.accentColor and 0x00FFFFFF) or (0xCC shl 24))
+                letterSpacing = 0.12f
+                gravity = Gravity.CENTER
+            })
+            val label = when {
+                SlotKey.isRom(session.key) -> {
+                    val id = SlotKey.romId(session.key)
+                    roms.firstOrNull { it.id == id }?.name ?: session.key
+                }
+                else -> library.visible(settings)
+                    .firstOrNull { it.packageName == session.key }?.label
+                    ?: session.key
+            }
+            nowPlaying.addView(TextView(context).apply {
+                text = label
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
+                setTextColor(Color.WHITE)
+                gravity = Gravity.CENTER
+                maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
+            })
+            val elapsed = SessionTracker.activeElapsedMs(session, System.currentTimeMillis())
+            nowPlaying.addView(TextView(context).apply {
+                text = "Session ${SessionMath.formatPlaytime(elapsed)}" +
+                    if (!session.isActive) " (paused)" else ""
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                setTextColor(0x99FFFFFF.toInt())
+                gravity = Gravity.CENTER
+            })
+            val npActions = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER
+                setPadding(0, dp(8), 0, 0)
+            }
+            npActions.addView(TextView(context).apply {
+                text = "Swap"
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                setTextColor(Color.BLACK)
+                background = TileBackgrounds.selected(context, settings.accentColor)
+                setPadding(dp(16), dp(8), dp(16), dp(8))
+                setOnClickListener { state.swapDisplays() }
+            })
+            npActions.addView(View(context), LinearLayout.LayoutParams(dp(12), 1))
+            npActions.addView(TextView(context).apply {
+                text = "End session"
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                setTextColor(Color.WHITE)
+                setPadding(dp(16), dp(8), dp(16), dp(8))
+                setOnClickListener { app.clearOpenSession() }
+            })
+            nowPlaying.addView(npActions)
+            content.addView(nowPlaying, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply { bottomMargin = dp(12) })
+        }
+
         // Status pill, top-right.
         val pillRow = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -402,6 +474,85 @@ object CompanionPanel {
                 gravity = Gravity.CENTER
                 setPadding(0, dp(4), 0, 0)
             })
+            selectedRom.description?.takeIf { it.isNotBlank() }?.let { desc ->
+                hero.addView(TextView(context).apply {
+                    text = desc
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                    setTextColor(0x77FFFFFF.toInt())
+                    gravity = Gravity.CENTER
+                    maxLines = 3
+                    ellipsize = android.text.TextUtils.TruncateAt.END
+                    setPadding(dp(16), dp(6), dp(16), 0)
+                })
+            }
+            // Hero quick actions for the selected ROM (Phase 3).
+            val quick = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER
+                setPadding(0, dp(12), 0, 0)
+            }
+            fun quickChip(label: String, onClick: () -> Unit) =
+                TextView(context).apply {
+                    text = label
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                    setTextColor(Color.WHITE)
+                    setBackgroundColor(0xFF2A2A32.toInt())
+                    setPadding(dp(12), dp(8), dp(12), dp(8))
+                    setOnClickListener { onClick() }
+                }
+            val romKey = SlotKey.rom(selectedRom.id)
+            quick.addView(quickChip(
+                if (romKey in settings.favorites) "Unfav" else "Fav",
+            ) {
+                val next = CollectionsOps.toggleFavorite(settings.favorites, romKey)
+                app.updateSettings(settings.copy(favorites = next))
+            })
+            quick.addView(View(context), LinearLayout.LayoutParams(dp(8), 1))
+            quick.addView(quickChip("Pin") {
+                val filled = CollectionsOps.bulkFillSlots(
+                    settings.gridSlots, listOf(romKey))
+                app.updateSettings(settings.copy(gridSlots = filled))
+                android.widget.Toast.makeText(
+                    activity, "Pinned to grid", android.widget.Toast.LENGTH_SHORT).show()
+            })
+            quick.addView(View(context), LinearLayout.LayoutParams(dp(8), 1))
+            quick.addView(quickChip("Art") {
+                (activity as? com.visorcraft.blackpearl.ui.BaseDeckActivity)
+                    ?.requestCustomIcon { uri ->
+                        app.artCache.invalidate(selectedRom.id)
+                        app.updateSettings(settings.copy(
+                            artOverrides = settings.artOverrides +
+                                (selectedRom.id to uri.toString())))
+                    }
+            })
+            quick.addView(View(context), LinearLayout.LayoutParams(dp(8), 1))
+            quick.addView(quickChip("Open with") {
+                // Reuse grid's player picker via a small inline dialog.
+                val platform = Platforms.byId(selectedRom.platformId)
+                val players = platform?.players.orEmpty()
+                if (players.isEmpty()) {
+                    android.widget.Toast.makeText(
+                        activity, "No players", android.widget.Toast.LENGTH_SHORT).show()
+                } else {
+                    android.app.AlertDialog.Builder(activity)
+                        .setTitle("Open with")
+                        .setItems(players.map { it.displayName }.toTypedArray()) { _, which ->
+                            val p = players[which]
+                            app.updateSettings(
+                                settings.copy(
+                                    defaultPlayers = settings.defaultPlayers +
+                                        (selectedRom.platformId to p.id),
+                                ),
+                                notify = false,
+                            )
+                            launchSlotKey(
+                                activity, state, roms, romKey, playerId = p.id)
+                        }
+                        .setNegativeButton("Cancel", null)
+                        .show()
+                }
+            })
+            hero.addView(quick)
         } else if (selectedEntry != null) {
             val icon = ImageView(context)
             icon.tag = TAG_HERO_ICON

@@ -38,6 +38,13 @@ class DeckState {
     var libraryBrowse: LibraryBrowse.BrowseQuery = LibraryBrowse.BrowseQuery()
         private set
 
+    // Multi-select set of slot keys in Game Mode (empty = select mode off).
+    var multiSelectKeys: Set<String> = emptySet()
+        private set
+
+    var multiSelectEnabled: Boolean = false
+        private set
+
     var lastChange: Change = Change.SETTINGS
         private set
 
@@ -102,6 +109,42 @@ class DeckState {
     fun setLibraryBrowse(query: LibraryBrowse.BrowseQuery) {
         if (libraryBrowse == query) return
         libraryBrowse = query
+        lastChange = Change.SETTINGS
+        notifyListeners()
+    }
+
+    fun setMultiSelectEnabled(enabled: Boolean) {
+        if (multiSelectEnabled == enabled && (!enabled || multiSelectKeys.isEmpty())) {
+            if (!enabled) {
+                multiSelectEnabled = false
+                multiSelectKeys = emptySet()
+            }
+            return
+        }
+        multiSelectEnabled = enabled
+        if (!enabled) multiSelectKeys = emptySet()
+        lastChange = Change.SETTINGS
+        notifyListeners()
+    }
+
+    fun toggleMultiSelectKey(key: String) {
+        multiSelectEnabled = true
+        multiSelectKeys = if (key in multiSelectKeys) multiSelectKeys - key else multiSelectKeys + key
+        lastChange = Change.SELECTION
+        notifyListeners()
+    }
+
+    fun clearMultiSelect() {
+        if (!multiSelectEnabled && multiSelectKeys.isEmpty()) return
+        multiSelectEnabled = false
+        multiSelectKeys = emptySet()
+        lastChange = Change.SETTINGS
+        notifyListeners()
+    }
+
+    fun setMultiSelectKeys(keys: Set<String>) {
+        multiSelectEnabled = keys.isNotEmpty()
+        multiSelectKeys = keys
         lastChange = Change.SETTINGS
         notifyListeners()
     }

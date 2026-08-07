@@ -320,6 +320,106 @@ class SettingsActivity : AppCompatActivity() {
         scrapeRow?.alpha = if (usable) 1f else 0.5f
     }
 
+    private fun showCollectionsDialog() {
+        val names = app.settings.collections.keys.sortedBy { it.lowercase() }
+            .toMutableList()
+        names.add(0, "+ New collection")
+        AlertDialog.Builder(this)
+            .setTitle("Collections")
+            .setItems(names.toTypedArray()) { _, which ->
+                if (which == 0) {
+                    val input = EditText(this).apply {
+                        hint = "Name"
+                        setTextColor(Color.WHITE)
+                        setHintTextColor(0x66FFFFFF)
+                    }
+                    AlertDialog.Builder(this)
+                        .setTitle("New collection")
+                        .setView(input)
+                        .setPositiveButton("Create") { _, _ ->
+                            val next = com.visorcraft.blackpearl.library.CollectionsOps
+                                .createCollection(
+                                    app.settings.collections,
+                                    input.text?.toString().orEmpty(),
+                                )
+                            app.updateSettings(app.settings.copy(collections = next))
+                            recreate()
+                        }
+                        .setNegativeButton("Cancel", null)
+                        .show()
+                } else {
+                    val name = names[which]
+                    val count = app.settings.collections[name]?.size ?: 0
+                    AlertDialog.Builder(this)
+                        .setTitle(name)
+                        .setMessage("$count items")
+                        .setPositiveButton("Rename") { _, _ ->
+                            val input = EditText(this).apply {
+                                setText(name)
+                                setTextColor(Color.WHITE)
+                            }
+                            AlertDialog.Builder(this)
+                                .setTitle("Rename")
+                                .setView(input)
+                                .setPositiveButton("Save") { _, _ ->
+                                    val next = com.visorcraft.blackpearl.library.CollectionsOps
+                                        .renameCollection(
+                                            app.settings.collections,
+                                            name,
+                                            input.text?.toString().orEmpty(),
+                                        )
+                                    app.updateSettings(app.settings.copy(collections = next))
+                                    recreate()
+                                }
+                                .setNegativeButton("Cancel", null)
+                                .show()
+                        }
+                        .setNeutralButton("Delete") { _, _ ->
+                            val next = com.visorcraft.blackpearl.library.CollectionsOps
+                                .deleteCollection(app.settings.collections, name)
+                            app.updateSettings(app.settings.copy(collections = next))
+                            recreate()
+                        }
+                        .setNegativeButton("Close", null)
+                        .show()
+                }
+            }
+            .setNegativeButton("Close", null)
+            .show()
+    }
+
+    private fun showDefaultPlayersDialog() {
+        val platforms = com.visorcraft.blackpearl.rom.Platforms.ALL
+        val labels = platforms.map { p ->
+            val defId = app.settings.defaultPlayers[p.id]
+            val def = defId?.let { id -> p.players.firstOrNull { it.id == id } }
+                ?: p.player
+            "${p.displayName}: ${def.displayName}"
+        }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("Default players")
+            .setItems(labels) { _, which ->
+                val platform = platforms[which]
+                val playerLabels = platform.players.map { it.displayName }.toTypedArray()
+                AlertDialog.Builder(this)
+                    .setTitle(platform.displayName)
+                    .setItems(playerLabels) { _, pWhich ->
+                        val player = platform.players[pWhich]
+                        app.updateSettings(
+                            app.settings.copy(
+                                defaultPlayers = app.settings.defaultPlayers +
+                                    (platform.id to player.id),
+                            ),
+                        )
+                        recreate()
+                    }
+                    .setNegativeButton("Cancel", null)
+                    .show()
+            }
+            .setNegativeButton("Close", null)
+            .show()
+    }
+
     private fun showSgdbKeyDialog() {
         val input = EditText(this).apply {
             inputType = InputType.TYPE_CLASS_TEXT or
@@ -1049,6 +1149,39 @@ class SettingsActivity : AppCompatActivity() {
             LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f),
         )
         libraryCard.addView(pinFavsRow, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))
+        // Named collections management (Phase 1).
+        val collectionsRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            isFocusable = true
+            setOnClickListener { showCollectionsDialog() }
+        }
+        collectionsRow.addView(rowLabel("Collections"), LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        collectionsRow.addView(TextView(this).apply {
+            text = app.settings.collections.size.toString()
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setTextColor(accent)
+        })
+        libraryCard.addView(collectionsRow, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))
+        // Default emulator per platform (Phase 2).
+        val playersRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            isFocusable = true
+            setOnClickListener { showDefaultPlayersDialog() }
+        }
+        playersRow.addView(rowLabel("Default players"), LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        playersRow.addView(TextView(this).apply {
+            text = if (app.settings.defaultPlayers.isEmpty()) "System defaults"
+            else "${app.settings.defaultPlayers.size} set"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setTextColor(accent)
+        })
+        libraryCard.addView(playersRow, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))
         // SteamGridDB gap-filler: key entry row (tap = paste dialog,
         // long-press = clear) and the batch download row.

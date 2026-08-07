@@ -9,12 +9,14 @@ import com.visorcraft.blackpearl.settings.SlotKey
  */
 object LibraryBrowse {
 
-    enum class Mode { ALL, RECENT, FAVORITES }
+    enum class Mode { ALL, RECENT, FAVORITES, COLLECTION }
 
     data class BrowseQuery(
         val mode: Mode = Mode.ALL,
         val platformId: String? = null,
         val text: String = "",
+        /** When [mode] is COLLECTION, members of this named list. */
+        val collectionName: String? = null,
     )
 
     /** Visible ROMs only, filtered by optional platform id. */
@@ -56,6 +58,7 @@ object LibraryBrowse {
         query: BrowseQuery,
         lastLaunchedMs: Map<String, Long> = emptyMap(),
         favorites: Set<String> = emptySet(),
+        collections: Map<String, List<String>> = emptyMap(),
     ): List<RomEntry> {
         val base = when (query.mode) {
             Mode.ALL -> roms.filter { it.visibleInUi }
@@ -71,6 +74,13 @@ object LibraryBrowse {
                 }.toSet()
                 roms.filter { it.visibleInUi && it.id in favIds }
             }
+            Mode.COLLECTION -> {
+                val name = query.collectionName?.trim().orEmpty()
+                val ids = collections[name].orEmpty().mapNotNull { key ->
+                    if (SlotKey.isRom(key)) SlotKey.romId(key) else null
+                }.toSet()
+                roms.filter { it.visibleInUi && it.id in ids }
+            }
         }
         val platformed = filterByPlatform(base, query.platformId)
         return searchRoms(platformed, query.text)
@@ -79,4 +89,8 @@ object LibraryBrowse {
     /** Distinct platform ids present in the visible library, sorted. */
     fun presentPlatforms(roms: List<RomEntry>): List<String> =
         roms.filter { it.visibleInUi }.map { it.platformId }.distinct().sorted()
+
+    /** Named collection titles suitable for Game Mode rails (stable sort). */
+    fun presentCollectionRails(collections: Map<String, List<String>>): List<String> =
+        collections.keys.filter { it.isNotBlank() }.sortedBy { it.lowercase() }
 }

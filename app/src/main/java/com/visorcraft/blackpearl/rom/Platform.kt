@@ -107,7 +107,10 @@ object Platforms {
         shortName = "GB",
         folderNames = listOf("gb"),
         extensions = listOf("gb"),
-        players = listOf(retroArch("ra-gambatte", "RetroArch (Gambatte)", "gambatte")),
+        players = listOf(
+            retroArch("ra-gambatte", "RetroArch (Gambatte)", "gambatte"),
+            retroArch("ra-sameboy", "RetroArch (SameBoy)", "sameboy"),
+        ),
     )
 
     val GBC = Platform(
@@ -116,7 +119,10 @@ object Platforms {
         shortName = "GBC",
         folderNames = listOf("gbc"),
         extensions = listOf("gbc"),
-        players = listOf(retroArch("ra-gambatte", "RetroArch (Gambatte)", "gambatte")),
+        players = listOf(
+            retroArch("ra-gambatte", "RetroArch (Gambatte)", "gambatte"),
+            retroArch("ra-sameboy", "RetroArch (SameBoy)", "sameboy"),
+        ),
     )
 
     val GBA = Platform(
@@ -125,7 +131,22 @@ object Platforms {
         shortName = "GBA",
         folderNames = listOf("gba"),
         extensions = listOf("gba", "agb"),
-        players = listOf(retroArch("ra-mgba", "RetroArch (mGBA)", "mgba")),
+        players = listOf(
+            retroArch("ra-mgba", "RetroArch (mGBA)", "mgba"),
+            retroArch("ra-gpsp", "RetroArch (gpSP)", "gpsp"),
+        ),
+    )
+
+    val NES = Platform(
+        id = "nes",
+        displayName = "Nintendo Entertainment System",
+        shortName = "NES",
+        folderNames = listOf("nes", "famicom"),
+        extensions = listOf("nes", "unf", "unif", "fds"),
+        players = listOf(
+            retroArch("ra-fceumm", "RetroArch (FCEUmm)", "fceumm"),
+            retroArch("ra-nestopia", "RetroArch (Nestopia UE)", "nestopia"),
+        ),
     )
 
     val SNES = Platform(
@@ -137,6 +158,7 @@ object Platforms {
         players = listOf(
             retroArch("ra-snes9x", "RetroArch (Snes9x)", "snes9x"),
             retroArch("ra-bsnes", "RetroArch (bsnes)", "bsnes"),
+            retroArch("ra-snes9x2010", "RetroArch (Snes9x 2010)", "snes9x2010"),
         ),
     )
 
@@ -146,8 +168,11 @@ object Platforms {
         shortName = "GEN",
         // The card's folder is the romm-style "genesis-slash-megadrive".
         folderNames = listOf("genesis-slash-megadrive", "genesis", "megadrive"),
-        extensions = listOf("md", "gen", "bin"),
-        players = listOf(retroArch("ra-genplus", "RetroArch (Genesis Plus GX)", "genesis_plus_gx")),
+        extensions = listOf("md", "gen", "bin", "smd"),
+        players = listOf(
+            retroArch("ra-genplus", "RetroArch (Genesis Plus GX)", "genesis_plus_gx"),
+            retroArch("ra-picodrive", "RetroArch (PicoDrive)", "picodrive"),
+        ),
     )
 
     val N64 = Platform(
@@ -156,7 +181,10 @@ object Platforms {
         shortName = "N64",
         folderNames = listOf("n64"),
         extensions = listOf("n64", "z64", "v64"),
-        players = listOf(retroArch("ra-mupen", "RetroArch (Mupen64Plus-Next)", "mupen64plus_next_gles3")),
+        players = listOf(
+            retroArch("ra-mupen", "RetroArch (Mupen64Plus-Next)", "mupen64plus_next_gles3"),
+            retroArch("ra-parallel", "RetroArch (ParaLLEl N64)", "parallel_n64"),
+        ),
     )
 
     val NDS = Platform(
@@ -165,7 +193,7 @@ object Platforms {
         shortName = "NDS",
         folderNames = listOf("nds"),
         extensions = listOf("nds"),
-        // melonDualDS primary; melonDS + DraStic as alternates (Daijisho-class).
+        // melonDualDS primary; melonDS + DraStic + RetroArch as alternates.
         players = listOf(
             PlayerTemplate(
                 id = "melondualds",
@@ -191,6 +219,7 @@ object Platforms {
                 uriStyle = UriStyle.URI,
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or CLEAR_FLAGS,
             ),
+            retroArch("ra-melonds", "RetroArch (melonDS)", "melonds"),
         ),
     )
 
@@ -233,6 +262,18 @@ object Platforms {
         ),
     )
 
+    val PS1 = Platform(
+        id = "ps1",
+        displayName = "PlayStation",
+        shortName = "PS1",
+        folderNames = listOf("psx", "ps1", "playstation"),
+        extensions = listOf("cue", "bin", "chd", "pbp", "iso", "m3u", "img", "ccd"),
+        players = listOf(
+            retroArch("ra-pcsx", "RetroArch (PCSX ReARMed)", "pcsx_rearmed"),
+            retroArch("ra-beetle-psx", "RetroArch (Beetle PSX)", "mednafen_psx"),
+        ),
+    )
+
     val PSP = Platform(
         id = "psp",
         displayName = "PlayStation Portable",
@@ -248,6 +289,7 @@ object Platforms {
                 uriStyle = UriStyle.URI,
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or CLEAR_FLAGS,
             ),
+            retroArch("ra-ppsspp", "RetroArch (PPSSPP)", "ppsspp"),
         ),
     )
 
@@ -271,6 +313,18 @@ object Platforms {
         ),
     )
 
+    val SATURN = Platform(
+        id = "saturn",
+        displayName = "Sega Saturn",
+        shortName = "SAT",
+        folderNames = listOf("saturn"),
+        extensions = listOf("cue", "chd", "iso", "bin", "m3u", "ccd"),
+        players = listOf(
+            retroArch("ra-yabause", "RetroArch (Yabause)", "yabause"),
+            retroArch("ra-beetle-saturn", "RetroArch (Beetle Saturn)", "mednafen_saturn"),
+        ),
+    )
+
     val DREAMCAST = Platform(
         id = "dreamcast",
         displayName = "Dreamcast",
@@ -285,6 +339,19 @@ object Platforms {
                 action = "android.intent.action.VIEW",
                 uriStyle = UriStyle.URI,
             ),
+            retroArch("ra-flycast", "RetroArch (Flycast)", "flycast"),
+        ),
+    )
+
+    val ARCADE = Platform(
+        id = "arcade",
+        displayName = "Arcade",
+        shortName = "ARC",
+        folderNames = listOf("arcade", "mame", "fbneo"),
+        extensions = listOf("zip", "7z"),
+        players = listOf(
+            retroArch("ra-fbneo", "RetroArch (FinalBurn Neo)", "fbneo"),
+            retroArch("ra-mame2003plus", "RetroArch (MAME 2003-Plus)", "mame2003_plus"),
         ),
     )
 
@@ -347,8 +414,8 @@ object Platforms {
     )
 
     val ALL: List<Platform> = listOf(
-        GB, GBC, GBA, SNES, GENESIS, N64, NDS, N3DS, SWITCH,
-        PSP, PS2, DREAMCAST, GAMECUBE, WII, WIIU,
+        GB, GBC, GBA, NES, SNES, GENESIS, N64, NDS, N3DS, SWITCH,
+        PS1, PSP, PS2, SATURN, DREAMCAST, ARCADE, GAMECUBE, WII, WIIU,
     )
 
     fun byId(id: String): Platform? = ALL.firstOrNull { it.id == id }
