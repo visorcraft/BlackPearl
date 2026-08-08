@@ -13,7 +13,6 @@ import android.graphics.drawable.LayerDrawable
 import android.media.MediaPlayer
 import android.net.Uri
 import android.util.TypedValue
-import android.view.GestureDetector
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -288,60 +287,56 @@ object CompanionPanel {
     }
 
     /**
-     * Tap = launch resume target. Horizontal fling cycles older/newer
-     * candidates; fling past either end clears the current key from
-     * lastLaunched so the chip can disappear.
+     * Tap = launch. Horizontal drag ≥ [swipeSlopPx] (either direction) =
+     * dismiss Resume chip until next launch (no lastLaunched thrash).
+     * Uses raw dx, not fling velocity — small OLED chips rarely hit 400px/s.
      */
     private fun bindResumeChipGestures(
         view: TextView,
         cont: String,
-        candidates: List<String>,
         activity: AppCompatActivity,
         state: DeckState,
         roms: List<RomEntry>,
         app: GhostGalleonApp,
+        swipeSlopPx: Float,
     ) {
-        val detector = GestureDetector(
-            view.context,
-            object : GestureDetector.SimpleOnGestureListener() {
-                override fun onDown(e: MotionEvent): Boolean = true
-
-                override fun onSingleTapUp(e: MotionEvent): Boolean {
-                    val idx = app.settings.gridSlots.indexOf(cont)
-                    if (idx >= 0) state.selectSlot(idx, cont) else state.select(cont)
-                    launchSlotKey(activity, state, roms, cont)
-                    return true
+        var downX = 0f
+        var downY = 0f
+        var tracking = false
+        view.setOnTouchListener { _, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    downX = event.x
+                    downY = event.y
+                    tracking = true
+                    true
                 }
-
-                override fun onFling(
-                    e1: MotionEvent?,
-                    e2: MotionEvent,
-                    velocityX: Float,
-                    velocityY: Float,
-                ): Boolean {
-                    if (abs(velocityX) < abs(velocityY) || abs(velocityX) < 400f) {
-                        return false
+                MotionEvent.ACTION_MOVE -> {
+                    if (!tracking) return@setOnTouchListener false
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    if (!tracking) return@setOnTouchListener false
+                    tracking = false
+                    val dx = event.x - downX
+                    val dy = event.y - downY
+                    if (abs(dx) >= swipeSlopPx && abs(dx) > abs(dy)) {
+                        // Horizontal swipe either way → hide Resume.
+                        app.dismissResumeChip()
+                        true
+                    } else if (abs(dx) < swipeSlopPx * 0.5f && abs(dy) < swipeSlopPx * 0.5f &&
+                        event.actionMasked == MotionEvent.ACTION_UP
+                    ) {
+                        val idx = app.settings.gridSlots.indexOf(cont)
+                        if (idx >= 0) state.selectSlot(idx, cont) else state.select(cont)
+                        launchSlotKey(activity, state, roms, cont)
+                        true
+                    } else {
+                        true
                     }
-                    // Left fling → older (+1); right fling → newer (−1).
-                    val delta = if (velocityX < 0f) +1 else -1
-                    val next = LibraryBrowse.continueAfterSwipe(candidates, cont, delta)
-                    val now = System.currentTimeMillis()
-                    val updated = LibraryBrowse.applyContinueSwipe(
-                        lastLaunchedMs = app.settings.lastLaunchedMs,
-                        current = cont,
-                        next = next,
-                        nowMs = now,
-                    )
-                    if (updated == app.settings.lastLaunchedMs) return true
-                    app.updateSettings(app.settings.copy(lastLaunchedMs = updated))
-                    return true
                 }
-            },
-        )
-        view.setOnTouchListener { v, event ->
-            val handled = detector.onTouchEvent(event)
-            // Consume so parent scroll views do not steal the fling.
-            handled || event.actionMasked == MotionEvent.ACTION_DOWN
+                else -> false
+            }
         }
     }
 
@@ -1020,16 +1015,14 @@ object CompanionPanel {
             setPadding(0, dp(4), 0, dp(4))
         }
         // Resume chip = jump to a *different* last-played title. Never show
-        // for the already-selected key (hero already is that game), and never
-        // when a session is open (Now Playing owns that state). lastLaunchedMs
-        // alone is not "running" — that misread as "Continue: Eden" while Eden
-        // sat idle as the cold-start selection.
+        // for the already-selected key, open session, or after user swipe-dismiss
+        // ([Settings.hideResumeChip] until the next real launch).
         //
-        // Swipe left/right: cycle older/newer resume targets. Swipe past either
-        // end clears the current key from lastLaunched (chip goes away when no
-        // other candidates remain). Tap still launches.
+        // Horizontal swipe (left or right) dismisses the chip entirely — does
+        // not thrash lastLaunched/recents. Tap still launches.
         run {
             if (app.openSession != null) return@run
+            if (settings.hideResumeChip) return@run
             val available = buildList {
                 addAll(settings.gridSlots.filterNotNull())
                 addAll(settings.dockSlots.filterNotNull())
@@ -1049,7 +1042,7 @@ object CompanionPanel {
             hero.addView(TextView(context).apply {
                 text = "Resume $contName"
                 contentDescription =
-                    "Resume $contName. Swipe left or right to change; swipe past end to clear."
+                    "Resume $contName. Swipe left or right to hide until next launch."
                 setTextSize(TypedValue.COMPLEX_UNIT_PX, dp(14).toFloat())
                 setTextColor(Color.WHITE)
                 background = TileBackgrounds.accentPill(context, settings.accentColor)
@@ -1062,11 +1055,11 @@ object CompanionPanel {
                 bindResumeChipGestures(
                     view = this,
                     cont = cont,
-                    candidates = candidates,
                     activity = activity,
                     state = state,
                     roms = roms,
                     app = app,
+                    swipeSlopPx = dp(40).toFloat(),
                 )
             }, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,

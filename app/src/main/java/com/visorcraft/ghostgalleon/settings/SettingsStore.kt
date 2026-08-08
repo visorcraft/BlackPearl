@@ -106,6 +106,8 @@ class SettingsStore(private val file: File) {
             keyMap = keyMap,
             // Schema v5 library/play/collections (absent = empty defaults).
             lastLaunchedMs = o.optJSONObject("lastLaunchedMs").toLongMap(),
+            // Within v8: absent = show Resume chip when candidates exist.
+            hideResumeChip = o.optBoolean("hideResumeChip", false),
             playtimeMs = o.optJSONObject("playtimeMs").toLongMap(),
             defaultPlayers = o.optJSONObject("defaultPlayers").toStringMap(),
             artOverrides = o.optJSONObject("artOverrides").toStringMap(),
@@ -222,6 +224,7 @@ class SettingsStore(private val file: File) {
             .put("lastLaunchedMs", JSONObject().apply {
                 s.lastLaunchedMs.forEach { (k, v) -> put(k, v) }
             })
+            .put("hideResumeChip", s.hideResumeChip)
             .put("playtimeMs", JSONObject().apply {
                 s.playtimeMs.forEach { (k, v) -> put(k, v) }
             })

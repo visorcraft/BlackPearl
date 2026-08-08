@@ -54,6 +54,12 @@ data class Settings(
     // --- schema v5: library browse / play / collections / players / art ---
     // Slot keys (package or "rom:<id>") -> last launch epoch ms.
     val lastLaunchedMs: Map<String, Long> = emptyMap(),
+    /**
+     * User dismissed the companion Resume chip (swipe). Stays hidden until the
+     * next real launch ([GhostGalleonApp.noteLaunch] clears it). Recents /
+     * lastLaunchedMs are not wiped. Within schema v8; optional on disk.
+     */
+    val hideResumeChip: Boolean = false,
     // Slot keys -> accumulated playtime ms across sessions.
     val playtimeMs: Map<String, Long> = emptyMap(),
     // platformId -> preferred PlayerTemplate.id

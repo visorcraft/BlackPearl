@@ -506,10 +506,25 @@ class GhostGalleonApp : Application() {
             settings.copy(
                 lastLaunchedMs = stamped.lastLaunchedMs,
                 playtimeMs = stamped.totalPlaytimeMs,
+                // New launch re-enables the companion Resume chip.
+                hideResumeChip = false,
             ),
             notify = false,
         )
         // Now Playing: companion should rebuild when session opens.
+        Handler(Looper.getMainLooper()).post { deckState.notifyChanged() }
+    }
+
+    /**
+     * User swiped the companion Resume chip away. Does **not** wipe recents;
+     * only hides Resume until the next [noteLaunch]. One SETTINGS notify so
+     * the chip drops without [updateSettings]'s setMode / contentEpoch path
+     * (that full thrash contributed to pure-black dual panels).
+     */
+    fun dismissResumeChip() {
+        if (settings.hideResumeChip) return
+        settings = settings.copy(hideResumeChip = true)
+        settingsStore.save(settings)
         Handler(Looper.getMainLooper()).post { deckState.notifyChanged() }
     }
 
