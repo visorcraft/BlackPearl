@@ -328,6 +328,58 @@ class LibraryBrowseTest {
     }
 
     @Test
+    fun `isPlayedSince and filterPlayedInWindow`() {
+        // now must exceed WEEK_WINDOW_MS so the window start stays positive.
+        val now = 2_000_000_000_000L
+        val week = LibraryBrowse.WEEK_WINDOW_MS
+        val last = mapOf(
+            "fresh" to now - 1_000L,
+            "old" to now - week - 1L,
+            "edge" to now - week,
+            "zero" to 0L,
+        )
+        assertTrue(LibraryBrowse.isPlayedSince("fresh", last, now - week))
+        assertTrue(LibraryBrowse.isPlayedSince("edge", last, now - week))
+        assertTrue(!LibraryBrowse.isPlayedSince("old", last, now - week))
+        assertTrue(!LibraryBrowse.isPlayedSince("zero", last, now - week))
+        assertTrue(!LibraryBrowse.isPlayedSince("missing", last, now - week))
+        assertEquals(
+            listOf("fresh", "edge"),
+            LibraryBrowse.filterPlayedInWindow(
+                listOf("old", "fresh", "edge", "zero", "missing"),
+                last,
+                nowMs = now,
+            ),
+        )
+    }
+
+    @Test
+    fun `browseRoms PLAYED_THIS_WEEK keeps only week launches newest first`() {
+        val now = 2_000_000_000_000L
+        val week = LibraryBrowse.WEEK_WINDOW_MS
+        val last = mapOf(
+            SlotKey.rom("switch:BotW.rom") to now - 1_000L,
+            SlotKey.rom("snes:Mario.rom") to now - week - 5_000L, // outside
+            SlotKey.rom("snes:Zelda.rom") to now - 50_000L,
+            SlotKey.rom("3ds:Pokemon.rom") to 0L,
+        )
+        val out = LibraryBrowse.browseRoms(
+            library,
+            LibraryBrowse.BrowseQuery(mode = LibraryBrowse.Mode.PLAYED_THIS_WEEK),
+            lastLaunchedMs = last,
+            nowMs = now,
+        )
+        assertEquals(listOf("BotW", "Zelda"), out.map { it.name })
+        // Default nowMs=0 → nothing in window
+        val empty = LibraryBrowse.browseRoms(
+            library,
+            LibraryBrowse.BrowseQuery(mode = LibraryBrowse.Mode.PLAYED_THIS_WEEK),
+            lastLaunchedMs = last,
+        )
+        assertTrue(empty.isEmpty())
+    }
+
+    @Test
     fun `genreTokens splits multi-genre strings`() {
         assertEquals(
             listOf("Action", "Adventure"),

@@ -62,7 +62,11 @@ class GameDeck(
     // top / A–Z / unplayed / fav). Ranked modes interleave apps by the same maps.
     // Genre is ROM-only: when set, app interleaving is skipped.
     private val entries: List<CarouselEntry> by lazy {
-        val q = state.libraryBrowse
+        // Drop power-user modes if chrome toggles turned them off mid-session.
+        val q = settings.browseChrome.sanitize(state.libraryBrowse)
+        if (q != state.libraryBrowse) {
+            state.setLibraryBrowse(q, force = true)
+        }
         val appsOk = q.platformId == null && q.genre.isNullOrBlank()
         val browsed = LibraryBrowse.browseRoms(
             roms, q,
@@ -71,6 +75,7 @@ class GameDeck(
             collections = settings.collections,
             playtimeMs = settings.playtimeMs,
             hiddenRomIds = settings.hiddenRomIds,
+            nowMs = System.currentTimeMillis(),
         ).map {
             CarouselEntry(SlotKey.rom(it.id), it.name, null, it)
         }
@@ -124,6 +129,24 @@ class GameDeck(
                 }
                 // Apps + ROMs both ordered by recency: merge by lastLaunched.
                 (recentApps + browsed).sortedByDescending {
+                    settings.lastLaunchedMs[it.key] ?: 0L
+                }
+            }
+            q.mode == LibraryBrowse.Mode.PLAYED_THIS_WEEK &&
+                appsOk && q.text.isBlank() -> {
+                val now = System.currentTimeMillis()
+                val byPkg = library.curated(settings)
+                    .associateBy { it.packageName }
+                val appKeys = settings.lastLaunchedMs.keys
+                    .filter { !SlotKey.isRom(it) && it in byPkg }
+                val weekApps = LibraryBrowse.filterPlayedInWindow(
+                    appKeys, settings.lastLaunchedMs, nowMs = now,
+                ).mapNotNull { pkg ->
+                    byPkg[pkg]?.let {
+                        CarouselEntry(it.packageName, it.label, it.packageName, null)
+                    }
+                }
+                (weekApps + browsed).sortedByDescending {
                     settings.lastLaunchedMs[it.key] ?: 0L
                 }
             }
@@ -377,7 +400,12 @@ class GameDeck(
         root.addView(content, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         // Compact clock/battery overlay (system status bar is hidden).
-        root.addView(StatusPill.build(context, compact = true), StatusPill.overlayLayoutParams(context))
+        if (settings.browseChrome.deckStatusPill) {
+            root.addView(
+                StatusPill.build(context, compact = true),
+                StatusPill.overlayLayoutParams(context),
+            )
+        }
         // A rebuild while the dock holds focus must repaint the ring
         // immediately — updateFocus otherwise only runs on selection updates.
         bar.updateFocus(state.dockSlot)
@@ -584,33 +612,55 @@ class GameDeck(
             ))
         })
         row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
-        row.addView(chip("Installed", q.mode == LibraryBrowse.Mode.RECENTLY_INSTALLED) {
+        row.addView(chip("Week", q.mode == LibraryBrowse.Mode.PLAYED_THIS_WEEK) {
             setQuery(q.copy(
-                mode = LibraryBrowse.Mode.RECENTLY_INSTALLED,
+                mode = LibraryBrowse.Mode.PLAYED_THIS_WEEK,
                 platformId = null,
                 genre = null,
                 collectionName = null,
             ))
         })
-        row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
-        row.addView(chip("Games", q.mode == LibraryBrowse.Mode.GAMES) {
-            setQuery(q.copy(
-                mode = LibraryBrowse.Mode.GAMES,
-                platformId = null,
-                genre = null,
-                collectionName = null,
-            ))
-        })
-        row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
-        row.addView(chip("Top", q.mode == LibraryBrowse.Mode.MOST_PLAYED) {
-            setQuery(q.copy(
-                mode = LibraryBrowse.Mode.MOST_PLAYED,
-                platformId = null,
-                genre = null,
-                collectionName = null,
-            ))
-        })
-        row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
+        val chrome = settings.browseChrome
+        fun addGap() {
+            row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
+        }
+        fun setBrowse(next: LibraryBrowse.BrowseQuery) {
+            setQuery(chrome.sanitize(next))
+        }
+        if (chrome.installedRail) {
+            addGap()
+            row.addView(chip("Installed", q.mode == LibraryBrowse.Mode.RECENTLY_INSTALLED) {
+                setBrowse(q.copy(
+                    mode = LibraryBrowse.Mode.RECENTLY_INSTALLED,
+                    platformId = null,
+                    genre = null,
+                    collectionName = null,
+                ))
+            })
+        }
+        if (chrome.gamesRail) {
+            addGap()
+            row.addView(chip("Games", q.mode == LibraryBrowse.Mode.GAMES) {
+                setBrowse(q.copy(
+                    mode = LibraryBrowse.Mode.GAMES,
+                    platformId = null,
+                    genre = null,
+                    collectionName = null,
+                ))
+            })
+        }
+        if (chrome.topRail) {
+            addGap()
+            row.addView(chip("Top", q.mode == LibraryBrowse.Mode.MOST_PLAYED) {
+                setBrowse(q.copy(
+                    mode = LibraryBrowse.Mode.MOST_PLAYED,
+                    platformId = null,
+                    genre = null,
+                    collectionName = null,
+                ))
+            })
+        }
+        addGap()
         row.addView(chip("Continue", false) {
             // Live settings: GameDeck holds a construction-time snapshot, so
             // lastLaunchedMs from `settings` can be empty after launches until
@@ -642,89 +692,101 @@ class GameDeck(
                 Toast.makeText(activity, "Continue: $label", Toast.LENGTH_SHORT).show()
             }
         })
-        row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
-        row.addView(chip("Random", false) {
-            pickRandomEntry()
-        })
-        row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
+        if (chrome.randomChip) {
+            addGap()
+            row.addView(chip("Random", false) {
+                pickRandomEntry()
+            })
+        }
+        addGap()
         row.addView(chip("Fav", q.mode == LibraryBrowse.Mode.FAVORITES) {
-            setQuery(q.copy(
+            setBrowse(q.copy(
                 mode = LibraryBrowse.Mode.FAVORITES,
                 platformId = null,
                 genre = null,
                 collectionName = null,
             ))
         })
-        row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
-        row.addView(chip("A–Z", q.mode == LibraryBrowse.Mode.ALPHA) {
-            setQuery(q.copy(
-                mode = LibraryBrowse.Mode.ALPHA,
-                platformId = null,
-                genre = null,
-                collectionName = null,
-            ))
-        })
-        row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
-        row.addView(chip("New", q.mode == LibraryBrowse.Mode.UNPLAYED) {
-            setQuery(q.copy(
-                mode = LibraryBrowse.Mode.UNPLAYED,
-                platformId = null,
-                genre = null,
-                collectionName = null,
-            ))
-        })
-        LibraryBrowse.presentCollectionRails(settings.collections).forEach { name ->
-            if (name.equals("Favorites", ignoreCase = true)) return@forEach
-            row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
-            val selected = q.mode == LibraryBrowse.Mode.COLLECTION &&
-                q.collectionName == name
-            row.addView(
-                chip(
-                    name,
-                    selected,
-                    onLongClick = { showCollectionManageDialog(name) },
-                ) {
-                    setQuery(
-                        LibraryBrowse.BrowseQuery(
-                            mode = LibraryBrowse.Mode.COLLECTION,
-                            collectionName = name,
+        if (chrome.alphaRail) {
+            addGap()
+            row.addView(chip("A–Z", q.mode == LibraryBrowse.Mode.ALPHA) {
+                setBrowse(q.copy(
+                    mode = LibraryBrowse.Mode.ALPHA,
+                    platformId = null,
+                    genre = null,
+                    collectionName = null,
+                ))
+            })
+        }
+        if (chrome.unplayedRail) {
+            addGap()
+            row.addView(chip("New", q.mode == LibraryBrowse.Mode.UNPLAYED) {
+                setBrowse(q.copy(
+                    mode = LibraryBrowse.Mode.UNPLAYED,
+                    platformId = null,
+                    genre = null,
+                    collectionName = null,
+                ))
+            })
+        }
+        if (chrome.collectionRails) {
+            LibraryBrowse.presentCollectionRails(settings.collections).forEach { name ->
+                if (name.equals("Favorites", ignoreCase = true)) return@forEach
+                addGap()
+                val selected = q.mode == LibraryBrowse.Mode.COLLECTION &&
+                    q.collectionName == name
+                row.addView(
+                    chip(
+                        name,
+                        selected,
+                        onLongClick = { showCollectionManageDialog(name) },
+                    ) {
+                        setBrowse(
+                            LibraryBrowse.BrowseQuery(
+                                mode = LibraryBrowse.Mode.COLLECTION,
+                                collectionName = name,
+                            ),
+                        )
+                    },
+                )
+            }
+        }
+        if (chrome.platformChips) {
+            LibraryBrowse.presentPlatforms(roms, settings.hiddenRomIds).forEach { pid ->
+                addGap()
+                val label = Platforms.byId(pid)?.shortName ?: pid
+                row.addView(chip(label, q.platformId == pid) {
+                    setBrowse(
+                        q.copy(
+                            mode = LibraryBrowse.Mode.ALL,
+                            platformId = if (q.platformId == pid) null else pid,
+                            collectionName = null,
                         ),
                     )
-                },
-            )
+                })
+            }
         }
-        LibraryBrowse.presentPlatforms(roms, settings.hiddenRomIds).forEach { pid ->
-            row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
-            val label = Platforms.byId(pid)?.shortName ?: pid
-            row.addView(chip(label, q.platformId == pid) {
-                setQuery(
-                    q.copy(
-                        mode = LibraryBrowse.Mode.ALL,
-                        platformId = if (q.platformId == pid) null else pid,
-                        collectionName = null,
-                    ),
-                )
-            })
+        // Genre chips (opt-in): gamelist meta, ROM-only filter.
+        if (chrome.genreChips) {
+            LibraryBrowse.presentGenres(roms, settings.hiddenRomIds).forEach { genre ->
+                addGap()
+                val selected = q.genre?.equals(genre, ignoreCase = true) == true
+                row.addView(chip(genre, selected) {
+                    setBrowse(
+                        q.copy(
+                            mode = LibraryBrowse.Mode.ALL,
+                            genre = if (selected) null else genre,
+                            collectionName = null,
+                        ),
+                    )
+                })
+            }
         }
-        // Genre chips from gamelist meta (top by frequency); ROM-only filter.
-        LibraryBrowse.presentGenres(roms, settings.hiddenRomIds).forEach { genre ->
-            row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
-            val selected = q.genre?.equals(genre, ignoreCase = true) == true
-            row.addView(chip(genre, selected) {
-                setQuery(
-                    q.copy(
-                        mode = LibraryBrowse.Mode.ALL,
-                        genre = if (selected) null else genre,
-                        collectionName = null,
-                    ),
-                )
-            })
-        }
-        row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
+        addGap()
         row.addView(chip(if (q.text.isBlank()) "Search" else "\"${q.text}\"", q.text.isNotBlank()) {
             openSearchDialog()
         })
-        row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
+        addGap()
         row.addView(chip(
             if (state.multiSelectEnabled) "Select (${state.multiSelectKeys.size})" else "Select",
             state.multiSelectEnabled,

@@ -5,14 +5,22 @@ import com.visorcraft.ghostgalleon.settings.SlotKey
 
 /**
  * Pure library browse ops for Game Mode / pickers: platform filter, text
- * search, recents / most-played / recently-installed / games / A–Z /
+ * search, recents / week / most-played / recently-installed / games / A–Z /
  * unplayed ordering, letter jump index. Host-tested; no Android types.
  */
 object LibraryBrowse {
 
+    /** Default rolling window for [Mode.PLAYED_THIS_WEEK] (7 days). */
+    const val WEEK_WINDOW_MS: Long = 7L * 24L * 60L * 60L * 1000L
+
     enum class Mode {
         ALL,
         RECENT,
+        /**
+         * Titles launched within the last week (rolling), newest first.
+         * Empty when nothing has been played in the window.
+         */
+        PLAYED_THIS_WEEK,
         FAVORITES,
         COLLECTION,
         MOST_PLAYED,
@@ -168,6 +176,40 @@ object LibraryBrowse {
         (lastLaunchedMs[key] ?: 0L) <= 0L
 
     /**
+     * True when [key] was last launched at or after [sinceMs] (inclusive).
+     * Missing / non-positive stamps → false.
+     */
+    fun isPlayedSince(
+        key: String,
+        lastLaunchedMs: Map<String, Long>,
+        sinceMs: Long,
+    ): Boolean {
+        val t = lastLaunchedMs[key] ?: return false
+        return t > 0L && t >= sinceMs
+    }
+
+    /** Start of a rolling window of [windowMs] ending at [nowMs]. */
+    fun windowStartMs(nowMs: Long, windowMs: Long = WEEK_WINDOW_MS): Long =
+        nowMs - windowMs.coerceAtLeast(0L)
+
+    /**
+     * Keys launched within [nowMs - windowMs, nowMs], newest first.
+     * Keys outside the window or with missing stamps are dropped.
+     * Non-positive [nowMs] → empty (caller must supply a real clock).
+     */
+    fun filterPlayedInWindow(
+        keys: List<String>,
+        lastLaunchedMs: Map<String, Long>,
+        nowMs: Long,
+        windowMs: Long = WEEK_WINDOW_MS,
+    ): List<String> {
+        if (nowMs <= 0L) return emptyList()
+        val since = windowStartMs(nowMs, windowMs)
+        val inWindow = keys.filter { isPlayedSince(it, lastLaunchedMs, since) }
+        return orderByRecent(inWindow, lastLaunchedMs)
+    }
+
+    /**
      * Filter Android apps marked as games ([AppEntry.isGame]). Pure helper for
      * the Games rail (host can pass any list of packages with a flag).
      */
@@ -176,8 +218,10 @@ object LibraryBrowse {
 
     /**
      * Full browse pipeline: mode → platform → genre → text. Recents /
-     * most-played / favorites / A–Z / unplayed are applied by restricting
+     * week / most-played / favorites / A–Z / unplayed are applied by restricting
      * first, then filter/search.
+     *
+     * [nowMs] is only used by [Mode.PLAYED_THIS_WEEK] (default 0 → empty week).
      */
     fun browseRoms(
         roms: List<RomEntry>,
@@ -187,6 +231,7 @@ object LibraryBrowse {
         collections: Map<String, List<String>> = emptyMap(),
         playtimeMs: Map<String, Long> = emptyMap(),
         hiddenRomIds: Set<String> = emptySet(),
+        nowMs: Long = 0L,
     ): List<RomEntry> {
         val listed = HiddenRoms.listed(roms, hiddenRomIds)
         val base = when (query.mode) {
@@ -202,6 +247,15 @@ object LibraryBrowse {
                 val byKey = listed.associateBy { SlotKey.rom(it.id) }
                 val recentKeys = lastLaunchedMs.keys.filter { it in byKey }
                 orderByRecent(recentKeys, lastLaunchedMs).mapNotNull { byKey[it] }
+            }
+            Mode.PLAYED_THIS_WEEK -> {
+                val byKey = listed.associateBy { SlotKey.rom(it.id) }
+                val weekKeys = filterPlayedInWindow(
+                    byKey.keys.toList(),
+                    lastLaunchedMs,
+                    nowMs = nowMs,
+                )
+                weekKeys.mapNotNull { byKey[it] }
             }
             Mode.MOST_PLAYED -> {
                 val byKey = listed.associateBy { SlotKey.rom(it.id) }
