@@ -24,6 +24,7 @@ class SlotMenu(
     enum class Choice(val label: String) {
         MOVE("Move"),
         PIN_TO_DOCK("Pin to dock"),
+        UNPIN_FROM_DOCK("Unpin from dock"),
         RENAME("Rename"),
         RESET_NAME("Reset name"),
         CUSTOM_ICON("Custom icon"),

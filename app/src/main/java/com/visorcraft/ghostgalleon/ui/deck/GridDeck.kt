@@ -885,6 +885,15 @@ class GridDeck(
         }
     }
 
+    private fun unpinFromDock(key: String) {
+        val app = activity.application as GhostGalleonApp
+        if (!DockSlots.containsKey(app.settings.dockSlots, key)) {
+            Toast.makeText(activity, "Not in dock", Toast.LENGTH_SHORT).show()
+            return
+        }
+        updateDockSlots(DockSlots.unpinKey(app.settings.dockSlots, key), "Unpinned from dock")
+    }
+
     private fun promptAddToCollection(key: String) {
         val app = activity.application as GhostGalleonApp
         val live = app.settings
@@ -1097,7 +1106,11 @@ class GridDeck(
                 else -> {
                     add(SlotMenu.Choice.DETAILS)
                     add(SlotMenu.Choice.MOVE)
-                    add(SlotMenu.Choice.PIN_TO_DOCK)
+                    if (key != null && DockSlots.containsKey(settings.dockSlots, key)) {
+                        add(SlotMenu.Choice.UNPIN_FROM_DOCK)
+                    } else {
+                        add(SlotMenu.Choice.PIN_TO_DOCK)
+                    }
                     add(if (fav) SlotMenu.Choice.UNFAVORITE else SlotMenu.Choice.FAVORITE)
                     add(SlotMenu.Choice.ADD_TO_COLLECTION)
                     if (isRom) {
@@ -1128,6 +1141,8 @@ class GridDeck(
                 SlotMenu.Choice.MOVE -> startMove(slot)
                 SlotMenu.Choice.PIN_TO_DOCK ->
                     settings.gridSlots.getOrNull(slot)?.let(::pinToDock)
+                SlotMenu.Choice.UNPIN_FROM_DOCK ->
+                    settings.gridSlots.getOrNull(slot)?.let(::unpinFromDock)
                 SlotMenu.Choice.FAVORITE, SlotMenu.Choice.UNFAVORITE -> key?.let { k ->
                     val app = activity.application as GhostGalleonApp
                     val next = com.visorcraft.ghostgalleon.library.CollectionsOps

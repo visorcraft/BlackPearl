@@ -88,4 +88,41 @@ object DockSlots {
         }
         return next to added
     }
+
+    /** True when [key] is already a filled dock member. */
+    fun containsKey(slots: List<String?>, key: String): Boolean {
+        val k = key.trim()
+        if (k.isEmpty()) return false
+        return k in filled(slots)
+    }
+
+    /**
+     * Remove [key] from the dock (first match) and compact. Missing key →
+     * unchanged slots (caller may treat as no-op).
+     */
+    fun unpinKey(slots: List<String?>, key: String): List<String?> {
+        val k = key.trim()
+        if (k.isEmpty()) return compact(slots)
+        val canon = compact(slots)
+        val idx = canon.indexOfFirst { it == k }
+        if (idx < 0) return canon
+        return remove(canon, idx)
+    }
+
+    /**
+     * Unpin many keys; returns updated slots and how many were removed.
+     */
+    fun unpinKeys(slots: List<String?>, keys: List<String>): Pair<List<String?>, Int> {
+        var next = compact(slots)
+        var removed = 0
+        val want = keys.map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+        if (want.isEmpty()) return next to 0
+        val kept = filled(next).filter { k ->
+            if (k in want) {
+                removed++
+                false
+            } else true
+        }
+        return compact(kept) to removed
+    }
 }

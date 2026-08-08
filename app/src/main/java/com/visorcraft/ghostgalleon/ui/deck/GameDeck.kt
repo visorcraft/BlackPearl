@@ -1212,6 +1212,15 @@ class GameDeck(
         }
     }
 
+    private fun unpinFromDock(key: String) {
+        val live = app().settings
+        if (!DockSlots.containsKey(live.dockSlots, key)) {
+            Toast.makeText(activity, "Not in dock", Toast.LENGTH_SHORT).show()
+            return
+        }
+        updateDockSlots(DockSlots.unpinKey(live.dockSlots, key), "Unpinned from dock")
+    }
+
     private fun hideRom(rom: RomEntry) {
         val next = HiddenRoms.hide(settings.hiddenRomIds, rom.id)
         app().updateSettings(settings.copy(hiddenRomIds = next))
@@ -1344,7 +1353,11 @@ class GameDeck(
         val isApp = entry.rom == null && !SlotKey.isRom(key)
         val choices = buildList {
             add(SlotMenu.Choice.DETAILS)
-            add(SlotMenu.Choice.PIN_TO_DOCK)
+            if (DockSlots.containsKey(settings.dockSlots, key)) {
+                add(SlotMenu.Choice.UNPIN_FROM_DOCK)
+            } else {
+                add(SlotMenu.Choice.PIN_TO_DOCK)
+            }
             add(if (fav) SlotMenu.Choice.UNFAVORITE else SlotMenu.Choice.FAVORITE)
             add(SlotMenu.Choice.ADD_TO_COLLECTION)
             if (activeCol != null) {
@@ -1373,6 +1386,7 @@ class GameDeck(
             when (choice) {
                 SlotMenu.Choice.DETAILS -> showDetails(entry)
                 SlotMenu.Choice.PIN_TO_DOCK -> pinToDock(key)
+                SlotMenu.Choice.UNPIN_FROM_DOCK -> unpinFromDock(key)
                 SlotMenu.Choice.APP_INFO -> openAppInfo(key)
                 SlotMenu.Choice.FAVORITE, SlotMenu.Choice.UNFAVORITE -> toggleFavorite(key)
                 SlotMenu.Choice.ADD_TO_COLLECTION -> promptAddToCollection(listOf(key))

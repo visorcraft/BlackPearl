@@ -1,7 +1,9 @@
 package com.visorcraft.ghostgalleon.settings
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class DockSlotsTest {
@@ -136,5 +138,23 @@ class DockSlotsTest {
         val (s2, added2) = DockSlots.pinKeys(almostFull, listOf("x", "y", "z"))
         assertEquals(1, added2)
         assertEquals(9, DockSlots.filled(s2).size)
+    }
+
+    @Test
+    fun `containsKey and unpinKey compact after remove`() {
+        val base = DockSlots.compact(listOf("a", "b", "c"))
+        assertTrue(DockSlots.containsKey(base, "b"))
+        assertFalse(DockSlots.containsKey(base, "missing"))
+        val unpinned = DockSlots.unpinKey(base, "b")
+        assertEquals(listOf("a", "c"), DockSlots.filled(unpinned))
+        assertEquals(base, DockSlots.unpinKey(base, "missing"))
+    }
+
+    @Test
+    fun `unpinKeys removes members and counts`() {
+        val base = DockSlots.compact(listOf("a", "b", "c", "d"))
+        val (slots, n) = DockSlots.unpinKeys(base, listOf("b", "d", "zzz"))
+        assertEquals(2, n)
+        assertEquals(listOf("a", "c"), DockSlots.filled(slots))
     }
 }

@@ -141,7 +141,7 @@ Offline-first. ROM tiles, carousel cards, and the hero panel use box art when av
 | Down from last grid row / carousel | Move focus into the dock |
 | A / Enter | Launch focused app or ROM |
 | Tap | Focus a tile; tap again to launch |
-| Long-press | Grid/dock: Move / Pin / Remove; Game Mode: Details / Pin to dock / Fav / collections |
+| Long-press | Grid/dock: Move / Pin·Unpin / Remove; Game Mode: Details / Pin·Unpin dock / Fav / collections |
 | B | Back (consumed on the home screen) |
 | X | Swap interactive / companion displays (sticky pin) |
 | Y | Toggle Grid / Game mode (persists) |
