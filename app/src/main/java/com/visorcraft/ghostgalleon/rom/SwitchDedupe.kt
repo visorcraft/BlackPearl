@@ -1,7 +1,7 @@
 package com.visorcraft.ghostgalleon.rom
 
 /**
- * Switch library dedupe (Stage 3 Task 4). A Switch folder typically holds
+ * Switch library dedupe. A Switch folder typically holds
  * one base package per game plus its updates and DLC as separate files;
  * showing all of them in the carousel/picker triples the list. This pure
  * post-scan step groups the switch entries of a library and flags every

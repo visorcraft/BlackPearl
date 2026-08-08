@@ -191,7 +191,7 @@ class DeckState {
      * Only call from real settings/library/user-data loads
      * (`updateSettings`, `publishRomEntries`, boot index change). **Never**
      * call from RA network, hero chrome, absorb, or resume thrash paths —
-     * that caused pure-black dual panels (see AGENTS dual paint invariants).
+     * that caused pure-black dual panels.
      * Hero-only updates use [notifySelectionRefresh].
      */
     fun notifyChanged() {

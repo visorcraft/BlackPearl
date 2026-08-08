@@ -10,7 +10,7 @@ import androidx.core.widget.TextViewCompat
 import kotlin.math.abs
 
 /**
- * Programmatic placeholder art for ROM tiles (Stage 3 replaces it with real
+ * Programmatic placeholder art for ROM tiles (replaced with real
  * covers): a rounded card in a deterministic per-platform color with the
  * platform short name centered (bold, white, auto-sized to fit). Used by the
  * grid, the picker, the carousel, and the companion hero.

@@ -23,7 +23,7 @@ data class Settings(
     // SAF-persisted image URI drawn dimmed behind the grid; null = black.
     val wallpaperUri: String? = null,
     // SAF tree grants for ROM folders (persistable read permission held per
-    // entry); scanned by the Stage 2 RomScanner.
+    // entry); scanned by RomScanner.
     val romTreeUris: List<String> = emptyList(),
     // SteamGridDB API key for the optional "download missing artwork"
     // scraper (Settings → Library); null = not set, scraper row disabled.

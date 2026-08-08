@@ -11,17 +11,10 @@ import com.visorcraft.ghostgalleon.GhostGalleonApp
 import com.visorcraft.ghostgalleon.R
 import com.visorcraft.ghostgalleon.display.DisplayTopology
 import com.visorcraft.ghostgalleon.state.DeckState
+import com.visorcraft.ghostgalleon.ui.dp
 import com.visorcraft.ghostgalleon.ui.settings.SettingsActivity
 
-/**
- * Swap + Settings affordances. In DUAL they host only on the physically
- * larger panel (not “whichever paints companion content”). SINGLE always
- * shows them. Pure placement policy lives in [DisplayTopology].
- *
- * Icons are **overlaid** at the bottom-left (Swap) and bottom-right
- * (Settings) of the panel root so Grid/Game dock + hint chrome never
- * shove them mid-screen.
- */
+/** Swap + Settings on the larger DUAL panel (or always in SINGLE). */
 internal fun shouldHostSystemChromeIcons(activity: Activity): Boolean {
     val app = activity.application as? GhostGalleonApp ?: return true
     val topo = app.displayConfig
@@ -32,21 +25,16 @@ internal fun shouldHostSystemChromeIcons(activity: Activity): Boolean {
     )
 }
 
-/**
- * Pin Swap (bottom-start) and Settings (bottom-end) on [root].
- * Call after content is attached so they paint above the deck/dock.
- */
+/** Overlay Swap (bottom-start) and Settings (bottom-end) above deck chrome. */
 internal fun attachSystemChromeOverlay(
     root: FrameLayout,
     context: Context,
     activity: AppCompatActivity,
     state: DeckState,
 ) {
-    val density = context.resources.displayMetrics.density
-    fun dp(v: Int) = (v * density).toInt()
-    val size = dp(40)
-    val edge = dp(8)
-    val bottom = dp(12)
+    val size = context.dp(40)
+    val edge = context.dp(8)
+    val bottom = context.dp(12)
 
     val swap = iconButton(context, R.drawable.ic_swap, "Swap screens") {
         val appCtx = activity.application as? GhostGalleonApp

@@ -1251,7 +1251,7 @@ object CompanionPanel {
             }
             // Hero quick actions — same dark rounded idle chips as Hero/Now/
             // Perf/Pin (not solid accent bricks). Fixed height + baseline off
-            // so glyphs paint on the Sugar secondary (see dual-paint notes).
+            // so glyphs paint on the Sugar secondary panel.
             if (heroSpec.showQuickChips) {
                 val chipH = dp(34)
                 val quick = LinearLayout(context).apply {

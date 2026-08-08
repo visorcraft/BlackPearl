@@ -1496,45 +1496,13 @@ class GameDeck(
             .show()
     }
 
-    /**
-     * Add [keys] (package or rom: ids) to an existing or new collection.
-     * When [clearMulti] is true, exits multi-select after a successful add.
-     */
     private fun promptAddToCollection(keys: List<String>, clearMulti: Boolean = false) {
-        if (keys.isEmpty()) {
-            Toast.makeText(activity, "Nothing selected", Toast.LENGTH_SHORT).show()
-            return
-        }
-        val names = LibraryBrowse.presentCollectionRails(settings.collections).toMutableList()
-        names.add(0, "+ New collection")
-        android.app.AlertDialog.Builder(activity)
-            .setTitle("Add to collection")
-            .setItems(names.toTypedArray()) { _, which ->
-                if (which == 0) {
-                    val input = android.widget.EditText(activity).apply { hint = "Name" }
-                    android.app.AlertDialog.Builder(activity)
-                        .setTitle("New collection")
-                        .setView(input)
-                        .setPositiveButton("Create") { _, _ ->
-                            val name = input.text?.toString().orEmpty()
-                            var cols = CollectionsOps.createCollection(settings.collections, name)
-                            cols = CollectionsOps.bulkAddToCollection(cols, name, keys)
-                            app().updateSettings(settings.copy(collections = cols))
-                            if (clearMulti) state.clearMultiSelect()
-                            Toast.makeText(activity, "Added to $name", Toast.LENGTH_SHORT).show()
-                        }
-                        .setNegativeButton("Cancel", null)
-                        .show()
-                } else {
-                    val name = names[which]
-                    val cols = CollectionsOps.bulkAddToCollection(
-                        settings.collections, name, keys)
-                    app().updateSettings(settings.copy(collections = cols))
-                    if (clearMulti) state.clearMultiSelect()
-                    Toast.makeText(activity, "Added to $name", Toast.LENGTH_SHORT).show()
-                }
-            }
-            .show()
+        CollectionDialogs.promptAdd(
+            activity,
+            app(),
+            keys,
+            onDone = if (clearMulti) ({ state.clearMultiSelect() }) else null,
+        )
     }
 
     /** Keys that may appear in Continue / history (ROMs, apps, grid, dock). */
@@ -2040,25 +2008,11 @@ class GameDeck(
     }
 
     private fun pinToDock(key: String) {
-        val live = app().settings
-        val result = DockSlots.pinKey(live.dockSlots, key)
-        when (result.status) {
-            DockSlots.PinStatus.ALREADY ->
-                Toast.makeText(activity, "Already in dock", Toast.LENGTH_SHORT).show()
-            DockSlots.PinStatus.FULL ->
-                Toast.makeText(activity, "Dock is full", Toast.LENGTH_SHORT).show()
-            DockSlots.PinStatus.PINNED ->
-                updateDockSlots(result.slots, "Pinned to dock")
-        }
+        DockActions.pin(activity, app(), key) { slots, toast -> updateDockSlots(slots, toast) }
     }
 
     private fun unpinFromDock(key: String) {
-        val live = app().settings
-        if (!DockSlots.containsKey(live.dockSlots, key)) {
-            Toast.makeText(activity, "Not in dock", Toast.LENGTH_SHORT).show()
-            return
-        }
-        updateDockSlots(DockSlots.unpinKey(live.dockSlots, key), "Unpinned from dock")
+        DockActions.unpin(activity, app(), key) { slots, toast -> updateDockSlots(slots, toast) }
     }
 
     private fun hideRom(rom: RomEntry) {
@@ -2399,12 +2353,8 @@ class GameDeck(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
     }
 
-    // --- Dock interactions (same behavior as the grid deck's dock) ---
-
     private fun updateDockSlots(slots: List<String?>, toast: String? = null) {
-        val app = activity.application as GhostGalleonApp
-        app.updateSettings(app.settings.copy(dockSlots = slots))
-        toast?.let { Toast.makeText(activity, it, Toast.LENGTH_SHORT).show() }
+        DockActions.persist(activity, app(), slots, toast)
     }
 
     private fun onDockTap(index: Int) {

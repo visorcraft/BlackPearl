@@ -18,7 +18,7 @@
   <img src="https://img.shields.io/badge/platform-Android%208%2B-3ddc84?logo=android&amp;logoColor=white" alt="Android 8+" />
   <img src="https://img.shields.io/badge/language-Kotlin-7f52ff?logo=kotlin&amp;logoColor=white" alt="Kotlin" />
   <img src="https://img.shields.io/badge/API-26%E2%80%9334-0b57a4" alt="API 26–34" />
-  <img src="https://img.shields.io/badge/version-0.4.0-informational" alt="0.4.0" />
+  <img src="https://img.shields.io/badge/version-0.4.1-informational" alt="0.4.1" />
 </p>
 
 ---
@@ -56,80 +56,77 @@
 
 ## What is Ghost Galleon?
 
-Ghost Galleon (Ghost Galleon Dual Screen Launcher) is a home-screen replacement for Android handhelds. It is **built and QA’d on the One X Sugar** (Android 14, top 2160×1080 + bottom 1240×1080) and also runs on **single-display** devices via Auto topology.
+Ghost Galleon is a home-screen replacement for Android handhelds. It is **built and QA’d on the One X Sugar** (Android 14, top 2160×1080 + bottom 1240×1080) and also runs on **single-display** devices via Auto topology.
 
 On dual-screen hardware one panel hosts the interactive deck (grid or carousel) while the other shows a companion surface (hero preview, Now Playing, Perf HUD, or a pinned app). Ghost Galleon holds the Android **HOME** role (and **SECONDARY_HOME** on dual panels), is designed for full gamepad control, and supports swipe-up all-apps.
 
 ### Highlights
 
-- **Grid Mode** — 3DS/Wii-style icon grid with a dock, blank “+” slots, long-press Move/Remove, swap-reorder, favorites, and folders. Optional deck clock/battery (off by default).
-- **Game Mode** — card carousel with a **minimal** default chip bar (All / Recent / Continue / Fav + platforms + Search/Select). Fav/Recent/collection/platform chips show counts (e.g. `Recent · 8`, `Fav · 3`, `SNES · 12`); optional Today/Week/Month/Top/New/Games/Installed/A–Z chips and genre/developer/year-decade chips do too. **Continue** shows a short target name when known (`Continue · Eden`); long-press opens history. **Long-press Recent** opens the same jump list (newest first). **Long-press Fav** opens or clears all favorites. **Long-press Search** (or Search → History) reuses recent queries. Details sheets include **Copy title** and **Related…** (jump to same platform; genre/dev/decade when those chips are enabled). Long-press cards also offer **Browse related…** when meta is available. Opt-in A–Z letter jump shows per-letter counts (`M · 12`). **Random** picks inside the current rail/filter when possible. Long-press a card → **Copy title** / **Clear play stats** when present. Multi-select can **Select all**, **Invert on rail**, **Unfavorite**, **Unpin from dock** (when selection includes docked titles), **Copy titles** (newline list to clipboard), and **Clear play stats**. Cards show playtime meta plus compact ★/Dock tags when favorited or docked. Search matches name, platform, genre, developer, year, and description (hit count toast). Empty rails/filters toast a short hint. Long-press never-played cards → **Mark as played** (stamps last-played without launching); multi-select can bulk mark. When platform/genre/dev/year/search filters are active, a contextual **Clear filters · N** chip appears (not always-on). **Long-press All** picks catalog sort (Name A–Z / Last played / Most played / Platform); the chip shows `All · A–Z` etc. while active — tap All resets. **Long-press a platform chip** opens filter / clear / Sort A–Z / Sort last played for that platform (no extra chrome). Power-user rails (Installed, Games, Top, Today, Week, Month, A–Z, New, Random, genre/developer/year chips, letter jump), **only launchable ROMs**, and Quick Panel browse shortcuts are **opt-in** under Settings → Display & Grid → Browse chrome.
-- **Portable display topology** — resolves interactive vs companion vs launch displays from `DisplayManager` (no hard-coded 0/1). Profiles: Auto, One X Sugar, Generic dual, Single.
-- **Live screen swap** — X (default) swaps interactive and companion roles with a sticky pin so Auto refresh does not undo it.
-- **Companion roles** — Hero, Now Playing, Perf HUD, or pinned app on the non-interactive panel (large status pill).
-- **Global input** — gamepad, d-pad, stick, and touch route to the interactive deck regardless of which window has focus; held directions auto-repeat.
+- **Grid Mode** — curated 3DS/Wii-style icon grid with dock, blank “+” slots, long-press Move/Remove, favorites, folders, pin/unpin to dock. Optional deck clock/battery (off by default).
+- **Game Mode** — card carousel with a **minimal** default chip bar (All / Recent / Continue / Fav + platforms + Search/Select). Counts on chips, deep search, details sheets, multi-select bulk actions, and long-press menus for history/sort/related/collections. Power-user rails (Installed, Games, Top, Today, Week, Month, A–Z, New, Random, genre/developer/year chips, letter jump), launchable-only ROMs, Resume chip, clock/battery, and Quick Panel browse shortcuts are **opt-in** under Settings → Display & Grid → Browse chrome (Minimal / Custom / Full).
+- **Portable display topology** — interactive vs companion vs launch from `DisplayManager` (no hard-coded 0/1). Profiles: Auto, One X Sugar, Generic dual, Single. Swap/Settings icons sit on the **physically larger** panel in DUAL.
+- **Live screen swap** — X (default) swaps interactive and companion roles with a sticky pin.
+- **Companion roles** — Hero, Now Playing, Perf HUD, or pinned app on the non-interactive panel.
+- **Global input** — gamepad, d-pad, stick, and touch route to the interactive deck regardless of focus; held directions auto-repeat.
 - **Swipe-up / re-HOME drawer** — all-apps + ROMs without reloading the deck.
-- **Quick Panel** — Select opens Wi‑Fi / Continue / Theme / Settings by default; Random/Top/Recent/Fav/Games/Installed/Week/Month/A–Z/New shortcuts enable with **Quick Panel browse shortcuts** (each rail still needs its own toggle where applicable).
-- **ROM library** — SAF tree grants only (no broad storage permission); offline-first art; hide ROMs from library (Settings unhide); optional SteamGridDB scrape and RetroAchievements credentials.
+- **Quick Panel** — Select opens Wi‑Fi / Continue / Theme / Settings by default; extra rail shortcuts when browse chrome enables them.
+- **ROM library** — SAF tree grants only; offline-first art; hide ROMs; optional SteamGridDB scrape and RetroAchievements.
 - **Honest playtime** — sessions pause while the launcher is focused or the device sleeps.
 - **Themes** — Ghost, 3DS Teal, OLED Black, Neon; optional custom theme JSON.
-- **Settings** — Display & Grid, Apps, Controls (incl. Controller Lab), Library, Stats, System (topology diagnostics), About.
-- **Export/import** — full settings + layout JSON for backup or migration.
+- **Settings** — Display & Grid, Apps, Controls (Controller Lab), Library, Stats, System (topology diagnostics), About.
+- **Export/import** — full settings + layout JSON.
 - **Optional platform packs** — extra platform/player JSON under `docs/platform-packs/` (loadable in Settings).
 
 ---
 
 ## Displays & topology
 
-Ghost Galleon separates three concepts:
-
 | Role | Meaning |
 |------|---------|
-| **Primary / interactive** | Where the grid or Game Mode carousel lives (input target). |
-| **Companion** | Other dual surface for hero / Now Playing / Perf / pin content. |
-| **Secondary home placement** | Physical panel where `CompanionActivity` runs (first non-default display). |
+| **Primary / interactive** | Grid or Game Mode (input target). |
+| **Companion** | Other dual surface: hero / Now Playing / Perf / pin. |
+| **Secondary home placement** | Panel where `CompanionActivity` runs (first non-default display). |
+| **Larger display** | Physically largest panel — hosts Swap + Settings chrome in DUAL. |
 
-On the **One X Sugar**, Auto/Sugar profile prefers the **bottom** panel for interactive content and the **top** for hero. System `SECONDARY_HOME` is absorbed so swipe-up does not thrash the bottom grid.
+On the **One X Sugar**, Auto/Sugar prefers the **bottom** panel for interactive content and the **top** for hero. System `SECONDARY_HOME` is absorbed so swipe-up does not thrash the deck.
 
-**Settings → System** shows the resolved line (e.g. `DUAL · profile=onex-sugar`) plus interactive display mode and device profile overrides. **Single-display** devices skip companion launch and run in SINGLE mode.
+**Settings → System** shows the resolved topology (e.g. `primary=1 companion=0 launch=0 secondaryHome=1 larger=0`) plus hardware readings. **Single-display** devices run in SINGLE mode.
 
 ---
 
 ## ROM library
 
-Ghost Galleon scans ROM folders through Storage Access Framework tree grants — the app requests no broad storage permissions; access comes only from folders you grant.
+Scans use Storage Access Framework tree grants only — no broad storage permission.
 
-- **Grant a folder:** Settings → Library → “Add ROM folder” → pick the folder (e.g. microSD `roms` root). The grant persists across reboots.
-- **Scan:** granting triggers a scan; “Rescan library” re-walks granted trees off the UI thread. The index is cached as JSON so cold starts do not rescan.
-- **Matching:** a file counts as a ROM when its extension fits a platform and it sits under that platform’s folder (tree root or first path segment, case-insensitive — e.g. `roms/snes`, `roms/new-nintendo-3ds`).
-- **Add to the grid:** tap a blank “+” → picker’s ROMs section (searchable). ROM tiles use a per-platform placeholder until art is available.
+- **Grant:** Settings → Library → “Add ROM folder”.
+- **Scan:** grant triggers a scan; “Rescan library” walks trees off the UI thread. Index is cached as JSON.
+- **Matching:** extension + platform folder name (tree root or first path segment, case-insensitive).
+- **Grid:** tap “+” → searchable picker (apps + ROMs).
 - **Carousel:** Game Mode lists apps and ROMs with filters; Switch updates/DLC are deduped when a base package is present.
-- **Launch:** apps and ROMs prefer the non-interactive (launch) display so the deck stays put. RetroArch platforms boot with the matching core path; other players receive a content/file URI with read grant.
+- **Launch:** prefers the non-interactive (launch) display so the deck stays put.
 
 | Platform | Player | Launch verified on device |
 |---|---|---|
 | Game Boy / GBC | RetroArch (Gambatte) | template (same shape as SNES) |
 | Game Boy Advance | RetroArch (mGBA) | yes |
 | Super Nintendo | RetroArch (Snes9x) | yes |
-| Genesis / Mega Drive | RetroArch (Genesis Plus GX) | template (same shape as SNES) |
-| Nintendo 64 | RetroArch (Mupen64Plus-Next) | template (same shape as SNES) |
-| Nintendo DS | melonDualDS (`LAUNCH_ROM` + `uri` extra) | yes |
-| Nintendo 3DS | Azahar (`VIEW` + URI to EmulationActivity) | yes |
-| Nintendo Switch | Eden (`TECH_DISCOVERED` + SAF content URI + grant) | yes |
-| PSP / PS2 / Dreamcast / GameCube / Wii / Wii U | PPSSPP / NetherSX2 / Flycast / Dolphin / Dolphin / Cemu | template only — no content on device |
-| Windows | Winlator | not ROM-launchable (container app) — launch as an app |
-
-RetroArch is path-only (filesystem path + core `.so`). Everyone else receives a URI with `FLAG_GRANT_READ_URI_PERMISSION`; Eden refuses anything else.
+| Genesis / Mega Drive | RetroArch (Genesis Plus GX) | template |
+| Nintendo 64 | RetroArch (Mupen64Plus-Next) | template |
+| Nintendo DS | melonDualDS | yes |
+| Nintendo 3DS | Azahar | yes |
+| Nintendo Switch | Eden | yes |
+| PSP / PS2 / Dreamcast / GameCube / Wii / Wii U | PPSSPP / NetherSX2 / Flycast / Dolphin / Cemu | template only |
+| Windows | Winlator | app launch only (not ROM-launchable) |
 
 ---
 
 ## Artwork
 
-Offline-first. ROM tiles, carousel cards, and the hero panel use box art when available, platform placeholder otherwise.
+Offline-first. Tiles, carousel cards, and hero use box art when available.
 
-- **Local card art (no network):** during a scan, an `images/` (or `media/`, `art/`) folder next to a platform’s ROMs is matched by ROM filename stem (romm layout) and cached under private storage.
-- **SteamGridDB (optional):** Settings → Library → API key, then “Download missing artwork”. Cancelable background job; polite rate limit. This is the only feature that uses the app’s single INTERNET permission.
-- **RetroAchievements (optional):** username + API key for hero progress lines when configured.
+- **Local:** `images/` / `media/` / `art/` next to ROMs (romm layout), cached privately.
+- **SteamGridDB (optional):** Settings → Library → API key → “Download missing artwork” (only INTERNET use).
+- **RetroAchievements (optional):** username + API key for hero progress when configured.
 
 ---
 
@@ -137,22 +134,20 @@ Offline-first. ROM tiles, carousel cards, and the hero panel use box art when av
 
 | Button | Action |
 |---|---|
-| D-pad / left stick / HAT | Navigate (auto-repeats when held) |
-| Down from last grid row / carousel | Move focus into the dock |
-| A / Enter | Launch focused app or ROM |
-| Tap | Focus a tile; tap again to launch |
-| Long-press | Grid/dock: Move / Pin·Unpin / Remove; Game Mode: Details / Pin·Unpin dock / Fav / collections |
-| B | Back (consumed on the home screen) |
-| X | Swap interactive / companion displays (sticky pin) |
-| Y | Toggle Grid / Game mode (persists) |
+| D-pad / left stick / HAT | Navigate (auto-repeat when held) |
+| Down from last grid row / carousel | Focus dock |
+| A / Enter | Launch |
+| Tap | Focus; tap again to launch |
+| Long-press | Grid/dock: Move / Pin·Unpin / Remove; Game Mode: Details / collections / pin / stats |
+| B | Back |
+| X | Swap interactive / companion |
+| Y | Toggle Grid / Game mode |
 | Start | Settings |
 | Select | Quick Panel |
 | L1 / R1 | Page |
-| Swipe up / re-HOME | All-apps drawer (apps + ROMs) |
+| Swipe up / re-HOME | All-apps drawer |
 
-All bindings are remappable in Settings → Controls. Controller Lab is available for capture/testing.
-
-On Sugar, the bottom panel is interactive by default; the top shows the companion (Hero by default). X swaps roles. Input remains global across both activities.
+Remap everything under Settings → Controls. Controller Lab is available for capture/testing.
 
 ---
 
@@ -160,12 +155,12 @@ On Sugar, the bottom panel is interactive by default; the top shows the companio
 
 | Page | Contents |
 |------|----------|
-| **Display & Grid** | Orientation, hints, mode, themes, wallpaper, grid, companion role, **Browse chrome** (Minimal / Custom / Full preset + per-feature toggles: rails, chips, clock/battery, Resume chip, Quick Panel browse) |
+| **Display & Grid** | Orientation, hints, default mode, themes, wallpaper, device profile, interactive display, companion role, **Browse chrome** (Minimal / Custom / Full + per-feature toggles), grid layout |
 | **Apps** | Hidden apps, dock management |
 | **Controls** | Haptics, remappable keys, Controller Lab |
 | **Library** | ROM folders, Hidden ROMs, rescan, SteamGridDB, RetroAchievements, export/import, platform packs |
 | **Stats** | Most played / recently played |
-| **System** | Live topology (primary / companion / launch / secondaryHome / larger), hardware readings |
+| **System** | Topology (primary / companion / launch / secondaryHome / larger), hardware readings |
 | **About** | Version, git SHA, credits, licenses |
 
 ---
@@ -183,14 +178,14 @@ cd GhostGalleon
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-**Release** builds (signed from `release-signing.properties` on the build host) are what Obtainium and production installs use:
+**Release** builds (signed from `release-signing.properties` on the build host):
 
 ```bash
 ./gradlew :app:assembleRelease
 adb install -r app/build/outputs/apk/release/app-release.apk
 ```
 
-Debug and release use different signing keys — switching from one to the other requires uninstall. Export settings first (Settings → Library) if you need to keep layout/library state.
+Debug and release use different signing keys — switching requires uninstall. Export settings first (Settings → Library) to keep layout/library state.
 
 ### Host unit tests
 
@@ -204,7 +199,7 @@ Pure modules under `display/`, settings migrations, library browse/stats, and in
 
 ## Releases & updates
 
-Signed release APKs are on the [GitHub releases page](https://github.com/visorcraft/GhostGalleon/releases). On-device updates are tracked with Obtainium (GitHub releases source).
+Signed release APKs are on the [GitHub releases page](https://github.com/visorcraft/GhostGalleon/releases). On-device updates use Obtainium (GitHub releases source).
 
 A one-shot **BlackPearl → Ghost Galleon** package bridge exists for data migration (`-PbridgeBlackPearl=true`); normal users install the `com.visorcraft.ghostgalleon` release only.
 
@@ -213,7 +208,6 @@ A one-shot **BlackPearl → Ghost Galleon** package bridge exists for data migra
 ## Documentation
 
 - [Credits & attribution](CREDITS.md) and [third-party licenses](docs/credits-third-party.md) — also in-app under Settings → About.
-- [Dual-paint invariants](docs/dual-paint-invariants.md) — dual-display activity/window rules.
 - Example [platform packs](docs/platform-packs/).
 - [GitHub releases](https://github.com/visorcraft/GhostGalleon/releases)
 

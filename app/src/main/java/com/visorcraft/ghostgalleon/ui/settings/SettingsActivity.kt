@@ -81,11 +81,8 @@ class SettingsActivity : AppCompatActivity() {
     private var captureLabel: TextView? = null
     private var capturePulse: ObjectAnimator? = null
 
-    // True while a ROM library rescan runs; the settings row ignores taps.
     private var scanning = false
 
-    // Label source for the Apps section modals (hidden apps / dock). Goes
-    // through AppLibrary so custom names show here too.
     private val appLibrary by lazy {
         AppLibrary(PackageManagerAppsSource(packageManager, packageName))
     }
@@ -98,7 +95,6 @@ class SettingsActivity : AppCompatActivity() {
         appLibrary.all(app.settings).firstOrNull { it.packageName == packageName }
             ?.label ?: packageName
 
-    // Dock keys are app packages or "rom:<id>" values.
     private fun dockEntryLabel(key: String): String {
         val romId = SlotKey.romId(key)
         return if (romId != null) {
@@ -176,7 +172,6 @@ class SettingsActivity : AppCompatActivity() {
             Toast.makeText(this, "No valid packs found", Toast.LENGTH_LONG).show()
             return
         }
-        // Serialize merged pack and install via the real store path.
         val root = org.json.JSONObject()
             .put("schemaVersion", 1)
             .put("platforms", org.json.JSONArray().apply {
@@ -243,7 +238,6 @@ class SettingsActivity : AppCompatActivity() {
             else dock.joinToString(" · ", transform = ::dockEntryLabel)
     }
 
-    // One label + chip row inside a management modal.
     private fun modalRow(label: String, chip: String, onChip: () -> Unit): View =
         LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -273,9 +267,6 @@ class SettingsActivity : AppCompatActivity() {
         setPadding(0, v, 0, v)
     }
 
-    // Hidden-apps management: every hidden package with an Unhide chip;
-    // unhiding removes it from settings.hiddenPackages (picker-visible
-    // again). Grid slots holding a hidden app are unaffected either way.
     private fun showHiddenAppsDialog() {
         val list = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -308,8 +299,6 @@ class SettingsActivity : AppCompatActivity() {
             .show()
     }
 
-    // User-hidden ROMs: unhide restores carousel/picker visibility; grid
-    // slots that still hold the key remain launchable either way.
     private fun showHiddenRomsDialog() {
         val list = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -361,7 +350,6 @@ class SettingsActivity : AppCompatActivity() {
             .setItems(labels) { _, which ->
                 val pkg = apps[which].packageName
                 app.updateSettings(app.settings.copy(companionPinnedPackage = pkg))
-                // Rebuild settings so the pin row label refreshes.
                 recreate()
             }
             .setNeutralButton("Clear") { _, _ ->
@@ -372,8 +360,6 @@ class SettingsActivity : AppCompatActivity() {
             .show()
     }
 
-    // Dock management: current dock entries in order with a Remove chip.
-    // Adding stays grid-side (slot menu "Pin to dock").
     private fun showDockDialog() {
         val list = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -407,7 +393,6 @@ class SettingsActivity : AppCompatActivity() {
             .show()
     }
 
-    // Platform pack import (Library): JSON platforms/players overlay.
     private val platformPackLauncher =
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
             if (uri == null) return@registerForActivityResult
@@ -431,10 +416,6 @@ class SettingsActivity : AppCompatActivity() {
             }
         }
 
-    // Settings export/import (Library section): one JSON bundle holding the
-    // settings object and the ROM library array (SettingsBundle). Import
-    // validates by decoding through the real codecs, then swaps both stores
-    // and reloads all state; anything malformed is rejected with a Toast.
     private val exportLauncher =
         registerForActivityResult(
             ActivityResultContracts.CreateDocument("application/json")
@@ -463,12 +444,9 @@ class SettingsActivity : AppCompatActivity() {
                     it.readBytes().toString(Charsets.UTF_8)
                 } ?: error("could not open $uri")
                 val (settingsJson, romJson) = SettingsBundle.unpack(text)
-                // Codec-level validation: bad enums/types throw here, before
-                // anything is persisted.
                 val newSettings = SettingsStore.parse(settingsJson)
                 val entries = RomLibrary.parseEntries(romJson)
                 app.romLibrary.save(entries)
-                // load() re-applies SwitchDedupe, matching a fresh scan.
                 app.publishRomEntries(app.romLibrary.load())
                 app.updateSettings(newSettings)
             }.onSuccess {
@@ -479,9 +457,6 @@ class SettingsActivity : AppCompatActivity() {
             }
         }
 
-    // SAF image picker for the grid wallpaper. The read grant is persisted
-    // so the URI keeps working across reboots; settings hot-reload rebuilds
-    // the grid with the new image.
     private val wallpaperPicker =
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
             if (uri != null) {
@@ -517,12 +492,6 @@ class SettingsActivity : AppCompatActivity() {
     private var wallpaperValue: TextView? = null
     private var wallpaperClear: View? = null
 
-    // SteamGridDB gap-filler (Stage 3 Task 3): the API-key row shows
-    // Set/Not set (long-press clears); the download row binds to the
-    // APP-SCOPED scrape job (GhostGalleonApp.scrapeJob) — the job survives
-    // this screen. The row shows live "N/M" progress and turns into Cancel
-    // while running; the listener is registered in onResume and removed in
-    // onPause, so leaving Settings never cancels the job.
     private var sgdbKeyValue: TextView? = null
     private var scrapeLabel: TextView? = null
     private var scrapeValue: TextView? = null
@@ -536,8 +505,6 @@ class SettingsActivity : AppCompatActivity() {
 
         override fun onFinished(summary: SgdbScraper.Summary) {
             refreshSgdbRows()
-            // The listener only fires while resumed, but a finish can race
-            // onPause; never toast into a destroyed activity.
             if (!isFinishing && !isDestroyed) {
                 val text = "Artwork: ${summary.downloaded} downloaded, " +
                     "${summary.skipped} skipped, ${summary.failed} failed" +
@@ -553,8 +520,6 @@ class SettingsActivity : AppCompatActivity() {
         val running = job.isRunning
         sgdbKeyValue?.text = if (hasKey) "Set" else "Not set"
         if (running) {
-            // Rebind to live job state (progress survives re-renders because
-            // it lives in the app, not the views).
             scrapeLabel?.text = "Cancel"
             scrapeValue?.text = if (job.progressTotal > 0)
                 "${job.progressDone}/${job.progressTotal}" else "…"
@@ -761,7 +726,6 @@ class SettingsActivity : AppCompatActivity() {
         val sample = """
             {"ID":1,"Title":"Sample","NumAwardedToUser":3,"NumAchievements":10,"HardcoreMode":0}
         """.trimIndent()
-        // Ensure credentials flag so heroLine is eligible to show.
         if (app.settings.raApiKey.isNullOrBlank()) {
             app.updateSettings(app.settings.copy(raApiKey = "sample"), notify = false)
         }
@@ -791,8 +755,6 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
-    // SAF tree picker for ROM folders. The read grant is persisted so the
-    // tree stays readable across reboots; the URI lands in romTreeUris.
     private val romFolderPicker =
         registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? ->
             if (uri != null) {
@@ -868,11 +830,7 @@ class SettingsActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        // Same immersive status-bar hiding as the deck activities.
         hideStatusBar(window)
-        // Bind to the app-scoped scrape job while visible; the job itself
-        // is owned by GhostGalleonApp and keeps running when this screen
-        // pauses or is destroyed.
         app.scrapeJob.addListener(scrapeListener)
         refreshSgdbRows()
     }
@@ -883,26 +841,22 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun dp(value: Int): Int =
-        (value * resources.displayMetrics.density).toInt()
+        com.visorcraft.ghostgalleon.ui.UiDimens.dp(this, value)
 
     private fun dpF(value: Int): Float =
-        value * resources.displayMetrics.density
+        com.visorcraft.ghostgalleon.ui.UiDimens.dpF(this, value)
 
-    /** Accent with an explicit alpha channel. */
     private fun withAlpha(color: Int, alpha: Int): Int =
         (color and 0x00FFFFFF) or (alpha shl 24)
 
-    private val offTint = 0x4DFFFFFF.toInt() // 30% white
+    private val offTint = 0x4DFFFFFF.toInt()
 
-    // Small uppercase section header, letter-spaced, tinted with the accent.
     private fun sectionHeader(text: String): TextView = TextView(this).apply {
         this.text = text.uppercase()
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
         setTextColor(withAlpha(accent, 0xCC))
         letterSpacing = 0.15f
     }
-
-    // Card container grouping one section's controls.
     private fun sectionCard(): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         background = TileBackgrounds.card(this@SettingsActivity)
@@ -1032,7 +986,6 @@ class SettingsActivity : AppCompatActivity() {
         val host = pageHost ?: return
         host.removeAllViews()
         val body = pageBodies[page] ?: return
-        // Re-parent safely if the body was already attached.
         (body.parent as? ViewGroup)?.removeView(body)
         host.addView(body, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
@@ -1130,7 +1083,6 @@ class SettingsActivity : AppCompatActivity() {
         val s = app.settings
         val wide = isWideSettings()
 
-        // Per-page vertical stacks of section headers + cards.
         SettingsPage.entries.forEach { page ->
             pageBodies[page] = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
@@ -1159,7 +1111,6 @@ class SettingsActivity : AppCompatActivity() {
             setPadding(dp(24), dp(20), dp(24), dp(16))
         }
 
-        // Header: back button + title with a thin accent underline.
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -1182,7 +1133,6 @@ class SettingsActivity : AppCompatActivity() {
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.WRAP_CONTENT,
         ))
-        // Thin accent underline beneath the title start.
         shell.addView(View(this).apply {
             setBackgroundColor(accent)
         }, LinearLayout.LayoutParams(dp(40), dp(2)).apply {
@@ -1239,7 +1189,6 @@ class SettingsActivity : AppCompatActivity() {
             ))
         }
 
-        // Display section.
         val displayCard = sectionCard()
         toggle(displayCard, "Gyroscope orientation", s.gyroEnabled) {
             app.updateSettings(app.settings.copy(gyroEnabled = it))
@@ -1254,7 +1203,6 @@ class SettingsActivity : AppCompatActivity() {
             LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))
 
-        // Theme packs: built-in chips + optional import JSON.
         val themeOptions = ThemePack.BUILTINS.map { it.id to it.displayName.uppercase() }
         val themeCurrent = ThemePack.resolve(s).id.let { id ->
             if (ThemePack.BUILTINS.any { it.id == id }) id else ThemePack.GHOST.id
@@ -1294,7 +1242,6 @@ class SettingsActivity : AppCompatActivity() {
         })
         displayCard.addView(themeImportRow, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))
-        // Portable display topology (Auto / Sugar / dual / single).
         val profileOptions = listOf(
             "auto" to "AUTO",
             "onex-sugar" to "SUGAR",
@@ -1368,7 +1315,6 @@ class SettingsActivity : AppCompatActivity() {
             ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))
         addSection(SettingsPage.DISPLAY_GRID, "Display", displayCard)
 
-        // Browse chrome: minimal default; power users opt into extra rails.
         val chrome = s.browseChrome
         val chromeCard = sectionCard()
         fun chromePresetId(c: com.visorcraft.ghostgalleon.settings.BrowseChrome): String = when {
@@ -1407,9 +1353,6 @@ class SettingsActivity : AppCompatActivity() {
                         recreate()
                     }
                     else -> {
-                        // CUSTOM is display-only (produced by flag toggles).
-                        // Snap the pill back to the true preset if settings
-                        // are still pure MINIMAL/FULL.
                         rebindChromePreset?.invoke(
                             chromePresetId(app.settings.browseChrome),
                         )
@@ -1466,7 +1409,6 @@ class SettingsActivity : AppCompatActivity() {
             chromeCard,
         )
 
-        // Companion panel role + pinned package (same page as Display).
         val companionCard = sectionCard()
         val roleOptions = listOf(
             CompanionRole.HERO.name to "HERO",
@@ -1519,7 +1461,6 @@ class SettingsActivity : AppCompatActivity() {
         })
         addSection(SettingsPage.DISPLAY_GRID, "Companion", companionCard)
 
-        // Grid section (same page as Display).
         val gridCard = sectionCard()
         gridCard.addView(controlRow("Grid scrolling", segmented(
             listOf("vertical" to "VERTICAL", "horizontal" to "HORIZONTAL"),
@@ -1536,8 +1477,6 @@ class SettingsActivity : AppCompatActivity() {
         toggle(gridCard, "Show app names", s.showLabels) {
             app.updateSettings(app.settings.copy(showLabels = it))
         }
-        // Grid wallpaper: tap the row to pick an image via SAF, Clear to
-        // go back to plain black.
         val wallpaperRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -1575,9 +1514,6 @@ class SettingsActivity : AppCompatActivity() {
             ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))
         addSection(SettingsPage.DISPLAY_GRID, "Grid", gridCard)
 
-        // Apps section: hidden-apps and dock management. Adding stays
-        // grid-side (picker hide menu / slot "Pin to dock"); these rows are
-        // the management surface.
         val appsCard = sectionCard()
         val hiddenRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -1616,7 +1552,6 @@ class SettingsActivity : AppCompatActivity() {
         refreshAppsRows()
         addSection(SettingsPage.APPS, "Apps", appsCard)
 
-        // Controls section: haptics + remappable button rows.
         val controlsCard = sectionCard()
         toggle(controlsCard, "Haptics", s.haptics) {
             app.updateSettings(app.settings.copy(haptics = it))
@@ -1681,10 +1616,6 @@ class SettingsActivity : AppCompatActivity() {
         }
         addSection(SettingsPage.CONTROLS, "Controls", controlsCard)
 
-        // Library section: granted SAF ROM folder trees + add/rescan rows.
-        // Rescan SAF-walks the granted trees off the main thread via
-        // RomLibrary and toasts the resulting entry count, or "library
-        // unchanged" when every granted tree is unreadable (card ejected).
         val libraryCard = sectionCard()
         val rows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         folderRows = rows
@@ -1726,11 +1657,6 @@ class SettingsActivity : AppCompatActivity() {
         hiddenRomsRow.addView(hiddenRomsValue)
         libraryCard.addView(hiddenRomsRow, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))
-        // Rescan library: guarded against re-entry — a second tap while the
-        // ~50 s SAF walk runs would queue a duplicate scan on RomLibrary's
-        // executor. While scanning, the label reads "Scanning…" and taps
-        // are ignored; completion toasts are dropped once the activity is
-        // gone (the scan can outlive the settings screen).
         val rescanLabel = rowLabel("Rescan library")
         fun startRescan(force: Boolean) {
             if (scanning) return
@@ -1769,7 +1695,6 @@ class SettingsActivity : AppCompatActivity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             isFocusable = true
-            // Tap: incremental (skip clean trees). Long-press: force full.
             setOnClickListener { startRescan(force = false) }
             setOnLongClickListener {
                 startRescan(force = true)
@@ -1785,7 +1710,6 @@ class SettingsActivity : AppCompatActivity() {
         })
         libraryCard.addView(rescanRow, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))
-        // Bulk-pin favorites into empty curated-grid slots (E).
         val pinFavsRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -1811,7 +1735,6 @@ class SettingsActivity : AppCompatActivity() {
         )
         libraryCard.addView(pinFavsRow, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))
-        // Named collections management (Phase 1).
         val collectionsRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -1827,7 +1750,6 @@ class SettingsActivity : AppCompatActivity() {
         })
         libraryCard.addView(collectionsRow, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))
-        // Default emulator per platform (Phase 2).
         val playersRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -1844,7 +1766,6 @@ class SettingsActivity : AppCompatActivity() {
         })
         libraryCard.addView(playersRow, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))
-        // RetroAchievements credentials (optional; hero shows cached progress).
         val raUserRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -1904,8 +1825,6 @@ class SettingsActivity : AppCompatActivity() {
         })
         libraryCard.addView(raSampleRow, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))
-        // SteamGridDB gap-filler: key entry row (tap = paste dialog,
-        // long-press = clear) and the batch download row.
         val keyRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -1950,9 +1869,6 @@ class SettingsActivity : AppCompatActivity() {
             ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))
         refreshSgdbRows()
 
-        // Export/import: one SAF JSON bundle carrying settings + ROM
-        // library (SettingsBundle). Import validates before touching either
-        // store and rejects malformed files with a Toast.
         val exportRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -2004,9 +1920,6 @@ class SettingsActivity : AppCompatActivity() {
         })
         libraryCard.addView(packRow, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))
-        // Bundled catalog: assets/platform_packs/*.json (pick one, or Load all).
-        // Note: importing a single pack replaces the stored overlay; use
-        // "Load all" to merge every bundled pack into one overlay.
         val bundledCount = listBundledPackAssets().size
         val examplePackRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -2023,7 +1936,6 @@ class SettingsActivity : AppCompatActivity() {
         })
         libraryCard.addView(examplePackRow, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))
-        // Re-show setup card on next empty boot.
         val setupRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -2040,7 +1952,6 @@ class SettingsActivity : AppCompatActivity() {
             ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))
         addSection(SettingsPage.LIBRARY, "Library", libraryCard)
 
-        // Light stats: most played + recently played from stored maps.
         val statsCard = sectionCard()
         val most = com.visorcraft.ghostgalleon.library.LibraryStats.mostPlayed(
             app.settings.playtimeMs, limit = 12,
@@ -2087,8 +1998,6 @@ class SettingsActivity : AppCompatActivity() {
             }
         }
         addSection(SettingsPage.STATS, "Stats", statsCard)
-
-        // System: live device hardware / RAM / CPU / storage / battery / power.
         val systemCard = sectionCard()
         val topo = app.refreshDisplayConfig()
         val systemCardExtra = systemCard
@@ -2145,10 +2054,6 @@ class SettingsActivity : AppCompatActivity() {
         systemCard.addView(refreshSys, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(56)))
         addSection(SettingsPage.SYSTEM, "System", systemCard)
-
-        // About page (Grexa-style): hero card with the dynamic version,
-        // feature cards, project link, Licenses/Credits dialogs. Built by
-        // AboutPage; no live settings binding, so it's static per inflate.
         pageBodies.getValue(SettingsPage.ABOUT).addView(
             AboutPage.build(this, accent),
             LinearLayout.LayoutParams(
@@ -2156,8 +2061,6 @@ class SettingsActivity : AppCompatActivity() {
                 ViewGroup.LayoutParams.WRAP_CONTENT,
             ),
         )
-
-        // Body: optional left nav blade (wide) + scrollable page content.
         val body = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
         }

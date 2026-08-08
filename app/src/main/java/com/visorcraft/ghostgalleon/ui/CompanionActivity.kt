@@ -9,12 +9,8 @@ import com.visorcraft.ghostgalleon.display.AndroidDisplayProbe
 import com.visorcraft.ghostgalleon.display.SurfaceMode
 
 /**
- * Secondary panel (Sugar bottom by default). System SECONDARY_HOME storms
- * must never thrash setContentView or open the all-apps drawer — that left
- * both physical displays pure black.
- *
- * See AGENTS.md "Black screens / dual paint invariants" and
- * [DualPaintPolicy].
+ * Secondary panel (Sugar bottom by default). SECONDARY_HOME redelivery must
+ * not thrash [setContentView] or open the all-apps drawer — see [DualPaintPolicy].
  */
 class CompanionActivity : BaseDeckActivity() {
 

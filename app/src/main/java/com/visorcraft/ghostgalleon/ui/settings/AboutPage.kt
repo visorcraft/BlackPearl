@@ -23,7 +23,7 @@ import com.visorcraft.ghostgalleon.R
 import com.visorcraft.ghostgalleon.ui.deck.TileBackgrounds
 
 /**
- * Grexa-style About page: hero card with the dynamic version, feature
+ * About page: hero card with the dynamic version, feature
  * cards, project link, and the Licenses / Credits dialogs backed by the
  * bundled raw texts (license_ghost_galleon, licenses_third_party,
  * acknowledgments, runtime_components). Self-contained - SettingsActivity
@@ -59,10 +59,10 @@ object AboutPage {
     )
 
     private fun dp(context: Context, value: Int): Int =
-        (value * context.resources.displayMetrics.density).toInt()
+        com.visorcraft.ghostgalleon.ui.UiDimens.dp(context, value)
 
     private fun dpF(context: Context, value: Int): Float =
-        value * context.resources.displayMetrics.density
+        com.visorcraft.ghostgalleon.ui.UiDimens.dpF(context, value)
 
     private fun withAlpha(color: Int, alpha: Int): Int =
         (color and 0x00FFFFFF) or (alpha shl 24)

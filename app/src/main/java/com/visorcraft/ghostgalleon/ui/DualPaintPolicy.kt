@@ -1,12 +1,8 @@
 package com.visorcraft.ghostgalleon.ui
 
 /**
- * Pure dual-screen paint / thrash policy. Host-tested — no Android types.
- *
- * Violating these gates caused pure-black physical panels: view hierarchy
- * still present (a11y) while the GPU buffer never presented non-black pixels.
- *
- * See AGENTS.md "Black screens / dual paint invariants".
+ * Pure dual-screen paint / thrash policy (host-tested, no Android types).
+ * Gates full rebuilds so GPU buffers present real pixels instead of pure black.
  */
 object DualPaintPolicy {
 

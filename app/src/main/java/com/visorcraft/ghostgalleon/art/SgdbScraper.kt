@@ -12,7 +12,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * SteamGridDB gap-filler (Stage 3 Task 3). For every library entry with no
+ * SteamGridDB gap-filler. For every library entry with no
  * local artUri and no cached art: search SGDB by the cleaned ROM name,
  * take the first result, download its first grid and hero image into
  * ArtCache (grid = tile art, hero keyed separately for the hero panel).
