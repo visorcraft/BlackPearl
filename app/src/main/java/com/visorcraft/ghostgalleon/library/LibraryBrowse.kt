@@ -74,6 +74,44 @@ object LibraryBrowse {
         val yearDecade: String? = null,
     )
 
+    /**
+     * True when any non-rail filter is set: platform, genre, developer,
+     * year decade, or text search. Does not count mode/collection rails.
+     * Pure; host-tested. Drives the contextual Clear-filters chip.
+     */
+    fun hasActiveMetaFilters(q: BrowseQuery): Boolean =
+        q.platformId != null ||
+            !q.genre.isNullOrBlank() ||
+            !q.developer.isNullOrBlank() ||
+            !q.yearDecade.isNullOrBlank() ||
+            q.text.isNotBlank()
+
+    /**
+     * Count of active meta filters (for chip labels like "Clear filters · 2").
+     */
+    fun activeMetaFilterCount(q: BrowseQuery): Int {
+        var n = 0
+        if (q.platformId != null) n++
+        if (!q.genre.isNullOrBlank()) n++
+        if (!q.developer.isNullOrBlank()) n++
+        if (!q.yearDecade.isNullOrBlank()) n++
+        if (q.text.isNotBlank()) n++
+        return n
+    }
+
+    /**
+     * Drop platform / genre / developer / year / text filters; keep mode and
+     * collectionName so the user stays on the current rail.
+     */
+    fun clearMetaFilters(q: BrowseQuery): BrowseQuery =
+        q.copy(
+            platformId = null,
+            genre = null,
+            developer = null,
+            yearDecade = null,
+            text = "",
+        )
+
     /** Listed ROMs only (scanner-visible, not user-hidden), optional platform. */
     fun filterByPlatform(
         roms: List<RomEntry>,

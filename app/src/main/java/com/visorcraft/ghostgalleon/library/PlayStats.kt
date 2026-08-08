@@ -59,6 +59,39 @@ object SessionMath {
     }
 
     /**
+     * How many of [keys] have never been launched (Mark as played bulk label).
+     */
+    fun unplayedCountInSelection(
+        lastLaunchedMs: Map<String, Long>,
+        keys: Collection<String>,
+    ): Int = keys.count { k ->
+        val t = k.trim()
+        t.isNotEmpty() && (lastLaunchedMs[t] ?: 0L) <= 0L
+    }
+
+    /**
+     * Stamp every unplayed key in [keys] as last-played at [nowMs].
+     * Returns updated stats and how many keys were newly stamped.
+     */
+    fun bulkStampLastPlayed(
+        stats: PlayStats,
+        keys: Collection<String>,
+        nowMs: Long,
+    ): Pair<PlayStats, Int> {
+        if (nowMs <= 0L || keys.isEmpty()) return stats to 0
+        var next = stats
+        var stamped = 0
+        keys.forEach { key ->
+            val k = key.trim()
+            if (k.isEmpty()) return@forEach
+            if ((next.lastLaunchedMs[k] ?: 0L) > 0L) return@forEach
+            next = stampLastPlayed(next, k, nowMs)
+            stamped++
+        }
+        return next to stamped
+    }
+
+    /**
      * Drop last-launch + playtime for [key]. Missing key is a no-op.
      * Does not touch favorites, collections, or dock/grid pins.
      */

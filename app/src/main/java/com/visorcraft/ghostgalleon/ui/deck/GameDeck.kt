@@ -706,9 +706,9 @@ class GameDeck(
         fun addGap() {
             row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
         }
-        fun setBrowse(next: LibraryBrowse.BrowseQuery) {
+        fun setBrowse(next: LibraryBrowse.BrowseQuery, force: Boolean = false) {
             val qNext = chrome.sanitize(next)
-            setQuery(qNext)
+            setQuery(qNext, force = force)
             toastIfEmptyBrowse(qNext)
         }
         row.addView(
@@ -1063,6 +1063,20 @@ class GameDeck(
                 )
             }
         }
+        // Contextual only: appears when platform/genre/dev/year/search is set.
+        if (LibraryBrowse.hasActiveMetaFilters(q)) {
+            addGap()
+            val n = LibraryBrowse.activeMetaFilterCount(q)
+            row.addView(
+                chip(
+                    LibraryBrowse.labeledChip("Clear filters", n),
+                    true,
+                ) {
+                    setBrowse(LibraryBrowse.clearMetaFilters(q), true)
+                    Toast.makeText(activity, "Filters cleared", Toast.LENGTH_SHORT).show()
+                },
+            )
+        }
         addGap()
         row.addView(
             chip(
@@ -1105,6 +1119,10 @@ class GameDeck(
             PlayStats(live.lastLaunchedMs, live.playtimeMs),
             state.multiSelectKeys,
         )
+        val unplayedInSel = SessionMath.unplayedCountInSelection(
+            live.lastLaunchedMs,
+            state.multiSelectKeys,
+        )
         val labels = mutableListOf(
             "Select all on rail (${railKeys.size})",
             "Invert selection on rail",
@@ -1117,6 +1135,9 @@ class GameDeck(
         labels.add("Pin selected to dock ($n)")
         labels.add("Add to collection…")
         labels.add("Hide selected ROMs ($romCount)")
+        if (unplayedInSel > 0) {
+            labels.add("Mark as played ($unplayedInSel)")
+        }
         if (statsInSel > 0) {
             labels.add("Clear play stats ($statsInSel)")
         }
@@ -1201,6 +1222,27 @@ class GameDeck(
                             Toast.makeText(
                                 activity,
                                 "Hidden $added ROM(s)",
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                        }
+                    }
+                    label.startsWith("Mark as played") -> {
+                        val cur = app().settings
+                        val (next, stamped) = SessionMath.bulkStampLastPlayed(
+                            PlayStats(cur.lastLaunchedMs, cur.playtimeMs),
+                            state.multiSelectKeys,
+                            System.currentTimeMillis(),
+                        )
+                        if (stamped == 0) {
+                            Toast.makeText(activity, "Nothing to mark", Toast.LENGTH_SHORT).show()
+                        } else {
+                            app().updateSettings(
+                                cur.copy(lastLaunchedMs = next.lastLaunchedMs),
+                            )
+                            state.clearMultiSelect()
+                            Toast.makeText(
+                                activity,
+                                "Marked $stamped as played",
                                 Toast.LENGTH_SHORT,
                             ).show()
                         }
