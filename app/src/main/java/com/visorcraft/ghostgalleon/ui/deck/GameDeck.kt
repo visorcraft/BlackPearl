@@ -25,6 +25,7 @@ import com.visorcraft.ghostgalleon.library.CollectionsOps
 import com.visorcraft.ghostgalleon.library.GameDetails
 import com.visorcraft.ghostgalleon.library.HiddenRoms
 import com.visorcraft.ghostgalleon.library.LibraryBrowse
+import com.visorcraft.ghostgalleon.library.PlayStats
 import com.visorcraft.ghostgalleon.library.SessionMath
 import com.visorcraft.ghostgalleon.rom.Platforms
 import com.visorcraft.ghostgalleon.rom.PlatformTile
@@ -736,37 +737,27 @@ class GameDeck(
             )
         }
         addGap()
-        row.addView(chip("Continue", false) {
-            // Live settings: GameDeck holds a construction-time snapshot, so
-            // lastLaunchedMs from `settings` can be empty after launches until
-            // the next SETTINGS rebuild — Continue would silently toast-null.
-            val live = app().settings
-            val available = buildList {
-                addAll(
-                    HiddenRoms.listed(roms, live.hiddenRomIds)
-                        .map { SlotKey.rom(it.id) },
+        row.addView(
+            chip(
+                "Continue",
+                false,
+                onLongClick = { showContinueHistory() },
+            ) {
+                // Live settings: GameDeck holds a construction-time snapshot, so
+                // lastLaunchedMs from `settings` can be empty after launches until
+                // the next SETTINGS rebuild — Continue would silently toast-null.
+                val live = app().settings
+                val cont = LibraryBrowse.continueKey(
+                    availableContinueKeys(live),
+                    live.lastLaunchedMs,
                 )
-                addAll(library.curated(live).map { it.packageName })
-                addAll(live.gridSlots.filterNotNull())
-                addAll(live.dockSlots.filterNotNull())
-                addAll(live.lastLaunchedMs.keys)
-            }
-            val cont = LibraryBrowse.continueKey(available, live.lastLaunchedMs)
-            if (cont == null) {
-                Toast.makeText(activity, "Nothing to continue", Toast.LENGTH_SHORT).show()
-            } else {
-                // RECENT rail puts cont at the front after rebuild. force on
-                // both sides so re-tapping Continue still scrolls/rebinds when
-                // the key is already selected or browse was already RECENT.
-                setQuery(
-                    LibraryBrowse.BrowseQuery(mode = LibraryBrowse.Mode.RECENT),
-                    force = true,
-                )
-                state.select(cont, force = true)
-                val label = continueLabel(cont, live)
-                Toast.makeText(activity, "Continue: $label", Toast.LENGTH_SHORT).show()
-            }
-        })
+                if (cont == null) {
+                    Toast.makeText(activity, "Nothing to continue", Toast.LENGTH_SHORT).show()
+                } else {
+                    jumpToContinue(cont, live)
+                }
+            },
+        )
         if (chrome.randomChip) {
             addGap()
             row.addView(chip("Random", false) {
@@ -847,20 +838,22 @@ class GameDeck(
                 })
             }
         }
-        // Genre chips (opt-in): gamelist meta, ROM-only filter.
+        // Genre chips (opt-in): gamelist meta, ROM-only filter + counts.
         if (chrome.genreChips) {
-            LibraryBrowse.presentGenres(roms, settings.hiddenRomIds).forEach { genre ->
+            LibraryBrowse.presentGenreCounts(roms, settings.hiddenRomIds).forEach { (genre, count) ->
                 addGap()
                 val selected = q.genre?.equals(genre, ignoreCase = true) == true
-                row.addView(chip(genre, selected) {
-                    setBrowse(
-                        q.copy(
-                            mode = LibraryBrowse.Mode.ALL,
-                            genre = if (selected) null else genre,
-                            collectionName = null,
-                        ),
-                    )
-                })
+                row.addView(
+                    chip(LibraryBrowse.labeledChip(genre, count), selected) {
+                        setBrowse(
+                            q.copy(
+                                mode = LibraryBrowse.Mode.ALL,
+                                genre = if (selected) null else genre,
+                                collectionName = null,
+                            ),
+                        )
+                    },
+                )
             }
         }
         addGap()
@@ -1080,6 +1073,18 @@ class GameDeck(
             .show()
     }
 
+    /** Keys that may appear in Continue / history (ROMs, apps, grid, dock). */
+    private fun availableContinueKeys(live: Settings): List<String> = buildList {
+        addAll(
+            HiddenRoms.listed(roms, live.hiddenRomIds)
+                .map { SlotKey.rom(it.id) },
+        )
+        addAll(library.curated(live).map { it.packageName })
+        addAll(live.gridSlots.filterNotNull())
+        addAll(live.dockSlots.filterNotNull())
+        addAll(live.lastLaunchedMs.keys)
+    }
+
     /** Human label for a continue/slot key (ROM name or app label). */
     private fun continueLabel(key: String, live: Settings): String {
         SlotKey.romId(key)?.let { id ->
@@ -1087,6 +1092,83 @@ class GameDeck(
         }
         library.curated(live).firstOrNull { it.packageName == key }?.label?.let { return it }
         return key.substringAfterLast(':').ifBlank { key }
+    }
+
+    /** Jump to [key] on the Recent rail (Continue / history picker). */
+    private fun jumpToContinue(key: String, live: Settings) {
+        // RECENT rail puts cont at the front after rebuild. force on both
+        // sides so re-tapping still scrolls/rebinds when already selected.
+        state.setLibraryBrowse(
+            LibraryBrowse.BrowseQuery(mode = LibraryBrowse.Mode.RECENT),
+            force = true,
+        )
+        state.select(key, force = true)
+        val label = continueLabel(key, live)
+        Toast.makeText(activity, "Continue: $label", Toast.LENGTH_SHORT).show()
+    }
+
+    /**
+     * Long-press Continue: pick any recent title (newest first, capped).
+     * No new always-on chrome — depth of the core Continue chip.
+     */
+    private fun showContinueHistory() {
+        val live = app().settings
+        val nowMs = System.currentTimeMillis()
+        val keys = LibraryBrowse.continueHistory(
+            availableContinueKeys(live),
+            live.lastLaunchedMs,
+        )
+        if (keys.isEmpty()) {
+            Toast.makeText(activity, "Nothing to continue", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val lines = keys.map { k ->
+            LibraryBrowse.continueHistoryLine(
+                continueLabel(k, live),
+                live.lastLaunchedMs[k],
+                nowMs,
+            )
+        }.toTypedArray()
+        android.app.AlertDialog.Builder(activity)
+            .setTitle("Continue")
+            .setItems(lines) { _, which ->
+                if (which in keys.indices) {
+                    jumpToContinue(keys[which], app().settings)
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun clearPlayStats(key: String) {
+        val live = app().settings
+        val stats = PlayStats(
+            lastLaunchedMs = live.lastLaunchedMs,
+            totalPlaytimeMs = live.playtimeMs,
+        )
+        if (!SessionMath.hasStats(stats, key)) {
+            Toast.makeText(activity, "No play stats", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val label = continueLabel(key, live)
+        android.app.AlertDialog.Builder(activity)
+            .setTitle("Clear play stats")
+            .setMessage("Remove last played and playtime for $label?")
+            .setPositiveButton("Clear") { _, _ ->
+                val next = SessionMath.clearStats(
+                    PlayStats(live.lastLaunchedMs, live.playtimeMs),
+                    key,
+                )
+                app().updateSettings(
+                    live.copy(
+                        lastLaunchedMs = next.lastLaunchedMs,
+                        playtimeMs = next.totalPlaytimeMs,
+                    ),
+                )
+                Toast.makeText(activity, "Cleared stats", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     /**
@@ -1518,8 +1600,15 @@ class GameDeck(
         val activeCol = activeCollectionName()
         val reorderCol = reorderCollectionName()
         val isApp = entry.rom == null && !SlotKey.isRom(key)
+        val liveStats = PlayStats(
+            lastLaunchedMs = settings.lastLaunchedMs,
+            totalPlaytimeMs = settings.playtimeMs,
+        )
         val choices = buildList {
             add(SlotMenu.Choice.DETAILS)
+            if (SessionMath.hasStats(liveStats, key)) {
+                add(SlotMenu.Choice.CLEAR_PLAY_STATS)
+            }
             if (DockSlots.containsKey(settings.dockSlots, key)) {
                 add(SlotMenu.Choice.UNPIN_FROM_DOCK)
             } else {
@@ -1552,6 +1641,7 @@ class GameDeck(
             closeSlotMenu()
             when (choice) {
                 SlotMenu.Choice.DETAILS -> showDetails(entry)
+                SlotMenu.Choice.CLEAR_PLAY_STATS -> clearPlayStats(key)
                 SlotMenu.Choice.PIN_TO_DOCK -> pinToDock(key)
                 SlotMenu.Choice.UNPIN_FROM_DOCK -> unpinFromDock(key)
                 SlotMenu.Choice.APP_INFO -> openAppInfo(key)

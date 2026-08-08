@@ -528,4 +528,47 @@ class LibraryBrowseTest {
         )
         assertTrue(withoutPokemon.none { it.equals("RPG", true) })
     }
+
+    @Test
+    fun `presentGenreCounts pairs labels with frequencies`() {
+        val counts = LibraryBrowse.presentGenreCounts(library, limit = 10).toMap()
+        assertEquals(2, counts["Action"])
+        assertEquals(2, counts["Adventure"])
+        assertEquals(1, counts["Platform"])
+        assertEquals(1, counts["RPG"])
+        // Names still rank by frequency first
+        assertEquals("Action", LibraryBrowse.presentGenreCounts(library).first().first)
+    }
+
+    @Test
+    fun `continueHistory caps newest first and history line`() {
+        val last = mapOf(
+            "a" to 10L,
+            "b" to 30L,
+            "c" to 20L,
+            "gone" to 99L,
+        )
+        val available = listOf("a", "b", "c")
+        assertEquals(
+            listOf("b", "c", "a"),
+            LibraryBrowse.continueHistory(available, last),
+        )
+        assertEquals(
+            listOf("b"),
+            LibraryBrowse.continueHistory(available, last, limit = 1),
+        )
+        assertEquals(
+            emptyList<String>(),
+            LibraryBrowse.continueHistory(available, last, limit = 0),
+        )
+        val now = 30L + 2 * 60_000L
+        assertEquals(
+            "Zelda · 2m ago",
+            LibraryBrowse.continueHistoryLine("Zelda", 30L, now),
+        )
+        assertEquals(
+            "Zelda",
+            LibraryBrowse.continueHistoryLine("Zelda", null, now),
+        )
+    }
 }

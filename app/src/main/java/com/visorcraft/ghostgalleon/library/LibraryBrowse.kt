@@ -91,14 +91,15 @@ object LibraryBrowse {
     }
 
     /**
-     * Distinct genre tokens present in the listed library, sorted by count
-     * descending then name. [limit] caps chip bar length (default 12).
+     * Distinct genre tokens present in the listed library with per-token
+     * ROM counts, sorted by count descending then name. [limit] caps chip
+     * bar length (default 12). Used for labeled chips like "Action · 4".
      */
-    fun presentGenres(
+    fun presentGenreCounts(
         roms: List<RomEntry>,
         hiddenRomIds: Set<String> = emptySet(),
         limit: Int = 12,
-    ): List<String> {
+    ): List<Pair<String, Int>> {
         val counts = linkedMapOf<String, Int>()
         // canonical display form: first-seen casing per lowercase key
         val display = linkedMapOf<String, String>()
@@ -115,8 +116,18 @@ object LibraryBrowse {
                     .thenBy { it.key },
             )
             .take(limit.coerceAtLeast(0))
-            .map { display[it.key] ?: it.key }
+            .map { (key, n) -> (display[key] ?: key) to n }
     }
+
+    /**
+     * Distinct genre tokens present in the listed library, sorted by count
+     * descending then name. [limit] caps chip bar length (default 12).
+     */
+    fun presentGenres(
+        roms: List<RomEntry>,
+        hiddenRomIds: Set<String> = emptySet(),
+        limit: Int = 12,
+    ): List<String> = presentGenreCounts(roms, hiddenRomIds, limit).map { it.first }
 
     /**
      * True when [rom] matches a search [needle] (already lowercased, non-empty).
@@ -436,6 +447,37 @@ object LibraryBrowse {
             lastLaunchedMs.keys.filter { it in present && it != excludeKey },
             lastLaunchedMs,
         )
+    }
+
+    /**
+     * Long-press Continue history: newest-first candidates capped at [limit]
+     * (default 20). Empty when nothing is continue-able.
+     */
+    fun continueHistory(
+        availableKeys: List<String>,
+        lastLaunchedMs: Map<String, Long>,
+        limit: Int = 20,
+    ): List<String> {
+        if (limit <= 0) return emptyList()
+        return continueCandidates(
+            availableKeys = availableKeys,
+            lastLaunchedMs = lastLaunchedMs,
+            excludeKey = null,
+        ).take(limit)
+    }
+
+    /**
+     * Dialog/chip line for a history row: `"Zelda · 2h ago"` when last-played
+     * is known, otherwise just [label]. Pure; host-tested.
+     */
+    fun continueHistoryLine(
+        label: String,
+        lastMs: Long?,
+        nowMs: Long,
+    ): String {
+        val name = label.trim().ifEmpty { "—" }
+        val ago = SessionMath.formatLastPlayed(lastMs, nowMs) ?: return name
+        return "$name · $ago"
     }
 
     /**

@@ -1105,6 +1105,15 @@ class GridDeck(
                 }
                 else -> {
                     add(SlotMenu.Choice.DETAILS)
+                    if (key != null) {
+                        val stats = com.visorcraft.ghostgalleon.library.PlayStats(
+                            lastLaunchedMs = settings.lastLaunchedMs,
+                            totalPlaytimeMs = settings.playtimeMs,
+                        )
+                        if (com.visorcraft.ghostgalleon.library.SessionMath.hasStats(stats, key)) {
+                            add(SlotMenu.Choice.CLEAR_PLAY_STATS)
+                        }
+                    }
                     add(SlotMenu.Choice.MOVE)
                     if (key != null && DockSlots.containsKey(settings.dockSlots, key)) {
                         add(SlotMenu.Choice.UNPIN_FROM_DOCK)
@@ -1135,6 +1144,7 @@ class GridDeck(
             closeSlotMenu()
             when (choice) {
                 SlotMenu.Choice.DETAILS -> key?.let { k -> showGridDetails(k) }
+                SlotMenu.Choice.CLEAR_PLAY_STATS -> key?.let { k -> clearGridPlayStats(k) }
                 SlotMenu.Choice.APP_INFO -> key?.let { k ->
                     if (!SlotKey.isRom(k) && !SlotKey.isFolder(k)) openAppInfo(k)
                 }
@@ -1223,6 +1233,50 @@ class GridDeck(
         slotMenu = menu
         rootView?.addView(menu.view, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+    }
+
+    private fun gridEntryLabel(key: String): String {
+        SlotKey.romId(key)?.let { id ->
+            roms.firstOrNull { it.id == id }?.name?.let { return it }
+        }
+        return settings.customNames[key]
+            ?: visibleByPkg[key]?.label
+            ?: key.substringAfterLast(':').ifBlank { key }
+    }
+
+    private fun clearGridPlayStats(key: String) {
+        val app = activity.application as GhostGalleonApp
+        val live = app.settings
+        val stats = com.visorcraft.ghostgalleon.library.PlayStats(
+            lastLaunchedMs = live.lastLaunchedMs,
+            totalPlaytimeMs = live.playtimeMs,
+        )
+        if (!com.visorcraft.ghostgalleon.library.SessionMath.hasStats(stats, key)) {
+            Toast.makeText(activity, "No play stats", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val label = gridEntryLabel(key)
+        android.app.AlertDialog.Builder(activity)
+            .setTitle("Clear play stats")
+            .setMessage("Remove last played and playtime for $label?")
+            .setPositiveButton("Clear") { _, _ ->
+                val next = com.visorcraft.ghostgalleon.library.SessionMath.clearStats(
+                    com.visorcraft.ghostgalleon.library.PlayStats(
+                        live.lastLaunchedMs,
+                        live.playtimeMs,
+                    ),
+                    key,
+                )
+                app.updateSettings(
+                    live.copy(
+                        lastLaunchedMs = next.lastLaunchedMs,
+                        playtimeMs = next.totalPlaytimeMs,
+                    ),
+                )
+                Toast.makeText(activity, "Cleared stats", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun showGridDetails(key: String) {

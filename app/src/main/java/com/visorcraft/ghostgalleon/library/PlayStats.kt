@@ -37,6 +37,31 @@ object SessionMath {
         )
     }
 
+    /**
+     * True when [key] has a positive last-launch stamp and/or positive
+     * accumulated playtime (menu can offer "Clear play stats").
+     */
+    fun hasStats(stats: PlayStats, key: String): Boolean {
+        val k = key.trim()
+        if (k.isEmpty()) return false
+        return (stats.lastLaunchedMs[k] ?: 0L) > 0L ||
+            (stats.totalPlaytimeMs[k] ?: 0L) > 0L
+    }
+
+    /**
+     * Drop last-launch + playtime for [key]. Missing key is a no-op.
+     * Does not touch favorites, collections, or dock/grid pins.
+     */
+    fun clearStats(stats: PlayStats, key: String): PlayStats {
+        val k = key.trim()
+        if (k.isEmpty()) return stats
+        if (!hasStats(stats, k)) return stats
+        return stats.copy(
+            lastLaunchedMs = stats.lastLaunchedMs - k,
+            totalPlaytimeMs = stats.totalPlaytimeMs - k,
+        )
+    }
+
     /** Human-readable playtime for hero labels (e.g. "12m", "1h 5m"). */
     fun formatPlaytime(ms: Long): String {
         if (ms <= 0L) return "0m"

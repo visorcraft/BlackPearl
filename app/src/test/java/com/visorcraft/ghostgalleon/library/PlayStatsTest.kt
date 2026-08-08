@@ -1,7 +1,9 @@
 package com.visorcraft.ghostgalleon.library
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PlayStatsTest {
@@ -74,5 +76,24 @@ class PlayStatsTest {
             "Never played · Dock",
             SessionMath.cardMetaLine(null, 0L, now, inDock = true),
         )
+    }
+
+    @Test
+    fun `hasStats and clearStats drop launch and playtime only`() {
+        val stats = PlayStats(
+            lastLaunchedMs = mapOf("a" to 10L, "b" to 20L),
+            totalPlaytimeMs = mapOf("a" to 5_000L),
+        )
+        assertTrue(SessionMath.hasStats(stats, "a"))
+        assertTrue(SessionMath.hasStats(stats, "b"))
+        assertFalse(SessionMath.hasStats(stats, "missing"))
+        assertFalse(SessionMath.hasStats(stats, "  "))
+        val cleared = SessionMath.clearStats(stats, "a")
+        assertFalse(SessionMath.hasStats(cleared, "a"))
+        assertTrue(SessionMath.hasStats(cleared, "b"))
+        assertEquals(mapOf("b" to 20L), cleared.lastLaunchedMs)
+        assertTrue(cleared.totalPlaytimeMs.isEmpty())
+        // No-op when already empty
+        assertEquals(cleared, SessionMath.clearStats(cleared, "a"))
     }
 }
