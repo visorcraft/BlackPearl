@@ -447,6 +447,9 @@ class GridDeck(
         content.addView(bar.build(context, pageDots))
         root.addView(content, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        // Immersive decks hide the system status bar; compact clock/battery
+        // so single-display and interactive panels always show time.
+        root.addView(StatusPill.build(context, compact = true), StatusPill.overlayLayoutParams(context))
         // A rebuild while the dock holds focus (settings save, mode
         // toggle) must repaint the ring immediately — updateFocus
         // otherwise only runs on selection-only updates.

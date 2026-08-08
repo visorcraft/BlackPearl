@@ -12,7 +12,6 @@ import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.LayerDrawable
 import android.media.MediaPlayer
 import android.net.Uri
-import android.os.BatteryManager
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
@@ -21,7 +20,6 @@ import android.view.ViewOutlineProvider
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.TextClock
 import android.widget.TextView
 import android.widget.VideoView
 import androidx.appcompat.app.AppCompatActivity
@@ -914,34 +912,12 @@ object CompanionPanel {
             ).apply { bottomMargin = dp(12) })
         }
 
-        // Status pill, top-right.
+        // Status pill, top-right (shared builder; large type for companion).
         val pillRow = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.END
         }
-        val pill = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            background = TileBackgrounds.pill(context)
-            setPadding(dp(20), dp(8), dp(20), dp(8))
-        }
-        val batteryManager = context.getSystemService(BatteryManager::class.java)
-        val batteryPct = batteryManager
-            ?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
-        if (batteryPct in 0..100) {
-            pill.addView(TextView(context).apply {
-                text = "$batteryPct%"
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
-                setTextColor(Color.WHITE)
-                setPadding(0, 0, dp(12), 0)
-            })
-        }
-        pill.addView(TextClock(context).apply {
-            format12Hour = "h:mm a"
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
-            setTextColor(Color.WHITE)
-        })
-        pillRow.addView(pill)
+        pillRow.addView(StatusPill.build(context, compact = false))
         content.addView(pillRow, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
