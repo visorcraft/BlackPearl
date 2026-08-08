@@ -32,7 +32,7 @@ import com.visorcraft.ghostgalleon.rom.PlatformTile
 import com.visorcraft.ghostgalleon.rom.PlayerResolver
 import com.visorcraft.ghostgalleon.rom.RomEntry
 import com.visorcraft.ghostgalleon.rom.RomLauncher
-import com.visorcraft.ghostgalleon.rom.RomProfiles
+import com.visorcraft.ghostgalleon.rom.isInstalled
 import com.visorcraft.ghostgalleon.settings.Action
 import com.visorcraft.ghostgalleon.settings.DockSlots
 import com.visorcraft.ghostgalleon.settings.GridSlots
@@ -1606,64 +1606,21 @@ class GameDeck(
     ): Set<String>? {
         if (!live.browseChrome.launchableOnly) return null
         val pm = activity.packageManager
-        fun installed(pkg: String): Boolean =
-            try {
-                pm.getPackageInfo(pkg, 0)
-                true
-            } catch (_: Exception) {
-                false
-            }
         val byPlatform = Platforms.ALL.associate { platform ->
             platform.id to platform.players.map { PlayerResolver.packageName(it) }
         }
-        // Collect installed package names we care about (union of all players).
-        val installedPkgs = byPlatform.values.flatten().filter(::installed).toSet()
+        val installedPkgs = byPlatform.values.flatten()
+            .filter { pm.isInstalled(it) }
+            .toSet()
         return LibraryBrowse.launchablePlatformIds(byPlatform, installedPkgs)
     }
 
     private fun markAsPlayed(key: String) {
-        val live = app().settings
-        val now = System.currentTimeMillis()
-        val next = SessionMath.stampLastPlayed(
-            PlayStats(live.lastLaunchedMs, live.playtimeMs),
-            key,
-            now,
-        )
-        app().updateSettings(
-            live.copy(lastLaunchedMs = next.lastLaunchedMs),
-        )
-        Toast.makeText(activity, "Marked as played", Toast.LENGTH_SHORT).show()
+        EntryActions.markAsPlayed(activity, key)
     }
 
     private fun clearPlayStats(key: String) {
-        val live = app().settings
-        val stats = PlayStats(
-            lastLaunchedMs = live.lastLaunchedMs,
-            totalPlaytimeMs = live.playtimeMs,
-        )
-        if (!SessionMath.hasStats(stats, key)) {
-            Toast.makeText(activity, "No play stats", Toast.LENGTH_SHORT).show()
-            return
-        }
-        val label = continueLabel(key, live)
-        android.app.AlertDialog.Builder(activity)
-            .setTitle("Clear play stats")
-            .setMessage("Remove last played and playtime for $label?")
-            .setPositiveButton("Clear") { _, _ ->
-                val next = SessionMath.clearStats(
-                    PlayStats(live.lastLaunchedMs, live.playtimeMs),
-                    key,
-                )
-                app().updateSettings(
-                    live.copy(
-                        lastLaunchedMs = next.lastLaunchedMs,
-                        playtimeMs = next.totalPlaytimeMs,
-                    ),
-                )
-                Toast.makeText(activity, "Cleared stats", Toast.LENGTH_SHORT).show()
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
+        EntryActions.clearPlayStats(activity, key, continueLabel(key, app().settings))
     }
 
     /**
@@ -1900,83 +1857,18 @@ class GameDeck(
     private fun app(): GhostGalleonApp = activity.application as GhostGalleonApp
 
     private fun toggleFavorite(key: String) {
-        val next = CollectionsOps.toggleFavorite(settings.favorites, key)
-        val cols = if (key in next) {
-            CollectionsOps.addToCollection(settings.collections, "Favorites", key)
-        } else {
-            CollectionsOps.removeFromCollection(settings.collections, "Favorites", key)
-        }
-        app().updateSettings(settings.copy(favorites = next, collections = cols))
-        Toast.makeText(
-            activity,
-            if (key in next) "Added to favorites" else "Removed from favorites",
-            Toast.LENGTH_SHORT,
-        ).show()
+        EntryActions.toggleFavorite(activity, key)
     }
 
     private fun openWithMenu(entry: CarouselEntry) {
         val rom = entry.rom ?: return
-        val platform = Platforms.byId(rom.platformId) ?: return
-        val pm = activity.packageManager
-        val installed = PlayerResolver.installedPlayers(platform) { pkg ->
-            try {
-                pm.getPackageInfo(pkg, 0)
-                true
-            } catch (_: Exception) {
-                false
-            }
+        EntryActions.openWith(activity, rom) { playerId ->
+            launch(entry, playerId = playerId)
         }
-        if (installed.isEmpty()) {
-            Toast.makeText(activity, "No players installed", Toast.LENGTH_SHORT).show()
-            return
-        }
-        val labels = installed.map { it.displayName }.toTypedArray()
-        android.app.AlertDialog.Builder(activity)
-            .setTitle("Open with")
-            .setItems(labels) { _, which ->
-                val player = installed[which]
-                // Persist as platform default when chosen.
-                app().updateSettings(
-                    settings.copy(
-                        defaultPlayers = settings.defaultPlayers +
-                            (rom.platformId to player.id),
-                    ),
-                    notify = false,
-                )
-                launch(entry, playerId = player.id)
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
     }
 
-    /** Per-ROM preferred player profile (settings.romProfiles). */
     private fun showPlayerProfileMenu(rom: RomEntry) {
-        val platform = Platforms.byId(rom.platformId) ?: return
-        val players = platform.players
-        if (players.isEmpty()) {
-            Toast.makeText(activity, "No players for platform", Toast.LENGTH_SHORT).show()
-            return
-        }
-        val current = settings.romProfiles[rom.id]
-        val labels = players.map { p ->
-            val mark = if (p.id == current) " ✓" else ""
-            p.displayName + mark
-        } + listOf(
-            if (current == null) "Platform default ✓" else "Platform default",
-        )
-        android.app.AlertDialog.Builder(activity)
-            .setTitle("Player profile")
-            .setItems(labels.toTypedArray()) { _, which ->
-                val nextProfiles = if (which >= players.size) {
-                    RomProfiles.clearProfile(settings.romProfiles, rom.id)
-                } else {
-                    RomProfiles.setProfile(settings.romProfiles, rom.id, players[which].id)
-                }
-                app().updateSettings(settings.copy(romProfiles = nextProfiles))
-                Toast.makeText(activity, "Player saved", Toast.LENGTH_SHORT).show()
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
+        EntryActions.playerProfile(activity, rom)
     }
 
     private fun setArtOverride(rom: RomEntry) {
@@ -2236,30 +2128,11 @@ class GameDeck(
     }
 
     private fun openAppInfo(packageName: String) {
-        val intent = android.content.Intent(
-            android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-        ).apply {
-            data = android.net.Uri.fromParts("package", packageName, null)
-            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        runCatching { activity.startActivity(intent) }
-            .onFailure {
-                Toast.makeText(activity, "Cannot open app info", Toast.LENGTH_SHORT).show()
-            }
+        EntryActions.openAppInfo(activity, packageName)
     }
 
     private fun copyTitleToClipboard(title: String) {
-        val text = title.trim().ifEmpty { return }
-        val clipboard = activity.getSystemService(Context.CLIPBOARD_SERVICE)
-            as? android.content.ClipboardManager
-        if (clipboard == null) {
-            Toast.makeText(activity, "Clipboard unavailable", Toast.LENGTH_SHORT).show()
-            return
-        }
-        clipboard.setPrimaryClip(
-            android.content.ClipData.newPlainText("title", text),
-        )
-        Toast.makeText(activity, "Copied title", Toast.LENGTH_SHORT).show()
+        EntryActions.copyTitle(activity, title)
     }
 
     private fun openEntryMenu(entry: CarouselEntry) {

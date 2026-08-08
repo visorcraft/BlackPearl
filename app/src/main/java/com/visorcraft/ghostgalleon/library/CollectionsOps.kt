@@ -17,6 +17,32 @@ object CollectionsOps {
 
     fun isFavorite(favorites: Set<String>, key: String): Boolean = key in favorites
 
+    data class FavoriteToggle(
+        val favorites: Set<String>,
+        val collections: Map<String, List<String>>,
+        /** True when [key] is a favorite after the toggle. */
+        val added: Boolean,
+    )
+
+    /**
+     * Toggle favorites and keep the "Favorites" collection rail in sync
+     * (Game Mode / Grid / Companion share this).
+     */
+    fun toggleFavoriteWithRail(
+        favorites: Set<String>,
+        collections: Map<String, List<String>>,
+        key: String,
+    ): FavoriteToggle {
+        val next = toggleFavorite(favorites, key)
+        val added = key in next
+        val cols = if (added) {
+            addToCollection(collections, "Favorites", key)
+        } else {
+            removeFromCollection(collections, "Favorites", key)
+        }
+        return FavoriteToggle(next, cols, added)
+    }
+
     fun addToCollection(
         collections: Map<String, List<String>>,
         name: String,

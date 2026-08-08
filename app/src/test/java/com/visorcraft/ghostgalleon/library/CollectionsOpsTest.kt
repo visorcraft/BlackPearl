@@ -16,6 +16,26 @@ class CollectionsOpsTest {
     }
 
     @Test
+    fun `toggleFavoriteWithRail mirrors Favorites collection`() {
+        val add = CollectionsOps.toggleFavoriteWithRail(
+            emptySet(),
+            emptyMap(),
+            "rom:x",
+        )
+        assertTrue(add.added)
+        assertEquals(setOf("rom:x"), add.favorites)
+        assertEquals(listOf("rom:x"), add.collections["Favorites"])
+        val rem = CollectionsOps.toggleFavoriteWithRail(
+            add.favorites,
+            add.collections,
+            "rom:x",
+        )
+        assertFalse(rem.added)
+        assertTrue(rem.favorites.isEmpty())
+        assertFalse(rem.collections.containsKey("Favorites"))
+    }
+
+    @Test
     fun `clearAllFavorites empties set and drops Favorites mirror`() {
         val favs = setOf("a", "b")
         val cols = mapOf(

@@ -42,8 +42,10 @@ import com.visorcraft.ghostgalleon.settings.Settings
 import com.visorcraft.ghostgalleon.settings.SlotKey
 import com.visorcraft.ghostgalleon.state.DeckState
 import com.visorcraft.ghostgalleon.state.UIMode
+import com.visorcraft.ghostgalleon.rom.isInstalled
 import com.visorcraft.ghostgalleon.ui.deck.AppIconLoader
 import com.visorcraft.ghostgalleon.ui.deck.AppPicker
+import com.visorcraft.ghostgalleon.ui.deck.DeckOverlays
 import com.visorcraft.ghostgalleon.ui.deck.CompanionPanel
 import com.visorcraft.ghostgalleon.ui.deck.Deck
 import com.visorcraft.ghostgalleon.ui.deck.GameDeck
@@ -365,10 +367,7 @@ abstract class BaseDeckActivity : AppCompatActivity() {
             },
             onHide = { packageName ->
                 closeAppDrawer()
-                app.updateSettings(
-                    settings.copy(hiddenPackages = settings.hiddenPackages + packageName),
-                )
-                Toast.makeText(this, "App hidden", Toast.LENGTH_SHORT).show()
+                DeckOverlays.hideApp(this, packageName)
             },
             onClose = { closeAppDrawer() },
         )
@@ -618,12 +617,7 @@ abstract class BaseDeckActivity : AppCompatActivity() {
     private var setupOverlay: View? = null
 
     private fun setupSnapshot(): SetupNeeds.Snapshot {
-        val installed = { pkg: String ->
-            runCatching {
-                packageManager.getPackageInfo(pkg, 0)
-                true
-            }.getOrDefault(false)
-        }
+        val installed = { pkg: String -> packageManager.isInstalled(pkg) }
         return SetupCard.snapshot(app, installed)
     }
 

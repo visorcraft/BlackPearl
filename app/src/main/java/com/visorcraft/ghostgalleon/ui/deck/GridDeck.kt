@@ -840,72 +840,16 @@ class GridDeck(
     }
 
     private fun openWithForRom(rom: RomEntry) {
-        val platform = Platforms.byId(rom.platformId) ?: return
-        val pm = activity.packageManager
-        val installed = PlayerResolver.installedPlayers(platform) { pkg ->
-            try {
-                pm.getPackageInfo(pkg, 0)
-                true
-            } catch (_: Exception) {
-                false
-            }
+        EntryActions.openWith(activity, rom) { playerId ->
+            launchSlotKey(
+                activity, state, roms, SlotKey.rom(rom.id),
+                playerId = playerId,
+            )
         }
-        if (installed.isEmpty()) {
-            Toast.makeText(activity, "No players installed", Toast.LENGTH_SHORT).show()
-            return
-        }
-        val labels = installed.map { it.displayName }.toTypedArray()
-        android.app.AlertDialog.Builder(activity)
-            .setTitle("Open with")
-            .setItems(labels) { _, which ->
-                val player = installed[which]
-                val app = activity.application as GhostGalleonApp
-                app.updateSettings(
-                    app.settings.copy(
-                        defaultPlayers = app.settings.defaultPlayers +
-                            (rom.platformId to player.id),
-                    ),
-                    notify = false,
-                )
-                launchSlotKey(
-                    activity, state, roms, SlotKey.rom(rom.id),
-                    playerId = player.id,
-                )
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
     }
 
-    /** Per-ROM preferred player profile (persists in settings.romProfiles). */
     private fun showPlayerProfileMenu(rom: RomEntry) {
-        val platform = Platforms.byId(rom.platformId) ?: return
-        val players = platform.players
-        if (players.isEmpty()) {
-            Toast.makeText(activity, "No players for platform", Toast.LENGTH_SHORT).show()
-            return
-        }
-        val current = settings.romProfiles[rom.id]
-        val labels = players.map { p ->
-            val mark = if (p.id == current) " ✓" else ""
-            p.displayName + mark
-        } + listOf(
-            if (current == null) "Platform default ✓" else "Platform default",
-        )
-        android.app.AlertDialog.Builder(activity)
-            .setTitle("Player profile")
-            .setItems(labels.toTypedArray()) { _, which ->
-                val app = activity.application as GhostGalleonApp
-                val nextProfiles = if (which >= players.size) {
-                    RomProfiles.clearProfile(app.settings.romProfiles, rom.id)
-                } else {
-                    RomProfiles.setProfile(
-                        app.settings.romProfiles, rom.id, players[which].id)
-                }
-                app.updateSettings(app.settings.copy(romProfiles = nextProfiles))
-                Toast.makeText(activity, "Player saved", Toast.LENGTH_SHORT).show()
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
+        EntryActions.playerProfile(activity, rom)
     }
 
     private fun createFolderAt(slot: Int) {
@@ -1077,10 +1021,7 @@ class GridDeck(
                 SlotMenu.Choice.UNPIN_FROM_DOCK ->
                     settings.gridSlots.getOrNull(slot)?.let(::unpinFromDock)
                 SlotMenu.Choice.FAVORITE, SlotMenu.Choice.UNFAVORITE -> key?.let { k ->
-                    val app = activity.application as GhostGalleonApp
-                    val next = com.visorcraft.ghostgalleon.library.CollectionsOps
-                        .toggleFavorite(app.settings.favorites, k)
-                    app.updateSettings(app.settings.copy(favorites = next))
+                    EntryActions.toggleFavorite(activity, k)
                 }
                 SlotMenu.Choice.ADD_TO_COLLECTION -> key?.let { k ->
                     promptAddToCollection(k)
@@ -1168,68 +1109,15 @@ class GridDeck(
     }
 
     private fun copyGridTitleToClipboard(title: String) {
-        val text = title.trim().ifEmpty { return }
-        val clipboard = activity.getSystemService(Context.CLIPBOARD_SERVICE)
-            as? android.content.ClipboardManager
-        if (clipboard == null) {
-            Toast.makeText(activity, "Clipboard unavailable", Toast.LENGTH_SHORT).show()
-            return
-        }
-        clipboard.setPrimaryClip(
-            android.content.ClipData.newPlainText("title", text),
-        )
-        Toast.makeText(activity, "Copied title", Toast.LENGTH_SHORT).show()
+        EntryActions.copyTitle(activity, title)
     }
 
     private fun markGridAsPlayed(key: String) {
-        val app = activity.application as GhostGalleonApp
-        val live = app.settings
-        val now = System.currentTimeMillis()
-        val next = com.visorcraft.ghostgalleon.library.SessionMath.stampLastPlayed(
-            com.visorcraft.ghostgalleon.library.PlayStats(
-                live.lastLaunchedMs,
-                live.playtimeMs,
-            ),
-            key,
-            now,
-        )
-        app.updateSettings(live.copy(lastLaunchedMs = next.lastLaunchedMs))
-        Toast.makeText(activity, "Marked as played", Toast.LENGTH_SHORT).show()
+        EntryActions.markAsPlayed(activity, key)
     }
 
     private fun clearGridPlayStats(key: String) {
-        val app = activity.application as GhostGalleonApp
-        val live = app.settings
-        val stats = com.visorcraft.ghostgalleon.library.PlayStats(
-            lastLaunchedMs = live.lastLaunchedMs,
-            totalPlaytimeMs = live.playtimeMs,
-        )
-        if (!com.visorcraft.ghostgalleon.library.SessionMath.hasStats(stats, key)) {
-            Toast.makeText(activity, "No play stats", Toast.LENGTH_SHORT).show()
-            return
-        }
-        val label = gridEntryLabel(key)
-        android.app.AlertDialog.Builder(activity)
-            .setTitle("Clear play stats")
-            .setMessage("Remove last played and playtime for $label?")
-            .setPositiveButton("Clear") { _, _ ->
-                val next = com.visorcraft.ghostgalleon.library.SessionMath.clearStats(
-                    com.visorcraft.ghostgalleon.library.PlayStats(
-                        live.lastLaunchedMs,
-                        live.playtimeMs,
-                    ),
-                    key,
-                )
-                app.updateSettings(
-                    live.copy(
-                        lastLaunchedMs = next.lastLaunchedMs,
-                        playtimeMs = next.totalPlaytimeMs,
-                    ),
-                )
-                Toast.makeText(activity, "Cleared stats", Toast.LENGTH_SHORT).show()
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
+        EntryActions.clearPlayStats(activity, key, gridEntryLabel(key))
     }
 
     private fun gridRelatedOptions(key: String): List<com.visorcraft.ghostgalleon.library.GameDetails.RelatedOption> {
@@ -1329,16 +1217,7 @@ class GridDeck(
     }
 
     private fun openAppInfo(packageName: String) {
-        val intent = android.content.Intent(
-            android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-        ).apply {
-            data = android.net.Uri.fromParts("package", packageName, null)
-            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        runCatching { activity.startActivity(intent) }
-            .onFailure {
-                Toast.makeText(activity, "Cannot open app info", Toast.LENGTH_SHORT).show()
-            }
+        EntryActions.openAppInfo(activity, packageName)
     }
 
     // Rename dialog: dark modal with an EditText prefilled with the current

@@ -40,6 +40,7 @@ import com.visorcraft.ghostgalleon.rom.HeroDetail
 import com.visorcraft.ghostgalleon.rom.PlatformLook
 import com.visorcraft.ghostgalleon.rom.PlatformTile
 import com.visorcraft.ghostgalleon.rom.Platforms
+import com.visorcraft.ghostgalleon.rom.isInstalled
 import com.visorcraft.ghostgalleon.rom.RomEntry
 import com.visorcraft.ghostgalleon.rom.RomProfiles
 import com.visorcraft.ghostgalleon.rom.SelectionStrip
@@ -186,12 +187,7 @@ object CompanionPanel {
             )
             name.text = rom.name
             val platform = Platforms.byId(rom.platformId)
-            val installed = { pkg: String ->
-                runCatching {
-                    context.packageManager.getPackageInfo(pkg, 0)
-                    true
-                }.getOrDefault(false)
-            }
+            val installed = { pkg: String -> context.packageManager.isInstalled(pkg) }
             val preferred = RomProfiles.preferredPlayerId(
                 rom.id,
                 settings.romProfiles,
@@ -675,12 +671,7 @@ object CompanionPanel {
     ): SelectionStrip.Model {
         val rom = selectedRom(state.selectedKey, roms)
         if (rom != null) {
-            val pmInstalled = { pkg: String ->
-                runCatching {
-                    app.packageManager.getPackageInfo(pkg, 0)
-                    true
-                }.getOrDefault(false)
-            }
+            val pmInstalled = { pkg: String -> app.packageManager.isInstalled(pkg) }
             val preferred = RomProfiles.preferredPlayerId(
                 rom.id,
                 settings.romProfiles,
@@ -839,9 +830,7 @@ object CompanionPanel {
             SlotKey.platformIdOf(k)
         }
         val pinPkg = settings.companionPinnedPackage
-        val pinInstalled = pinPkg != null && runCatching {
-            context.packageManager.getPackageInfo(pinPkg, 0); true
-        }.getOrDefault(false)
+        val pinInstalled = pinPkg != null && context.packageManager.isInstalled(pinPkg)
         val effectiveRole = CompanionRoleResolve.effective(
             CompanionRoleResolve.Context(
                 preferred = preferredRole,
@@ -1122,12 +1111,7 @@ object CompanionPanel {
                 ViewGroup.LayoutParams.WRAP_CONTENT,
             ))
             val platform = Platforms.byId(selectedRom.platformId)
-            val installed = { pkg: String ->
-                runCatching {
-                    context.packageManager.getPackageInfo(pkg, 0)
-                    true
-                }.getOrDefault(false)
-            }
+            val installed = { pkg: String -> context.packageManager.isInstalled(pkg) }
             val preferredPlayer = RomProfiles.preferredPlayerId(
                 selectedRom.id,
                 settings.romProfiles,
@@ -1294,8 +1278,7 @@ object CompanionPanel {
                 addChip(
                     if (romKey in settings.favorites) "Unfavorite" else "Favorite",
                 ) {
-                    val next = CollectionsOps.toggleFavorite(settings.favorites, romKey)
-                    app.updateSettings(settings.copy(favorites = next))
+                    EntryActions.toggleFavorite(activity, romKey)
                 }
                 addChip("Pin") {
                     val filled = CollectionsOps.bulkFillSlots(
