@@ -20,6 +20,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.visorcraft.ghostgalleon.GhostGalleonApp
 import com.visorcraft.ghostgalleon.art.ArtTile
 import com.visorcraft.ghostgalleon.library.AppLibrary
+import com.visorcraft.ghostgalleon.library.BrowseFeedback
 import com.visorcraft.ghostgalleon.library.CollectionsOps
 import com.visorcraft.ghostgalleon.library.GameDetails
 import com.visorcraft.ghostgalleon.library.HiddenRoms
@@ -623,21 +624,23 @@ class GameDeck(
             if (firstKey != null) state.select(firstKey, force = true)
         })
         row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
+        val chrome = settings.browseChrome
+        fun addGap() {
+            row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
+        }
+        fun setBrowse(next: LibraryBrowse.BrowseQuery) {
+            val qNext = chrome.sanitize(next)
+            setQuery(qNext)
+            toastIfEmptyBrowse(qNext)
+        }
         row.addView(chip("Recent", q.mode == LibraryBrowse.Mode.RECENT) {
-            setQuery(q.copy(
+            setBrowse(q.copy(
                 mode = LibraryBrowse.Mode.RECENT,
                 platformId = null,
                 genre = null,
                 collectionName = null,
             ))
         })
-        val chrome = settings.browseChrome
-        fun addGap() {
-            row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
-        }
-        fun setBrowse(next: LibraryBrowse.BrowseQuery) {
-            setQuery(chrome.sanitize(next))
-        }
         if (chrome.weekRail) {
             addGap()
             row.addView(chip("Week", q.mode == LibraryBrowse.Mode.PLAYED_THIS_WEEK) {
@@ -1078,15 +1081,134 @@ class GameDeck(
             .setTitle("Search library")
             .setView(input)
             .setPositiveButton("Search") { _, _ ->
-                state.setLibraryBrowse(
-                    state.libraryBrowse.copy(text = input.text?.toString().orEmpty()),
-                )
+                val text = input.text?.toString().orEmpty()
+                val next = state.libraryBrowse.copy(text = text)
+                state.setLibraryBrowse(next)
+                val n = estimateCarouselSize(next)
+                Toast.makeText(
+                    activity,
+                    BrowseFeedback.searchApplied(n, text),
+                    Toast.LENGTH_SHORT,
+                ).show()
             }
             .setNeutralButton("Clear") { _, _ ->
                 state.setLibraryBrowse(state.libraryBrowse.copy(text = ""))
+                Toast.makeText(
+                    activity,
+                    BrowseFeedback.searchApplied(0, ""),
+                    Toast.LENGTH_SHORT,
+                ).show()
             }
             .setNegativeButton("Cancel", null)
             .show()
+    }
+
+    /** Toast when a rail/filter would show zero cards. */
+    private fun toastIfEmptyBrowse(q: LibraryBrowse.BrowseQuery) {
+        val hint = BrowseFeedback.emptyHint(q) ?: return
+        if (estimateCarouselSize(q) == 0) {
+            Toast.makeText(activity, hint, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /**
+     * Lightweight size estimate for feedback toasts (apps + ROMs, same gates
+     * as the carousel for search/platform/genre).
+     */
+    private fun estimateCarouselSize(q: LibraryBrowse.BrowseQuery): Int {
+        val live = app().settings
+        val now = System.currentTimeMillis()
+        val browsed = LibraryBrowse.browseRoms(
+            roms, q,
+            lastLaunchedMs = live.lastLaunchedMs,
+            favorites = live.favorites,
+            collections = live.collections,
+            playtimeMs = live.playtimeMs,
+            hiddenRomIds = live.hiddenRomIds,
+            nowMs = now,
+        )
+        val appsOk = q.platformId == null && q.genre.isNullOrBlank()
+        if (q.mode == LibraryBrowse.Mode.RECENTLY_INSTALLED) {
+            val apps = library.visible(live)
+            if (q.text.isBlank()) return apps.size
+            val needle = q.text.trim()
+            return apps.count {
+                it.label.contains(needle, ignoreCase = true) ||
+                    it.packageName.contains(needle, ignoreCase = true)
+            }
+        }
+        if (q.mode == LibraryBrowse.Mode.COLLECTION) {
+            val name = q.collectionName.orEmpty()
+            val keys = live.collections[name].orEmpty()
+            if (keys.isEmpty()) return 0
+            // Member keys that still resolve (apps or visible ROMs).
+            val hidden = live.hiddenRomIds
+            val byRom = roms.associateBy { it.id }
+            val curated = library.curated(live).map { it.packageName }.toSet()
+            return keys.count { k ->
+                SlotKey.romId(k)?.let { id -> id !in hidden && id in byRom } == true ||
+                    (!SlotKey.isRom(k) && k in curated)
+            }
+        }
+        var n = browsed.size
+        if (!appsOk) return n
+        when (q.mode) {
+            LibraryBrowse.Mode.ALL,
+            LibraryBrowse.Mode.GAMES,
+            LibraryBrowse.Mode.ALPHA,
+            -> {
+                val apps = when (q.mode) {
+                    LibraryBrowse.Mode.GAMES ->
+                        LibraryBrowse.filterGameApps(library.curated(live)) { it.isGame }
+                    LibraryBrowse.Mode.UNPLAYED -> emptyList()
+                    else -> library.curated(live)
+                }
+                n += if (q.text.isBlank()) {
+                    apps.size
+                } else {
+                    val needle = q.text.trim()
+                    apps.count {
+                        it.label.contains(needle, ignoreCase = true) ||
+                            it.packageName.contains(needle, ignoreCase = true)
+                    }
+                }
+            }
+            LibraryBrowse.Mode.RECENT,
+            LibraryBrowse.Mode.PLAYED_THIS_WEEK,
+            LibraryBrowse.Mode.PLAYED_THIS_MONTH,
+            LibraryBrowse.Mode.MOST_PLAYED,
+            LibraryBrowse.Mode.FAVORITES,
+            -> {
+                // Apps interleave; count positive last-launch / playtime / fav keys.
+                val byPkg = library.curated(live).associateBy { it.packageName }
+                n += when (q.mode) {
+                    LibraryBrowse.Mode.FAVORITES ->
+                        live.favorites.count { !SlotKey.isRom(it) && it in byPkg }
+                    LibraryBrowse.Mode.MOST_PLAYED ->
+                        live.playtimeMs.count { (k, v) ->
+                            v > 0L && !SlotKey.isRom(k) && k in byPkg
+                        }
+                    LibraryBrowse.Mode.PLAYED_THIS_WEEK ->
+                        LibraryBrowse.filterPlayedInWindow(
+                            live.lastLaunchedMs.keys.filter { !SlotKey.isRom(it) && it in byPkg },
+                            live.lastLaunchedMs,
+                            nowMs = now,
+                            windowMs = LibraryBrowse.WEEK_WINDOW_MS,
+                        ).size
+                    LibraryBrowse.Mode.PLAYED_THIS_MONTH ->
+                        LibraryBrowse.filterPlayedInWindow(
+                            live.lastLaunchedMs.keys.filter { !SlotKey.isRom(it) && it in byPkg },
+                            live.lastLaunchedMs,
+                            nowMs = now,
+                            windowMs = LibraryBrowse.MONTH_WINDOW_MS,
+                        ).size
+                    else -> // RECENT
+                        live.lastLaunchedMs.keys.count { !SlotKey.isRom(it) && it in byPkg }
+                }
+            }
+            else -> {}
+        }
+        return n
     }
 
     // Apps launch through their package intent, ROMs through the platform
