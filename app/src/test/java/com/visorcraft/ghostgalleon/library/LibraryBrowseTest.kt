@@ -49,6 +49,27 @@ class LibraryBrowseTest {
     }
 
     @Test
+    fun `labeledChip appends positive counts only`() {
+        assertEquals("Fav", LibraryBrowse.labeledChip("Fav", 0))
+        assertEquals("Fav · 3", LibraryBrowse.labeledChip("Fav", 3))
+        assertEquals("SNES · 12", LibraryBrowse.labeledChip("SNES", 12))
+        assertEquals("", LibraryBrowse.labeledChip("  ", 0))
+    }
+
+    @Test
+    fun `presentPlatformCounts ranks listed roms and hides invisible`() {
+        val counts = LibraryBrowse.presentPlatformCounts(library).toMap()
+        assertEquals(2, counts["snes"])
+        assertEquals(1, counts["switch"])
+        assertTrue("nds" !in counts) // Hidden not listed
+        val withoutHidden = LibraryBrowse.presentPlatformCounts(
+            library,
+            hiddenRomIds = setOf("3ds:Pokemon.rom"),
+        ).toMap()
+        assertTrue("3ds" !in withoutHidden)
+    }
+
+    @Test
     fun `searchRoms matches name case-insensitively`() {
         val hits = LibraryBrowse.searchRoms(library, "zel")
         assertEquals(listOf("Zelda"), hits.map { it.name })

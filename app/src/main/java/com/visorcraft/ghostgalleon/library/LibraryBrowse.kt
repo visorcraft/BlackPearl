@@ -335,6 +335,33 @@ object LibraryBrowse {
     ): List<String> =
         HiddenRoms.listed(roms, hiddenRomIds).map { it.platformId }.distinct().sorted()
 
+    /**
+     * Platforms with listed ROM counts (sorted by platform id). Empty library
+     * → empty list. Used for chip labels like "SNES · 12".
+     */
+    fun presentPlatformCounts(
+        roms: List<RomEntry>,
+        hiddenRomIds: Set<String> = emptySet(),
+    ): List<Pair<String, Int>> {
+        val counts = linkedMapOf<String, Int>()
+        HiddenRoms.listed(roms, hiddenRomIds).forEach { rom ->
+            counts[rom.platformId] = (counts[rom.platformId] ?: 0) + 1
+        }
+        return counts.entries
+            .sortedBy { it.key }
+            .map { it.key to it.value }
+    }
+
+    /**
+     * Chip label with optional positive count suffix: "Fav · 3", "SNES · 12".
+     * Non-positive [count] → [base] unchanged.
+     */
+    fun labeledChip(base: String, count: Int): String {
+        val label = base.trim()
+        if (label.isEmpty()) return if (count > 0) "· $count" else ""
+        return if (count > 0) "$label · $count" else label
+    }
+
     /** Named collection titles suitable for Game Mode rails (stable sort). */
     fun presentCollectionRails(collections: Map<String, List<String>>): List<String> =
         collections.keys.filter { it.isNotBlank() }.sortedBy { it.lowercase() }

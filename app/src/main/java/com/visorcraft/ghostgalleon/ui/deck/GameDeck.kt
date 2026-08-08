@@ -735,14 +735,19 @@ class GameDeck(
             })
         }
         addGap()
-        row.addView(chip("Fav", q.mode == LibraryBrowse.Mode.FAVORITES) {
-            setBrowse(q.copy(
-                mode = LibraryBrowse.Mode.FAVORITES,
-                platformId = null,
-                genre = null,
-                collectionName = null,
-            ))
-        })
+        row.addView(
+            chip(
+                LibraryBrowse.labeledChip("Fav", settings.favorites.size),
+                q.mode == LibraryBrowse.Mode.FAVORITES,
+            ) {
+                setBrowse(q.copy(
+                    mode = LibraryBrowse.Mode.FAVORITES,
+                    platformId = null,
+                    genre = null,
+                    collectionName = null,
+                ))
+            },
+        )
         if (chrome.alphaRail) {
             addGap()
             row.addView(chip("A–Z", q.mode == LibraryBrowse.Mode.ALPHA) {
@@ -771,9 +776,10 @@ class GameDeck(
                 addGap()
                 val selected = q.mode == LibraryBrowse.Mode.COLLECTION &&
                     q.collectionName == name
+                val members = settings.collections[name]?.size ?: 0
                 row.addView(
                     chip(
-                        name,
+                        LibraryBrowse.labeledChip(name, members),
                         selected,
                         onLongClick = { showCollectionManageDialog(name) },
                     ) {
@@ -788,10 +794,10 @@ class GameDeck(
             }
         }
         if (chrome.platformChips) {
-            LibraryBrowse.presentPlatforms(roms, settings.hiddenRomIds).forEach { pid ->
+            LibraryBrowse.presentPlatformCounts(roms, settings.hiddenRomIds).forEach { (pid, count) ->
                 addGap()
-                val label = Platforms.byId(pid)?.shortName ?: pid
-                row.addView(chip(label, q.platformId == pid) {
+                val short = Platforms.byId(pid)?.shortName ?: pid
+                row.addView(chip(LibraryBrowse.labeledChip(short, count), q.platformId == pid) {
                     setBrowse(
                         q.copy(
                             mode = LibraryBrowse.Mode.ALL,
