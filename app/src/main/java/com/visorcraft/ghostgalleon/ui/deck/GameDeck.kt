@@ -633,35 +633,66 @@ class GameDeck(
             setQuery(qNext)
             toastIfEmptyBrowse(qNext)
         }
-        row.addView(chip("Recent", q.mode == LibraryBrowse.Mode.RECENT) {
-            setBrowse(q.copy(
-                mode = LibraryBrowse.Mode.RECENT,
-                platformId = null,
-                genre = null,
-                collectionName = null,
-            ))
-        })
-        if (chrome.weekRail) {
-            addGap()
-            row.addView(chip("Week", q.mode == LibraryBrowse.Mode.PLAYED_THIS_WEEK) {
+        row.addView(
+            chip(
+                LibraryBrowse.labeledChip(
+                    "Recent",
+                    LibraryBrowse.recentCount(settings.lastLaunchedMs),
+                ),
+                q.mode == LibraryBrowse.Mode.RECENT,
+            ) {
                 setBrowse(q.copy(
-                    mode = LibraryBrowse.Mode.PLAYED_THIS_WEEK,
+                    mode = LibraryBrowse.Mode.RECENT,
                     platformId = null,
                     genre = null,
                     collectionName = null,
                 ))
-            })
+            },
+        )
+        val nowMs = System.currentTimeMillis()
+        if (chrome.weekRail) {
+            addGap()
+            row.addView(
+                chip(
+                    LibraryBrowse.labeledChip(
+                        "Week",
+                        LibraryBrowse.playedInWindowCount(
+                            settings.lastLaunchedMs, nowMs,
+                            LibraryBrowse.WEEK_WINDOW_MS,
+                        ),
+                    ),
+                    q.mode == LibraryBrowse.Mode.PLAYED_THIS_WEEK,
+                ) {
+                    setBrowse(q.copy(
+                        mode = LibraryBrowse.Mode.PLAYED_THIS_WEEK,
+                        platformId = null,
+                        genre = null,
+                        collectionName = null,
+                    ))
+                },
+            )
         }
         if (chrome.monthRail) {
             addGap()
-            row.addView(chip("Month", q.mode == LibraryBrowse.Mode.PLAYED_THIS_MONTH) {
-                setBrowse(q.copy(
-                    mode = LibraryBrowse.Mode.PLAYED_THIS_MONTH,
-                    platformId = null,
-                    genre = null,
-                    collectionName = null,
-                ))
-            })
+            row.addView(
+                chip(
+                    LibraryBrowse.labeledChip(
+                        "Month",
+                        LibraryBrowse.playedInWindowCount(
+                            settings.lastLaunchedMs, nowMs,
+                            LibraryBrowse.MONTH_WINDOW_MS,
+                        ),
+                    ),
+                    q.mode == LibraryBrowse.Mode.PLAYED_THIS_MONTH,
+                ) {
+                    setBrowse(q.copy(
+                        mode = LibraryBrowse.Mode.PLAYED_THIS_MONTH,
+                        platformId = null,
+                        genre = null,
+                        collectionName = null,
+                    ))
+                },
+            )
         }
         if (chrome.installedRail) {
             addGap()
@@ -687,14 +718,22 @@ class GameDeck(
         }
         if (chrome.topRail) {
             addGap()
-            row.addView(chip("Top", q.mode == LibraryBrowse.Mode.MOST_PLAYED) {
-                setBrowse(q.copy(
-                    mode = LibraryBrowse.Mode.MOST_PLAYED,
-                    platformId = null,
-                    genre = null,
-                    collectionName = null,
-                ))
-            })
+            row.addView(
+                chip(
+                    LibraryBrowse.labeledChip(
+                        "Top",
+                        LibraryBrowse.topPlayedCount(settings.playtimeMs),
+                    ),
+                    q.mode == LibraryBrowse.Mode.MOST_PLAYED,
+                ) {
+                    setBrowse(q.copy(
+                        mode = LibraryBrowse.Mode.MOST_PLAYED,
+                        platformId = null,
+                        genre = null,
+                        collectionName = null,
+                    ))
+                },
+            )
         }
         addGap()
         row.addView(chip("Continue", false) {

@@ -65,6 +65,7 @@ data class BrowseChrome(
     fun quickPanelRailShortcuts(): List<Pair<String, LibraryBrowse.Mode>> {
         if (!quickPanelBrowse) return emptyList()
         return buildList {
+            add("Recent" to LibraryBrowse.Mode.RECENT)
             add("Fav" to LibraryBrowse.Mode.FAVORITES)
             if (gamesRail) add("Games" to LibraryBrowse.Mode.GAMES)
             if (installedRail) add("Installed" to LibraryBrowse.Mode.RECENTLY_INSTALLED)

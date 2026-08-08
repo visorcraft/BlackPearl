@@ -57,6 +57,38 @@ class LibraryBrowseTest {
     }
 
     @Test
+    fun `recentCount and window and top counts`() {
+        val last = mapOf(
+            "a" to 100L,
+            "b" to 0L,
+            "c" to 50L,
+        )
+        assertEquals(2, LibraryBrowse.recentCount(last))
+        assertEquals(0, LibraryBrowse.recentCount(emptyMap()))
+        // now must exceed MONTH_WINDOW so older stamps stay positive.
+        val now = 2_000_000_000_000L
+        val week = LibraryBrowse.WEEK_WINDOW_MS
+        val stamps = mapOf(
+            "fresh" to now - 1_000L,
+            "old" to now - week - 5_000L,
+        )
+        assertEquals(
+            1,
+            LibraryBrowse.playedInWindowCount(stamps, nowMs = now, windowMs = week),
+        )
+        assertEquals(
+            2,
+            LibraryBrowse.playedInWindowCount(
+                stamps, nowMs = now, windowMs = LibraryBrowse.MONTH_WINDOW_MS,
+            ),
+        )
+        assertEquals(
+            2,
+            LibraryBrowse.topPlayedCount(mapOf("x" to 10L, "y" to 0L, "z" to 5L)),
+        )
+    }
+
+    @Test
     fun `presentPlatformCounts ranks listed roms and hides invisible`() {
         val counts = LibraryBrowse.presentPlatformCounts(library).toMap()
         assertEquals(2, counts["snes"])

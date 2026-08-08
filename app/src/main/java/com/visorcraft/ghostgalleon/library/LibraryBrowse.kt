@@ -362,6 +362,32 @@ object LibraryBrowse {
         return if (count > 0) "$label · $count" else label
     }
 
+    /** Keys with a positive last-launch stamp (Recent rail size proxy). */
+    fun recentCount(lastLaunchedMs: Map<String, Long>): Int =
+        lastLaunchedMs.count { it.value > 0L }
+
+    /**
+     * Keys launched inside a rolling window ending at [nowMs]
+     * (Week/Month chip size proxy). Non-positive [nowMs] → 0.
+     */
+    fun playedInWindowCount(
+        lastLaunchedMs: Map<String, Long>,
+        nowMs: Long,
+        windowMs: Long = WEEK_WINDOW_MS,
+    ): Int {
+        if (nowMs <= 0L || lastLaunchedMs.isEmpty()) return 0
+        return filterPlayedInWindow(
+            lastLaunchedMs.keys.toList(),
+            lastLaunchedMs,
+            nowMs = nowMs,
+            windowMs = windowMs,
+        ).size
+    }
+
+    /** Keys with positive playtime (Top rail size proxy). */
+    fun topPlayedCount(playtimeMs: Map<String, Long>): Int =
+        playtimeMs.count { it.value > 0L }
+
     /** Named collection titles suitable for Game Mode rails (stable sort). */
     fun presentCollectionRails(collections: Map<String, List<String>>): List<String> =
         collections.keys.filter { it.isNotBlank() }.sortedBy { it.lowercase() }

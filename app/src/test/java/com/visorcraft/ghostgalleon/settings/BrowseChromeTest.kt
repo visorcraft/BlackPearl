@@ -104,13 +104,14 @@ class BrowseChromeTest {
         )
         assertEquals(
             listOf(
+                "Recent" to LibraryBrowse.Mode.RECENT,
                 "Fav" to LibraryBrowse.Mode.FAVORITES,
                 "Week" to LibraryBrowse.Mode.PLAYED_THIS_WEEK,
             ),
             onlyWeek.quickPanelRailShortcuts(),
         )
         val full = BrowseChrome.FULL.quickPanelRailShortcuts().map { it.first }
-        assertTrue(full.containsAll(listOf("Fav", "Games", "Installed", "Week", "Month", "A–Z", "New")))
+        assertTrue(full.containsAll(listOf("Recent", "Fav", "Games", "Installed", "Week", "Month", "A–Z", "New")))
         assertFalse(full.contains("Top")) // Top stays a special cell
         assertFalse(full.contains("Random"))
     }
