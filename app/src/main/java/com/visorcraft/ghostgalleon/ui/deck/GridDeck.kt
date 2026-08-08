@@ -426,6 +426,15 @@ class GridDeck(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         content.addView(gridFrame, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        // Dual: Swap/Settings only on the larger physical panel (may be this
+        // deck when primary is the big screen). Single: always show.
+        // X/START key mappings still work on both panels.
+        if (shouldHostSystemChromeIcons(activity)) {
+            content.addView(
+                buildSystemChromeRow(context, activity, state),
+                systemChromeRowLayoutParams(),
+            )
+        }
         // Bottom stack: HintBar above the dock bar, so the dock sits at the
         // very bottom edge. The hint text follows focus —
         // grid actions normally, dock actions while the dock is focused.
@@ -437,8 +446,7 @@ class GridDeck(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
         // Apps-only dock bar (90% width, centered): fixed slots, "+" for
-        // empties, page dots at the end. Swap/settings live on the
-        // companion panel (and the X/START key mappings).
+        // empties, page dots at the end.
         val bar = DockBar(
             activity, settings, library, iconLoader, roms,
             slots = { dockMoveWorking ?: settings.dockSlots },
@@ -1107,6 +1115,13 @@ class GridDeck(
                     add(SlotMenu.Choice.DETAILS)
                     add(SlotMenu.Choice.COPY_TITLE)
                     if (key != null) {
+                        if (com.visorcraft.ghostgalleon.library.LibraryBrowse.isUnplayed(
+                                key,
+                                settings.lastLaunchedMs,
+                            )
+                        ) {
+                            add(SlotMenu.Choice.MARK_PLAYED)
+                        }
                         val stats = com.visorcraft.ghostgalleon.library.PlayStats(
                             lastLaunchedMs = settings.lastLaunchedMs,
                             totalPlaytimeMs = settings.playtimeMs,
@@ -1148,6 +1163,7 @@ class GridDeck(
                 SlotMenu.Choice.COPY_TITLE -> key?.let { k ->
                     copyGridTitleToClipboard(gridEntryLabel(k))
                 }
+                SlotMenu.Choice.MARK_PLAYED -> key?.let { k -> markGridAsPlayed(k) }
                 SlotMenu.Choice.CLEAR_PLAY_STATS -> key?.let { k -> clearGridPlayStats(k) }
                 SlotMenu.Choice.APP_INFO -> key?.let { k ->
                     if (!SlotKey.isRom(k) && !SlotKey.isFolder(k)) openAppInfo(k)
@@ -1260,6 +1276,22 @@ class GridDeck(
             android.content.ClipData.newPlainText("title", text),
         )
         Toast.makeText(activity, "Copied title", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun markGridAsPlayed(key: String) {
+        val app = activity.application as GhostGalleonApp
+        val live = app.settings
+        val now = System.currentTimeMillis()
+        val next = com.visorcraft.ghostgalleon.library.SessionMath.stampLastPlayed(
+            com.visorcraft.ghostgalleon.library.PlayStats(
+                live.lastLaunchedMs,
+                live.playtimeMs,
+            ),
+            key,
+            now,
+        )
+        app.updateSettings(live.copy(lastLaunchedMs = next.lastLaunchedMs))
+        Toast.makeText(activity, "Marked as played", Toast.LENGTH_SHORT).show()
     }
 
     private fun clearGridPlayStats(key: String) {

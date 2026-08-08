@@ -1,6 +1,7 @@
 package com.visorcraft.ghostgalleon.display
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -45,6 +46,45 @@ class DisplayTopologyTest {
         // Activity placement stays on the non-default panel even when hero
         // *content* lives on default (companionDisplayId=0).
         assertEquals(1, t.secondaryHomeDisplayId)
+        // 2160×1080 > 1240×1080 → chrome icons host on default (top).
+        assertEquals(0, t.largerDisplayId)
+    }
+
+    @Test
+    fun `largerDisplayId picks pixel area winner`() {
+        val displays = listOf(
+            DisplayInfo(0, 2160, 1080, 320, isDefault = true),
+            DisplayInfo(1, 1240, 1080, 320, isDefault = false),
+        )
+        assertEquals(0, DisplayTopology.largerDisplayId(displays))
+        assertEquals(
+            5,
+            DisplayTopology.largerDisplayId(
+                listOf(
+                    DisplayInfo(1, 800, 600, 320, isDefault = true),
+                    DisplayInfo(5, 1920, 1080, 320, isDefault = false),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun `system chrome icons only on larger panel in dual`() {
+        assertTrue(
+            DisplayTopology.shouldShowSystemChromeIcons(
+                SurfaceMode.SINGLE, thisDisplayId = 1, largerDisplayId = 0,
+            ),
+        )
+        assertTrue(
+            DisplayTopology.shouldShowSystemChromeIcons(
+                SurfaceMode.DUAL, thisDisplayId = 0, largerDisplayId = 0,
+            ),
+        )
+        assertFalse(
+            DisplayTopology.shouldShowSystemChromeIcons(
+                SurfaceMode.DUAL, thisDisplayId = 1, largerDisplayId = 0,
+            ),
+        )
     }
 
     @Test

@@ -129,6 +129,7 @@ class GhostGalleonApp : Application() {
             companionDisplayId = companion,
             launchDisplayId = companion,
             secondaryHomeDisplayId = topo.secondaryHomeDisplayId,
+            largerDisplayId = topo.largerDisplayId,
             allIds = topo.allIds,
             reason = topo.reason,
         )

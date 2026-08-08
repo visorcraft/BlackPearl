@@ -52,6 +52,11 @@ data class ResolvedTopology(
      * panel empty (Sugar regression: bottom wallpaper). Null in SINGLE.
      */
     val secondaryHomeDisplayId: Int? = null,
+    /**
+     * Physically largest usable display (by pixel area). Swap/Settings chrome
+     * hosts here in DUAL; null when unknown / empty. Unchanged by role swap.
+     */
+    val largerDisplayId: Int? = null,
     val allIds: List<Int>,
     val reason: String = "",
 ) {

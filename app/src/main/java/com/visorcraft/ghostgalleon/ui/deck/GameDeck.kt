@@ -74,6 +74,7 @@ class GameDeck(
             q.genre.isNullOrBlank() &&
             q.developer.isNullOrBlank() &&
             q.yearDecade.isNullOrBlank()
+        val launchablePlatformIds = resolveLaunchablePlatformIds()
         val browsed = LibraryBrowse.browseRoms(
             roms, q,
             lastLaunchedMs = settings.lastLaunchedMs,
@@ -82,6 +83,7 @@ class GameDeck(
             playtimeMs = settings.playtimeMs,
             hiddenRomIds = settings.hiddenRomIds,
             nowMs = System.currentTimeMillis(),
+            launchablePlatformIds = launchablePlatformIds,
         ).map {
             CarouselEntry(SlotKey.rom(it.id), it.name, null, it)
         }
@@ -108,6 +110,11 @@ class GameDeck(
                             return@mapNotNull null
                         }
                         if (!LibraryBrowse.matchesYearDecade(rom, q.yearDecade)) {
+                            return@mapNotNull null
+                        }
+                        if (launchablePlatformIds != null &&
+                            rom.platformId !in launchablePlatformIds
+                        ) {
                             return@mapNotNull null
                         }
                         CarouselEntry(SlotKey.rom(rom.id), rom.name, null, rom)
@@ -459,6 +466,13 @@ class GameDeck(
         recycler = rv
         content.addView(rv, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        // Dual: Swap/Settings only on the larger physical panel. Single: always.
+        if (shouldHostSystemChromeIcons(activity)) {
+            content.addView(
+                buildSystemChromeRow(context, activity, state),
+                systemChromeRowLayoutParams(),
+            )
+        }
         if (settings.showHints) {
             val hints = HintBar.build(context) as TextView
             hints.text = HintBar.textFor(state.dockSlot != null)
@@ -977,7 +991,11 @@ class GameDeck(
             }
         }
         if (chrome.platformChips) {
-            LibraryBrowse.presentPlatformCounts(roms, settings.hiddenRomIds).forEach { (pid, count) ->
+            val platformRoms = LibraryBrowse.filterByLaunchablePlatforms(
+                HiddenRoms.listed(roms, settings.hiddenRomIds),
+                resolveLaunchablePlatformIds(),
+            )
+            LibraryBrowse.presentPlatformCounts(platformRoms).forEach { (pid, count) ->
                 addGap()
                 val short = Platforms.byId(pid)?.shortName ?: pid
                 row.addView(chip(LibraryBrowse.labeledChip(short, count), q.platformId == pid) {
@@ -1457,6 +1475,44 @@ class GameDeck(
             .show()
     }
 
+    /**
+     * Platforms that have at least one installed player. Null when
+     * launchableOnly is off (no filter). Empty set when on and nothing installed.
+     */
+    private fun resolveLaunchablePlatformIds(
+        live: Settings = settings,
+    ): Set<String>? {
+        if (!live.browseChrome.launchableOnly) return null
+        val pm = activity.packageManager
+        fun installed(pkg: String): Boolean =
+            try {
+                pm.getPackageInfo(pkg, 0)
+                true
+            } catch (_: Exception) {
+                false
+            }
+        val byPlatform = Platforms.ALL.associate { platform ->
+            platform.id to platform.players.map { PlayerResolver.packageName(it) }
+        }
+        // Collect installed package names we care about (union of all players).
+        val installedPkgs = byPlatform.values.flatten().filter(::installed).toSet()
+        return LibraryBrowse.launchablePlatformIds(byPlatform, installedPkgs)
+    }
+
+    private fun markAsPlayed(key: String) {
+        val live = app().settings
+        val now = System.currentTimeMillis()
+        val next = SessionMath.stampLastPlayed(
+            PlayStats(live.lastLaunchedMs, live.playtimeMs),
+            key,
+            now,
+        )
+        app().updateSettings(
+            live.copy(lastLaunchedMs = next.lastLaunchedMs),
+        )
+        Toast.makeText(activity, "Marked as played", Toast.LENGTH_SHORT).show()
+    }
+
     private fun clearPlayStats(key: String) {
         val live = app().settings
         val stats = PlayStats(
@@ -1616,6 +1672,7 @@ class GameDeck(
             playtimeMs = live.playtimeMs,
             hiddenRomIds = live.hiddenRomIds,
             nowMs = now,
+            launchablePlatformIds = resolveLaunchablePlatformIds(live),
         )
         val appsOk = q.platformId == null &&
             q.genre.isNullOrBlank() &&
@@ -1995,9 +2052,13 @@ class GameDeck(
             lastLaunchedMs = settings.lastLaunchedMs,
             totalPlaytimeMs = settings.playtimeMs,
         )
+        val neverPlayed = LibraryBrowse.isUnplayed(key, settings.lastLaunchedMs)
         val choices = buildList {
             add(SlotMenu.Choice.DETAILS)
             add(SlotMenu.Choice.COPY_TITLE)
+            if (neverPlayed) {
+                add(SlotMenu.Choice.MARK_PLAYED)
+            }
             if (SessionMath.hasStats(liveStats, key)) {
                 add(SlotMenu.Choice.CLEAR_PLAY_STATS)
             }
@@ -2034,6 +2095,7 @@ class GameDeck(
             when (choice) {
                 SlotMenu.Choice.DETAILS -> showDetails(entry)
                 SlotMenu.Choice.COPY_TITLE -> copyTitleToClipboard(entry.label)
+                SlotMenu.Choice.MARK_PLAYED -> markAsPlayed(key)
                 SlotMenu.Choice.CLEAR_PLAY_STATS -> clearPlayStats(key)
                 SlotMenu.Choice.PIN_TO_DOCK -> pinToDock(key)
                 SlotMenu.Choice.UNPIN_FROM_DOCK -> unpinFromDock(key)

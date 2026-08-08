@@ -1453,36 +1453,14 @@ object CompanionPanel {
         content.addView(hero, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
 
-        // Tappable swap/settings buttons: swap at the FAR LEFT of the row,
-        // settings at the right (the grid dock no longer carries either).
-        val actions = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(8), 0, dp(8), 0)
+        // Swap/Settings: dual → only on the physically larger panel (not
+        // “companion role”). Single-display always shows the row.
+        if (shouldHostSystemChromeIcons(activity)) {
+            content.addView(
+                buildSystemChromeRow(context, activity, state),
+                systemChromeRowLayoutParams(),
+            )
         }
-        actions.addView(
-            iconButton(context, R.drawable.ic_swap, "Swap screens") {
-                val appCtx = activity.application as? GhostGalleonApp
-                if (appCtx != null && !appCtx.swapInteractiveDisplay()) {
-                    android.widget.Toast.makeText(
-                        context,
-                        "Only one display — swap unavailable",
-                        android.widget.Toast.LENGTH_SHORT,
-                    ).show()
-                }
-            },
-            LinearLayout.LayoutParams(dp(40), dp(40)))
-        actions.addView(View(context), LinearLayout.LayoutParams(0, 1, 1f))
-        actions.addView(
-            iconButton(context, R.drawable.ic_settings, "Settings") {
-                // Same display routing as START: settings opens opposite the
-                // interactive deck.
-                launchOnOtherDisplay(
-                    activity, state, Intent(activity, SettingsActivity::class.java))
-            },
-            LinearLayout.LayoutParams(dp(40), dp(40)))
-        content.addView(actions, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
         if (settings.showHints) {
             content.addView(HintBar.build(context), LinearLayout.LayoutParams(

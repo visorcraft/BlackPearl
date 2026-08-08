@@ -29,11 +29,13 @@ object DisplayTopology {
                 companionDisplayId = null,
                 launchDisplayId = 0,
                 secondaryHomeDisplayId = null,
+                largerDisplayId = 0,
                 allIds = listOf(0),
                 reason = "no usable displays; synthetic id 0",
             )
         }
         val allIds = displays.map { it.id }
+        val largerId = largerDisplayId(displays)
         val defaultId = displays.firstOrNull { it.isDefault }?.id ?: displays.first().id
         val secondaries = displays.filter { it.id != defaultId }
 
@@ -52,6 +54,7 @@ object DisplayTopology {
                 companionDisplayId = null,
                 launchDisplayId = primary,
                 secondaryHomeDisplayId = null,
+                largerDisplayId = largerId,
                 allIds = allIds,
                 reason = "SINGLE profile=${profile.id} displays=${allIds.size} primary=$primary",
             )
@@ -70,6 +73,7 @@ object DisplayTopology {
                 companionDisplayId = companion,
                 launchDisplayId = companion,
                 secondaryHomeDisplayId = secondaryHome.id,
+                largerDisplayId = largerId,
                 allIds = allIds,
                 reason = "DUAL pinned primary=$primary companion=$companion secondaryHome=${secondaryHome.id}",
             )
@@ -109,6 +113,7 @@ object DisplayTopology {
                 companionDisplayId = null,
                 launchDisplayId = primary,
                 secondaryHomeDisplayId = null,
+                largerDisplayId = largerId,
                 allIds = allIds,
                 reason = "collapsed to SINGLE after resolve primary=$primary",
             )
@@ -120,9 +125,37 @@ object DisplayTopology {
             companionDisplayId = companionFinal,
             launchDisplayId = companionFinal,
             secondaryHomeDisplayId = secondaryHome.id,
+            largerDisplayId = largerId,
             allIds = allIds,
             reason = "DUAL profile=${profile.id} mode=$mode primary=$primary companion=$companionFinal secondaryHome=${secondaryHome.id}",
         )
+    }
+
+    /**
+     * Largest usable panel by pixel area (width×height). Tie → lower id.
+     * Host-tested; used for Swap/Settings chrome placement in DUAL.
+     */
+    fun largerDisplayId(displays: List<DisplayInfo>): Int? =
+        displays
+            .filter { !it.isPrivate && it.widthPx > 0 && it.heightPx > 0 }
+            .maxWithOrNull(
+                compareBy<DisplayInfo> { it.widthPx.toLong() * it.heightPx.toLong() }
+                    .thenBy { -it.id }, // lower id wins ties (stable)
+            )
+            ?.id
+
+    /**
+     * Swap/Settings icons host on the physically larger panel in DUAL.
+     * SINGLE always shows them (only one surface).
+     */
+    fun shouldShowSystemChromeIcons(
+        mode: SurfaceMode,
+        thisDisplayId: Int?,
+        largerDisplayId: Int?,
+    ): Boolean {
+        if (mode != SurfaceMode.DUAL) return true
+        if (thisDisplayId == null || largerDisplayId == null) return true
+        return thisDisplayId == largerDisplayId
     }
 
     fun swap(topology: ResolvedTopology): ResolvedTopology {
