@@ -894,6 +894,7 @@ class GameDeck(
             chip(
                 LibraryBrowse.labeledChip("Fav", settings.favorites.size),
                 q.mode == LibraryBrowse.Mode.FAVORITES,
+                onLongClick = { showFavoritesManageDialog() },
             ) {
                 setBrowse(q.copy(
                     mode = LibraryBrowse.Mode.FAVORITES,
@@ -1221,6 +1222,62 @@ class GameDeck(
                 }
             }
             .setNegativeButton("Close", null)
+            .show()
+    }
+
+    /**
+     * Long-press Fav chip: open Favorites rail or clear all favorites.
+     * Depth of core Fav without new always-on chrome.
+     */
+    private fun showFavoritesManageDialog() {
+        val live = app().settings
+        val count = live.favorites.size
+        val labels = buildList {
+            add("Open ($count)")
+            if (count > 0) add("Clear all favorites")
+            add("Cancel")
+        }.toTypedArray()
+        android.app.AlertDialog.Builder(activity)
+            .setTitle("Favorites")
+            .setItems(labels) { _, which ->
+                val label = labels[which]
+                when {
+                    label.startsWith("Open") -> {
+                        state.setLibraryBrowse(
+                            LibraryBrowse.BrowseQuery(mode = LibraryBrowse.Mode.FAVORITES),
+                            force = true,
+                        )
+                    }
+                    label.startsWith("Clear all") -> confirmClearAllFavorites()
+                }
+            }
+            .show()
+    }
+
+    private fun confirmClearAllFavorites() {
+        val live = app().settings
+        val n = live.favorites.size
+        if (n == 0) {
+            Toast.makeText(activity, "No favorites", Toast.LENGTH_SHORT).show()
+            return
+        }
+        android.app.AlertDialog.Builder(activity)
+            .setTitle("Clear all favorites")
+            .setMessage("Remove all $n favorites?")
+            .setPositiveButton("Clear") { _, _ ->
+                val (favs, cols) = CollectionsOps.clearAllFavorites(
+                    live.favorites,
+                    live.collections,
+                )
+                app().updateSettings(
+                    live.copy(favorites = favs, collections = cols),
+                )
+                if (state.libraryBrowse.mode == LibraryBrowse.Mode.FAVORITES) {
+                    state.setLibraryBrowse(LibraryBrowse.BrowseQuery(), force = true)
+                }
+                Toast.makeText(activity, "Cleared $n favorites", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("Cancel", null)
             .show()
     }
 
@@ -1891,9 +1948,12 @@ class GameDeck(
             .setTitle("Details")
             .setMessage(body)
             .setPositiveButton("OK", null)
+            .setNeutralButton("Copy title") { _, _ ->
+                copyTitleToClipboard(entry.label)
+            }
         // Apps: optional jump to system package details.
         if (rom == null && !SlotKey.isRom(key)) {
-            builder.setNeutralButton("App info") { _, _ -> openAppInfo(key) }
+            builder.setNegativeButton("App info") { _, _ -> openAppInfo(key) }
         }
         builder.show()
     }

@@ -16,6 +16,22 @@ class CollectionsOpsTest {
     }
 
     @Test
+    fun `clearAllFavorites empties set and drops Favorites mirror`() {
+        val favs = setOf("a", "b")
+        val cols = mapOf(
+            "Favorites" to listOf("a", "b"),
+            "RPGs" to listOf("c"),
+        )
+        val (nextFav, nextCols) = CollectionsOps.clearAllFavorites(favs, cols)
+        assertTrue(nextFav.isEmpty())
+        assertFalse(nextCols.containsKey("Favorites"))
+        assertEquals(listOf("c"), nextCols["RPGs"])
+        val (again, cols2) = CollectionsOps.clearAllFavorites(emptySet(), mapOf("RPGs" to listOf("x")))
+        assertTrue(again.isEmpty())
+        assertEquals(listOf("x"), cols2["RPGs"])
+    }
+
+    @Test
     fun `addToCollection dedupes and creates named list`() {
         val c1 = CollectionsOps.addToCollection(emptyMap(), "RPGs", "rom:a")
         val c2 = CollectionsOps.addToCollection(c1, "RPGs", "rom:b")

@@ -108,6 +108,22 @@ object CollectionsOps {
     fun bulkRemoveFavorites(favorites: Set<String>, keys: List<String>): Set<String> =
         favorites - keys.toSet()
 
+    /**
+     * Clear all favorites and drop the "Favorites" collection mirror if
+     * present. Returns empty favorites set + updated collections map.
+     * Pure; host-tested.
+     */
+    fun clearAllFavorites(
+        favorites: Set<String>,
+        collections: Map<String, List<String>>,
+    ): Pair<Set<String>, Map<String, List<String>>> {
+        // favorites arg documents the input; result is always empty.
+        @Suppress("UNUSED_PARAMETER")
+        val _fav = favorites
+        val cols = collections.filterKeys { !it.equals("Favorites", ignoreCase = true) }
+        return emptySet<String>() to cols
+    }
+
     /** Add every key to a named collection (creating the list if needed). */
     fun bulkAddToCollection(
         collections: Map<String, List<String>>,

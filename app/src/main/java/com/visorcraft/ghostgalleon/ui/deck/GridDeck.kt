@@ -1324,8 +1324,11 @@ class GridDeck(
             .setTitle("Details")
             .setMessage(body)
             .setPositiveButton("OK", null)
+            .setNeutralButton("Copy title") { _, _ ->
+                copyGridTitleToClipboard(title)
+            }
         if (rom == null && !SlotKey.isRom(key) && !SlotKey.isFolder(key)) {
-            builder.setNeutralButton("App info") { _, _ -> openAppInfo(key) }
+            builder.setNegativeButton("App info") { _, _ -> openAppInfo(key) }
         }
         builder.show()
     }
