@@ -153,4 +153,58 @@ class LibraryBrowseTest {
         )
         assertEquals(listOf("Mario"), out.map { it.name })
     }
+
+    @Test
+    fun `orderByName is case-insensitive A-Z and stable`() {
+        val names = listOf("zeta", "Alpha", "alpha2", "Mario")
+        assertEquals(
+            listOf("Alpha", "alpha2", "Mario", "zeta"),
+            LibraryBrowse.orderByName(names) { it },
+        )
+    }
+
+    @Test
+    fun `isUnplayed treats missing and zero as unplayed`() {
+        val last = mapOf("a" to 1L, "b" to 0L)
+        assertTrue(LibraryBrowse.isUnplayed("b", last))
+        assertTrue(LibraryBrowse.isUnplayed("missing", last))
+        assertTrue(!LibraryBrowse.isUnplayed("a", last))
+    }
+
+    @Test
+    fun `browseRoms ALPHA sorts by name`() {
+        val out = LibraryBrowse.browseRoms(
+            library,
+            LibraryBrowse.BrowseQuery(mode = LibraryBrowse.Mode.ALPHA),
+        )
+        assertEquals(listOf("BotW", "Mario", "Pokemon", "Zelda"), out.map { it.name })
+    }
+
+    @Test
+    fun `browseRoms UNPLAYED drops launched and sorts A-Z`() {
+        val last = mapOf(
+            SlotKey.rom("snes:Zelda.rom") to 100L,
+            SlotKey.rom("switch:BotW.rom") to 50L,
+        )
+        val out = LibraryBrowse.browseRoms(
+            library,
+            LibraryBrowse.BrowseQuery(mode = LibraryBrowse.Mode.UNPLAYED),
+            lastLaunchedMs = last,
+        )
+        assertEquals(listOf("Mario", "Pokemon"), out.map { it.name })
+    }
+
+    @Test
+    fun `browseRoms UNPLAYED respects platform filter`() {
+        val last = mapOf(SlotKey.rom("snes:Mario.rom") to 10L)
+        val out = LibraryBrowse.browseRoms(
+            library,
+            LibraryBrowse.BrowseQuery(
+                mode = LibraryBrowse.Mode.UNPLAYED,
+                platformId = "snes",
+            ),
+            lastLaunchedMs = last,
+        )
+        assertEquals(listOf("Zelda"), out.map { it.name })
+    }
 }

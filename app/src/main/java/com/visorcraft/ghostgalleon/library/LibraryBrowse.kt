@@ -5,11 +5,12 @@ import com.visorcraft.ghostgalleon.settings.SlotKey
 
 /**
  * Pure library browse ops for Game Mode / pickers: platform filter, text
- * search, recents / most-played ordering. Host-tested; no Android types.
+ * search, recents / most-played / A–Z / unplayed ordering. Host-tested; no
+ * Android types.
  */
 object LibraryBrowse {
 
-    enum class Mode { ALL, RECENT, FAVORITES, COLLECTION, MOST_PLAYED }
+    enum class Mode { ALL, RECENT, FAVORITES, COLLECTION, MOST_PLAYED, ALPHA, UNPLAYED }
 
     data class BrowseQuery(
         val mode: Mode = Mode.ALL,
@@ -61,8 +62,22 @@ object LibraryBrowse {
     }
 
     /**
+     * Case-insensitive A–Z by [labelOf], stable on input order for ties.
+     */
+    fun <T> orderByName(items: List<T>, labelOf: (T) -> String): List<T> {
+        return items.withIndex().sortedWith(
+            compareBy<IndexedValue<T>> { labelOf(it.value).lowercase() }
+                .thenBy { it.index },
+        ).map { it.value }
+    }
+
+    /** True when [key] has never been launched (missing or non-positive stamp). */
+    fun isUnplayed(key: String, lastLaunchedMs: Map<String, Long>): Boolean =
+        (lastLaunchedMs[key] ?: 0L) <= 0L
+
+    /**
      * Full browse pipeline: mode → platform → text. Recents / most-played /
-     * favorites are applied by restricting to known keys first, then
+     * favorites / A–Z / unplayed are applied by restricting first, then
      * filter/search.
      */
     fun browseRoms(
@@ -75,6 +90,13 @@ object LibraryBrowse {
     ): List<RomEntry> {
         val base = when (query.mode) {
             Mode.ALL -> roms.filter { it.visibleInUi }
+            Mode.ALPHA -> orderByName(roms.filter { it.visibleInUi }) { it.name }
+            Mode.UNPLAYED -> {
+                val unplayed = roms.filter { it.visibleInUi }.filter {
+                    isUnplayed(SlotKey.rom(it.id), lastLaunchedMs)
+                }
+                orderByName(unplayed) { it.name }
+            }
             Mode.RECENT -> {
                 val byKey = roms.filter { it.visibleInUi }
                     .associateBy { SlotKey.rom(it.id) }

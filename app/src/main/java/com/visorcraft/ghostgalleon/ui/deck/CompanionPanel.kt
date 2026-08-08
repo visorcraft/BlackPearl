@@ -313,16 +313,13 @@ object CompanionPanel {
     }
 
     /** Platform subtitle companion line: last played + playtime when known. */
-    internal fun romMetaLine(settings: Settings, slotKey: String): String {
-        val parts = mutableListOf<String>()
-        SessionMath.formatLastPlayed(
+    internal fun romMetaLine(settings: Settings, slotKey: String): String =
+        SessionMath.cardMetaLine(
             settings.lastLaunchedMs[slotKey],
+            settings.playtimeMs[slotKey] ?: 0L,
             System.currentTimeMillis(),
-        )?.let { parts.add(it) }
-        val played = settings.playtimeMs[slotKey] ?: 0L
-        if (played > 0L) parts.add("Played ${SessionMath.formatPlaytime(played)}")
-        return parts.joinToString(" · ").ifEmpty { "Never played" }
-    }
+            playtimePrefix = "Played ",
+        )
 
     private fun bindMetadataLine(tv: TextView?, rom: RomEntry) {
         if (tv == null) return

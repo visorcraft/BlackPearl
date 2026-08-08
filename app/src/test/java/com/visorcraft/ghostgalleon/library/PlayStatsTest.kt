@@ -41,4 +41,19 @@ class PlayStatsTest {
         assertEquals("Just now", SessionMath.formatLastPlayed(1_000L, 1_000L + 10_000L))
         assertEquals("2m ago", SessionMath.formatLastPlayed(1_000L, 1_000L + 2 * 60_000L))
     }
+
+    @Test
+    fun `cardMetaLine joins last played and playtime`() {
+        val now = 10_000L + 2 * 60_000L
+        assertEquals(
+            "2m ago · 12m",
+            SessionMath.cardMetaLine(10_000L, 12 * 60_000L, now),
+        )
+        assertEquals(
+            "2m ago · Played 12m",
+            SessionMath.cardMetaLine(10_000L, 12 * 60_000L, now, playtimePrefix = "Played "),
+        )
+        assertEquals("Never played", SessionMath.cardMetaLine(null, 0L, now))
+        assertEquals("5m", SessionMath.cardMetaLine(null, 5 * 60_000L, now))
+    }
 }

@@ -22,6 +22,7 @@ import com.visorcraft.ghostgalleon.art.ArtTile
 import com.visorcraft.ghostgalleon.library.AppLibrary
 import com.visorcraft.ghostgalleon.library.CollectionsOps
 import com.visorcraft.ghostgalleon.library.LibraryBrowse
+import com.visorcraft.ghostgalleon.library.SessionMath
 import com.visorcraft.ghostgalleon.rom.Platforms
 import com.visorcraft.ghostgalleon.rom.PlatformTile
 import com.visorcraft.ghostgalleon.rom.PlayerResolver
@@ -56,7 +57,7 @@ class GameDeck(
 
     // Curated apps (when browse mode is ALL and no platform filter/search),
     // then browsed ROMs via LibraryBrowse (platform / search / recent / top /
-    // fav). Recent + Most Played interleave apps by the same ranking maps.
+    // A–Z / unplayed / fav). Ranked modes interleave apps by the same maps.
     private val entries: List<CarouselEntry> by lazy {
         val q = state.libraryBrowse
         val browsed = LibraryBrowse.browseRoms(
@@ -121,6 +122,24 @@ class GameDeck(
                     settings.playtimeMs[it.key] ?: 0L
                 }
             }
+            q.mode == LibraryBrowse.Mode.ALPHA &&
+                q.platformId == null && q.text.isBlank() -> {
+                val apps = library.curated(settings).map {
+                    CarouselEntry(it.packageName, it.label, it.packageName, null)
+                }
+                LibraryBrowse.orderByName(apps + browsed) { it.label }
+            }
+            q.mode == LibraryBrowse.Mode.UNPLAYED &&
+                q.platformId == null && q.text.isBlank() -> {
+                val apps = library.curated(settings)
+                    .filter {
+                        LibraryBrowse.isUnplayed(it.packageName, settings.lastLaunchedMs)
+                    }
+                    .map {
+                        CarouselEntry(it.packageName, it.label, it.packageName, null)
+                    }
+                LibraryBrowse.orderByName(apps + browsed) { it.label }
+            }
             q.mode == LibraryBrowse.Mode.FAVORITES &&
                 q.platformId == null -> {
                 val favApps = library.curated(settings)
@@ -150,7 +169,19 @@ class GameDeck(
                     .map {
                         CarouselEntry(it.packageName, it.label, it.packageName, null)
                     }
-                matchedApps + browsed
+                // Keep A–Z / unplayed semantics under search when those chips
+                // are active; otherwise curated order + browsed ROMs.
+                when (q.mode) {
+                    LibraryBrowse.Mode.ALPHA ->
+                        LibraryBrowse.orderByName(matchedApps + browsed) { it.label }
+                    LibraryBrowse.Mode.UNPLAYED -> {
+                        val apps = matchedApps.filter {
+                            LibraryBrowse.isUnplayed(it.key, settings.lastLaunchedMs)
+                        }
+                        LibraryBrowse.orderByName(apps + browsed) { it.label }
+                    }
+                    else -> matchedApps + browsed
+                }
             }
             else -> browsed
         }
@@ -411,6 +442,22 @@ class GameDeck(
         row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
         row.addView(chip("Fav", q.mode == LibraryBrowse.Mode.FAVORITES) {
             setQuery(q.copy(mode = LibraryBrowse.Mode.FAVORITES, platformId = null, collectionName = null))
+        })
+        row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
+        row.addView(chip("A–Z", q.mode == LibraryBrowse.Mode.ALPHA) {
+            setQuery(q.copy(
+                mode = LibraryBrowse.Mode.ALPHA,
+                platformId = null,
+                collectionName = null,
+            ))
+        })
+        row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
+        row.addView(chip("New", q.mode == LibraryBrowse.Mode.UNPLAYED) {
+            setQuery(q.copy(
+                mode = LibraryBrowse.Mode.UNPLAYED,
+                platformId = null,
+                collectionName = null,
+            ))
         })
         LibraryBrowse.presentCollectionRails(settings.collections).forEach { name ->
             if (name.equals("Favorites", ignoreCase = true)) return@forEach
@@ -982,6 +1029,23 @@ class GameDeck(
                 text = entry.label
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
                 setTextColor(Color.WHITE)
+                gravity = Gravity.CENTER
+                maxLines = 1
+                ellipsize = TextUtils.TruncateAt.END
+            }, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ))
+            // Playtime / last-played subtitle (GameDeck-style card meta).
+            val meta = SessionMath.cardMetaLine(
+                settings.lastLaunchedMs[entry.key],
+                settings.playtimeMs[entry.key] ?: 0L,
+                System.currentTimeMillis(),
+            )
+            card.addView(TextView(context).apply {
+                text = meta
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+                setTextColor(0x99FFFFFF.toInt())
                 gravity = Gravity.CENTER
                 maxLines = 1
                 ellipsize = TextUtils.TruncateAt.END
