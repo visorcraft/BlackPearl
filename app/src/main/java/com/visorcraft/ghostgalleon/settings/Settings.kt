@@ -90,6 +90,11 @@ data class Settings(
     val orientationMode: String = "auto",
     // Sticky pin after manual swap; null = follow profile/auto
     val userPinnedPrimaryId: Int? = null,
+    /**
+     * Optional Game Mode / Quick Panel / deck chrome. Absent on disk → [BrowseChrome.MINIMAL]
+     * (within schema v8; no bump). Power users enable extras in Settings → Display & Grid.
+     */
+    val browseChrome: BrowseChrome = BrowseChrome.MINIMAL,
     val schemaVersion: Int = 8,
 ) {
     companion object {

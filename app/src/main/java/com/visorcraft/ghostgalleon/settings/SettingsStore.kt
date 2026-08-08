@@ -152,6 +152,14 @@ class SettingsStore(private val file: File) {
             } else {
                 null
             },
+            // Within schema v8: absent browseChrome → minimal defaults.
+            browseChrome = BrowseChrome.fromJson(
+                if (o.has("browseChrome") && !o.isNull("browseChrome")) {
+                    o.optJSONObject("browseChrome")
+                } else {
+                    null
+                },
+            ),
             schemaVersion = CURRENT_SCHEMA,
         )
         }
@@ -254,6 +262,7 @@ class SettingsStore(private val file: File) {
                 "userPinnedPrimaryId",
                 s.userPinnedPrimaryId?.let { it } ?: JSONObject.NULL,
             )
+            .put("browseChrome", s.browseChrome.toJson())
             .put("schemaVersion", CURRENT_SCHEMA)
         }
 

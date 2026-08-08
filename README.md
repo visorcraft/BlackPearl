@@ -62,14 +62,14 @@ On dual-screen hardware one panel hosts the interactive deck (grid or carousel) 
 
 ### Highlights
 
-- **Grid Mode** — 3DS/Wii-style icon grid with a dock, blank “+” slots, long-press Move/Remove, swap-reorder, favorites, and folders; compact clock/battery status pill (immersive).
-- **Game Mode** — card carousel with Recent / Installed / Games / Top (most played) / Continue / Random / Favorites / A–Z / New (unplayed) filters, A–Z letter jump strip, platform + genre chips (gamelist meta), long-press add-to-collection, long-press collection chips to rename/delete, multi-select bulk favorite/pin/collection/hide ROMs, unified app+ROM search, and last-played + playtime card meta.
+- **Grid Mode** — 3DS/Wii-style icon grid with a dock, blank “+” slots, long-press Move/Remove, swap-reorder, favorites, and folders. Optional deck clock/battery (off by default).
+- **Game Mode** — card carousel with a **minimal** default chip bar (All / Recent / Continue / Fav + platforms + Search/Select). Power-user rails (Installed, Games, Top, A–Z, New, Random, genre chips, letter jump) and Quick Panel browse shortcuts are **opt-in** under Settings → Display & Grid → Browse chrome.
 - **Portable display topology** — resolves interactive vs companion vs launch displays from `DisplayManager` (no hard-coded 0/1). Profiles: Auto, One X Sugar, Generic dual, Single.
 - **Live screen swap** — X (default) swaps interactive and companion roles with a sticky pin so Auto refresh does not undo it.
 - **Companion roles** — Hero, Now Playing, Perf HUD, or pinned app on the non-interactive panel (large status pill).
 - **Global input** — gamepad, d-pad, stick, and touch route to the interactive deck regardless of which window has focus; held directions auto-repeat.
 - **Swipe-up / re-HOME drawer** — all-apps + ROMs without reloading the deck.
-- **Quick Panel** — Select (default) opens Wi‑Fi / Continue / Random / Top / Fav / Games / Installed / theme / settings shortcuts.
+- **Quick Panel** — Select opens Wi‑Fi / Continue / Theme / Settings by default; Random/Top/Fav/Games/Installed shortcuts enable with **Quick Panel browse shortcuts**.
 - **ROM library** — SAF tree grants only (no broad storage permission); offline-first art; hide ROMs from library (Settings unhide); optional SteamGridDB scrape and RetroAchievements credentials.
 - **Honest playtime** — sessions pause while the launcher is focused or the device sleeps.
 - **Themes** — Ghost, 3DS Teal, OLED Black, Neon; optional custom theme JSON.
@@ -160,7 +160,7 @@ On Sugar, the bottom panel is interactive by default; the top shows the companio
 
 | Page | Contents |
 |------|----------|
-| **Display & Grid** | Orientation, control hints, default mode, themes, wallpaper, grid options, companion role |
+| **Display & Grid** | Orientation, hints, mode, themes, wallpaper, grid, companion role, **Browse chrome** (Minimal/Full preset + per-feature toggles) |
 | **Apps** | Hidden apps, dock management |
 | **Controls** | Haptics, remappable keys, Controller Lab |
 | **Library** | ROM folders, rescan, SteamGridDB, RetroAchievements, export/import, platform packs |

@@ -83,7 +83,10 @@ class QuickPanel(
         val app = activity.application as GhostGalleonApp
         accent = app.settings.accentColor
 
-        cells = listOf(
+        // Minimal Quick Panel: system tiles + Continue + Theme + lab + Close.
+        // Browse rails (Random/Top/Fav/Games/Installed) opt in via Settings.
+        val chrome = app.settings.browseChrome
+        val core = mutableListOf(
             Cell("Wi‑Fi") { openSystem(Settings.ACTION_WIFI_SETTINGS) },
             Cell("Bluetooth") { openSystem(Settings.ACTION_BLUETOOTH_SETTINGS) },
             Cell("Display") { openSystem(Settings.ACTION_DISPLAY_SETTINGS) },
@@ -96,33 +99,44 @@ class QuickPanel(
                 launchContinue(app)
                 onClose()
             },
-            Cell("Random") {
-                launchRandom(app)
-                onClose()
-            },
-            Cell("Top") {
-                openTopPlayed()
-                onClose()
-            },
-            Cell("Fav") {
+        )
+        if (chrome.quickPanelBrowse) {
+            if (chrome.randomChip) {
+                core.add(Cell("Random") {
+                    launchRandom(app)
+                    onClose()
+                })
+            }
+            if (chrome.topRail) {
+                core.add(Cell("Top") {
+                    openTopPlayed()
+                    onClose()
+                })
+            }
+            core.add(Cell("Fav") {
                 openGameRail(LibraryBrowse.Mode.FAVORITES, "Favorites")
                 onClose()
-            },
-            Cell("Games") {
-                openGameRail(LibraryBrowse.Mode.GAMES, "Games")
-                onClose()
-            },
-            Cell("Installed") {
-                openGameRail(LibraryBrowse.Mode.RECENTLY_INSTALLED, "Installed")
-                onClose()
-            },
-            Cell("Theme") { cycleTheme(app) },
-            Cell("Controller") {
-                activity.startActivity(Intent(activity, ControllerLabActivity::class.java))
-                onClose()
-            },
-            Cell("Close") { onClose() },
-        )
+            })
+            if (chrome.gamesRail) {
+                core.add(Cell("Games") {
+                    openGameRail(LibraryBrowse.Mode.GAMES, "Games")
+                    onClose()
+                })
+            }
+            if (chrome.installedRail) {
+                core.add(Cell("Installed") {
+                    openGameRail(LibraryBrowse.Mode.RECENTLY_INSTALLED, "Installed")
+                    onClose()
+                })
+            }
+        }
+        core.add(Cell("Theme") { cycleTheme(app) })
+        core.add(Cell("Controller") {
+            activity.startActivity(Intent(activity, ControllerLabActivity::class.java))
+            onClose()
+        })
+        core.add(Cell("Close") { onClose() })
+        cells = core
 
         val root = FrameLayout(context).apply {
             setBackgroundColor(0xCC000000.toInt())

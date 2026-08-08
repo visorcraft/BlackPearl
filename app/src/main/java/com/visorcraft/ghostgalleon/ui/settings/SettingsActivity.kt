@@ -1246,6 +1246,7 @@ class SettingsActivity : AppCompatActivity() {
         displayCard.addView(controlRow("Default mode", modeSegmented(s.defaultMode)),
             LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))
+
         // Theme packs: built-in chips + optional import JSON.
         val themeOptions = ThemePack.BUILTINS.map { it.id to it.displayName.uppercase() }
         val themeCurrent = ThemePack.resolve(s).id.let { id ->
@@ -1359,6 +1360,59 @@ class SettingsActivity : AppCompatActivity() {
         displayCard.addView(resetDisplayRow, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))
         addSection(SettingsPage.DISPLAY_GRID, "Display", displayCard)
+
+        // Browse chrome: minimal default; power users opt into extra rails.
+        val chrome = s.browseChrome
+        val chromeCard = sectionCard()
+        val presetOptions = listOf("minimal" to "MINIMAL", "full" to "FULL")
+        val presetId = when {
+            chrome.isFull() -> "full"
+            chrome.isMinimal() -> "minimal"
+            else -> "minimal" // custom: applying Minimal/Full resets
+        }
+        chromeCard.addView(controlRow(
+            "Chrome preset",
+            segmented(presetOptions, presetId) { id ->
+                val next = if (id == "full") {
+                    com.visorcraft.ghostgalleon.settings.BrowseChrome.FULL
+                } else {
+                    com.visorcraft.ghostgalleon.settings.BrowseChrome.MINIMAL
+                }
+                app.updateSettings(app.settings.copy(browseChrome = next))
+                recreate()
+            },
+        ), LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))
+        fun chromeFlag(
+            label: String,
+            checked: Boolean,
+            set: (com.visorcraft.ghostgalleon.settings.BrowseChrome, Boolean) ->
+                com.visorcraft.ghostgalleon.settings.BrowseChrome,
+        ) {
+            toggle(chromeCard, label, checked) { on ->
+                app.updateSettings(
+                    app.settings.copy(browseChrome = set(app.settings.browseChrome, on)),
+                )
+            }
+        }
+        chromeFlag("Installed rail", chrome.installedRail) { c, v -> c.copy(installedRail = v) }
+        chromeFlag("Games rail", chrome.gamesRail) { c, v -> c.copy(gamesRail = v) }
+        chromeFlag("Top (most played) rail", chrome.topRail) { c, v -> c.copy(topRail = v) }
+        chromeFlag("A–Z rail + letter jump", chrome.alphaRail) { c, v -> c.copy(alphaRail = v) }
+        chromeFlag("New (unplayed) rail", chrome.unplayedRail) { c, v -> c.copy(unplayedRail = v) }
+        chromeFlag("Random chip", chrome.randomChip) { c, v -> c.copy(randomChip = v) }
+        chromeFlag("Genre chips", chrome.genreChips) { c, v -> c.copy(genreChips = v) }
+        chromeFlag("Platform chips", chrome.platformChips) { c, v -> c.copy(platformChips = v) }
+        chromeFlag("Collection rails", chrome.collectionRails) { c, v -> c.copy(collectionRails = v) }
+        chromeFlag("Deck clock / battery", chrome.deckStatusPill) { c, v -> c.copy(deckStatusPill = v) }
+        chromeFlag("Quick Panel browse shortcuts", chrome.quickPanelBrowse) { c, v ->
+            c.copy(quickPanelBrowse = v)
+        }
+        addSection(
+            SettingsPage.DISPLAY_GRID,
+            "Browse chrome (minimal default)",
+            chromeCard,
+        )
 
         // Companion panel role + pinned package (same page as Display).
         val companionCard = sectionCard()
