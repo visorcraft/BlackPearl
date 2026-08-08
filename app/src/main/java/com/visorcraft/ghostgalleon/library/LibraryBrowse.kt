@@ -5,8 +5,8 @@ import com.visorcraft.ghostgalleon.settings.SlotKey
 
 /**
  * Pure library browse ops for Game Mode / pickers: platform filter, text
- * search, recents / most-played / A–Z / unplayed ordering. Host-tested; no
- * Android types.
+ * search, recents / most-played / A–Z / unplayed ordering, letter jump
+ * index. Host-tested; no Android types.
  */
 object LibraryBrowse {
 
@@ -165,5 +165,37 @@ object LibraryBrowse {
             lastLaunchedMs.keys.filter { it in present },
             lastLaunchedMs,
         ).firstOrNull()
+    }
+
+    /**
+     * A–Z letter bucket for a display label: first significant character
+     * uppercased into A–Z, or '#' for empty / non-letter (digits, symbols).
+     * Used by the Game Mode letter jump strip under A–Z / New rails.
+     */
+    fun letterBucket(label: String): Char {
+        val c = label.trim().firstOrNull()?.uppercaseChar() ?: return '#'
+        return if (c in 'A'..'Z') c else '#'
+    }
+
+    /**
+     * Distinct letter buckets present in [labels], A–Z then optional '#'.
+     * Empty input → empty list (no strip).
+     */
+    fun presentLetterIndex(labels: List<String>): List<Char> {
+        if (labels.isEmpty()) return emptyList()
+        val present = labels.map { letterBucket(it) }.toSet()
+        val letters = ('A'..'Z').filter { it in present }
+        return if ('#' in present) letters + '#' else letters
+    }
+
+    /**
+     * First index in [labels] whose [letterBucket] equals [letter]
+     * (case-insensitive A–Z; anything else maps to '#'). Missing → -1.
+     */
+    fun firstIndexForLetter(labels: List<String>, letter: Char): Int {
+        val bucket = letter.uppercaseChar().let { c ->
+            if (c in 'A'..'Z') c else '#'
+        }
+        return labels.indexOfFirst { letterBucket(it) == bucket }
     }
 }

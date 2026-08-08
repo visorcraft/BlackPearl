@@ -193,6 +193,8 @@ class GameDeck(
     private var dockBar: DockBar? = null
     private var hintView: TextView? = null
     private var rootView: FrameLayout? = null
+    /** Letter-jump chips (A–Z / #) when ALPHA/UNPLAYED; repainted on selection. */
+    private var letterChipViews: List<Pair<Char, TextView>> = emptyList()
 
     // Modals (at most one at a time): dock slot menu, app picker.
     private var slotMenu: SlotMenu? = null
@@ -250,6 +252,16 @@ class GameDeck(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
             ),
         )
+        // A–Z / New (unplayed) rails: 3DS-style letter jump strip under chips.
+        buildLetterJumpBar(context, ::dp)?.let { letterBar ->
+            content.addView(
+                letterBar,
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ),
+            )
+        }
         val rv = RecyclerView(context).apply {
             layoutManager = LinearLayoutManager(context, LinearLayoutManager.HORIZONTAL, false)
             adapter = CardAdapter(context, dp(settings.cardSizeDp), dp(12), dp(8))
@@ -313,6 +325,7 @@ class GameDeck(
         // then run the existing scroll-to-center alignment.
         rv.adapter?.notifyDataSetChanged()
         scrollSelectionToCenter(rv)
+        paintLetterJumpSelection()
         // Dock focus is a selection change too: repaint the dock ring (and
         // the lifted tile's pulse during a dock move) and switch the hint
         // bar between carousel and dock actions.
@@ -323,6 +336,21 @@ class GameDeck(
             HintBar.textFor(state.dockSlot != null)
         }
         return true
+    }
+
+    private fun paintLetterJumpSelection() {
+        if (letterChipViews.isEmpty()) return
+        val selectedLetter = entries.getOrNull(selectedIndex())
+            ?.label
+            ?.let { LibraryBrowse.letterBucket(it) }
+        letterChipViews.forEach { (letter, tv) ->
+            val on = letter == selectedLetter
+            tv.setTextColor(if (on) Color.BLACK else Color.WHITE)
+            tv.setBackgroundColor(
+                if (on) settings.accentColor
+                else TileBackgrounds.chipIdleColor(activity),
+            )
+        }
     }
 
     override fun handleAction(action: Action): Boolean {
@@ -353,6 +381,64 @@ class GameDeck(
                 true
             }
             else -> false
+        }
+    }
+
+    /**
+     * Letter jump strip for A–Z ordered rails (ALPHA + UNPLAYED). Tapping a
+     * letter selects the first carousel entry in that bucket and recenters.
+     * Hidden when the rail is empty or mode is not letter-ordered.
+     */
+    private fun buildLetterJumpBar(context: Context, dp: (Int) -> Int): View? {
+        val mode = state.libraryBrowse.mode
+        if (mode != LibraryBrowse.Mode.ALPHA && mode != LibraryBrowse.Mode.UNPLAYED) {
+            letterChipViews = emptyList()
+            return null
+        }
+        val labels = entries.map { it.label }
+        val letters = LibraryBrowse.presentLetterIndex(labels)
+        if (letters.isEmpty()) {
+            letterChipViews = emptyList()
+            return null
+        }
+        val selectedLetter = entries.getOrNull(selectedIndex())
+            ?.label
+            ?.let { LibraryBrowse.letterBucket(it) }
+        val row = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(12), dp(0), dp(12), dp(6))
+        }
+        val chips = mutableListOf<Pair<Char, TextView>>()
+        letters.forEachIndexed { i, letter ->
+            if (i > 0) {
+                row.addView(View(context), LinearLayout.LayoutParams(dp(4), 1))
+            }
+            val on = letter == selectedLetter
+            val chip = TextView(context).apply {
+                text = letter.toString()
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                setTextColor(if (on) Color.BLACK else Color.WHITE)
+                setBackgroundColor(
+                    if (on) settings.accentColor
+                    else TileBackgrounds.chipIdleColor(context),
+                )
+                setPadding(dp(10), dp(4), dp(10), dp(4))
+                contentDescription = "Jump to $letter"
+                setOnClickListener {
+                    val idx = LibraryBrowse.firstIndexForLetter(labels, letter)
+                    val key = entries.getOrNull(idx)?.key ?: return@setOnClickListener
+                    state.select(key, force = true)
+                    Toast.makeText(activity, letter.toString(), Toast.LENGTH_SHORT).show()
+                }
+            }
+            chips.add(letter to chip)
+            row.addView(chip)
+        }
+        letterChipViews = chips
+        return android.widget.HorizontalScrollView(context).apply {
+            isHorizontalScrollBarEnabled = false
+            addView(row)
         }
     }
 

@@ -207,4 +207,34 @@ class LibraryBrowseTest {
         )
         assertEquals(listOf("Zelda"), out.map { it.name })
     }
+
+    @Test
+    fun `letterBucket maps first letter and non-letters to hash`() {
+        assertEquals('Z', LibraryBrowse.letterBucket("zelda"))
+        assertEquals('A', LibraryBrowse.letterBucket("  Alpha"))
+        assertEquals('#', LibraryBrowse.letterBucket("007 Bond"))
+        assertEquals('#', LibraryBrowse.letterBucket(""))
+        assertEquals('#', LibraryBrowse.letterBucket("  "))
+    }
+
+    @Test
+    fun `presentLetterIndex lists A-Z then hash only when present`() {
+        val labels = listOf("Zelda", "Mario", "007", "alpha", "Pokemon")
+        assertEquals(
+            listOf('A', 'M', 'P', 'Z', '#'),
+            LibraryBrowse.presentLetterIndex(labels),
+        )
+        assertEquals(emptyList<Char>(), LibraryBrowse.presentLetterIndex(emptyList()))
+        assertEquals(listOf('B'), LibraryBrowse.presentLetterIndex(listOf("BotW")))
+    }
+
+    @Test
+    fun `firstIndexForLetter finds first matching bucket`() {
+        val labels = listOf("Alpha", "BotW", "Mario", "Zelda", "007")
+        assertEquals(0, LibraryBrowse.firstIndexForLetter(labels, 'A'))
+        assertEquals(0, LibraryBrowse.firstIndexForLetter(labels, 'a'))
+        assertEquals(2, LibraryBrowse.firstIndexForLetter(labels, 'M'))
+        assertEquals(4, LibraryBrowse.firstIndexForLetter(labels, '#'))
+        assertEquals(-1, LibraryBrowse.firstIndexForLetter(labels, 'Q'))
+    }
 }
