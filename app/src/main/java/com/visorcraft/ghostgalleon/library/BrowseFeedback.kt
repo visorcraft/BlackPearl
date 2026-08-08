@@ -28,6 +28,7 @@ object BrowseFeedback {
             return "No titles on ${query.platformId}"
         }
         return when (query.mode) {
+            LibraryBrowse.Mode.PLAYED_TODAY -> "Nothing played today"
             LibraryBrowse.Mode.PLAYED_THIS_WEEK -> "Nothing played this week"
             LibraryBrowse.Mode.PLAYED_THIS_MONTH -> "Nothing played this month"
             LibraryBrowse.Mode.MOST_PLAYED -> "No playtime recorded yet"
@@ -67,6 +68,7 @@ object BrowseFeedback {
      */
     fun preferFullCount(mode: LibraryBrowse.Mode): Boolean = when (mode) {
         LibraryBrowse.Mode.RECENT,
+        LibraryBrowse.Mode.PLAYED_TODAY,
         LibraryBrowse.Mode.PLAYED_THIS_WEEK,
         LibraryBrowse.Mode.PLAYED_THIS_MONTH,
         LibraryBrowse.Mode.MOST_PLAYED,

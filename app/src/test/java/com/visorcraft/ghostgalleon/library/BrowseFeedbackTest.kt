@@ -39,6 +39,12 @@ class BrowseFeedbackTest {
     @Test
     fun `emptyHint mode messages`() {
         assertEquals(
+            "Nothing played today",
+            BrowseFeedback.emptyHint(
+                LibraryBrowse.BrowseQuery(mode = LibraryBrowse.Mode.PLAYED_TODAY),
+            ),
+        )
+        assertEquals(
             "Nothing played this week",
             BrowseFeedback.emptyHint(
                 LibraryBrowse.BrowseQuery(mode = LibraryBrowse.Mode.PLAYED_THIS_WEEK),

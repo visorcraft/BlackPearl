@@ -15,6 +15,7 @@ class BrowseChromeTest {
         assertFalse(c.installedRail)
         assertFalse(c.gamesRail)
         assertFalse(c.topRail)
+        assertFalse(c.todayRail)
         assertFalse(c.weekRail)
         assertFalse(c.monthRail)
         assertFalse(c.alphaRail)
@@ -34,7 +35,7 @@ class BrowseChromeTest {
     fun `full enables all chrome`() {
         val c = BrowseChrome.FULL
         assertTrue(c.installedRail && c.gamesRail && c.topRail && c.alphaRail)
-        assertTrue(c.weekRail && c.monthRail)
+        assertTrue(c.todayRail && c.weekRail && c.monthRail)
         assertTrue(c.unplayedRail && c.randomChip && c.genreChips)
         assertTrue(c.developerChips && c.yearChips)
         assertTrue(c.deckStatusPill && c.quickPanelBrowse)
@@ -105,9 +106,14 @@ class BrowseChromeTest {
         assertTrue(c.allowsMode(LibraryBrowse.Mode.MOST_PLAYED))
         assertFalse(c.allowsMode(LibraryBrowse.Mode.GAMES))
         assertFalse(c.allowsMode(LibraryBrowse.Mode.PLAYED_THIS_MONTH))
+        assertFalse(c.allowsMode(LibraryBrowse.Mode.PLAYED_TODAY))
         assertTrue(
             BrowseChrome.MINIMAL.copy(monthRail = true)
                 .allowsMode(LibraryBrowse.Mode.PLAYED_THIS_MONTH),
+        )
+        assertTrue(
+            BrowseChrome.MINIMAL.copy(todayRail = true)
+                .allowsMode(LibraryBrowse.Mode.PLAYED_TODAY),
         )
     }
 
@@ -132,7 +138,11 @@ class BrowseChromeTest {
             onlyWeek.quickPanelRailShortcuts(),
         )
         val full = BrowseChrome.FULL.quickPanelRailShortcuts().map { it.first }
-        assertTrue(full.containsAll(listOf("Recent", "Fav", "Games", "Installed", "Week", "Month", "A–Z", "New")))
+        assertTrue(
+            full.containsAll(
+                listOf("Recent", "Fav", "Games", "Installed", "Today", "Week", "Month", "A–Z", "New"),
+            ),
+        )
         assertFalse(full.contains("Top")) // Top stays a special cell
         assertFalse(full.contains("Random"))
     }

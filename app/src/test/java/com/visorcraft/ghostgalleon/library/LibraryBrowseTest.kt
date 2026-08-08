@@ -453,6 +453,31 @@ class LibraryBrowseTest {
     }
 
     @Test
+    fun `browseRoms PLAYED_TODAY keeps only 24h launches newest first`() {
+        val now = 2_000_000_000_000L
+        val day = LibraryBrowse.DAY_WINDOW_MS
+        val last = mapOf(
+            SlotKey.rom("switch:BotW.rom") to now - 1_000L,
+            SlotKey.rom("snes:Zelda.rom") to now - day - 5_000L, // outside
+            SlotKey.rom("snes:Mario.rom") to now - 50_000L,
+            SlotKey.rom("3ds:Pokemon.rom") to 0L,
+        )
+        val out = LibraryBrowse.browseRoms(
+            library,
+            LibraryBrowse.BrowseQuery(mode = LibraryBrowse.Mode.PLAYED_TODAY),
+            lastLaunchedMs = last,
+            nowMs = now,
+        )
+        assertEquals(listOf("BotW", "Mario"), out.map { it.name })
+        val empty = LibraryBrowse.browseRoms(
+            library,
+            LibraryBrowse.BrowseQuery(mode = LibraryBrowse.Mode.PLAYED_TODAY),
+            lastLaunchedMs = last,
+        )
+        assertTrue(empty.isEmpty())
+    }
+
+    @Test
     fun `browseRoms PLAYED_THIS_WEEK keeps only week launches newest first`() {
         val now = 2_000_000_000_000L
         val week = LibraryBrowse.WEEK_WINDOW_MS

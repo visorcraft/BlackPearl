@@ -148,6 +148,25 @@ class GameDeck(
                     settings.lastLaunchedMs[it.key] ?: 0L
                 }
             }
+            q.mode == LibraryBrowse.Mode.PLAYED_TODAY &&
+                appsOk && q.text.isBlank() -> {
+                val now = System.currentTimeMillis()
+                val byPkg = library.curated(settings)
+                    .associateBy { it.packageName }
+                val appKeys = settings.lastLaunchedMs.keys
+                    .filter { !SlotKey.isRom(it) && it in byPkg }
+                val dayApps = LibraryBrowse.filterPlayedInWindow(
+                    appKeys, settings.lastLaunchedMs, nowMs = now,
+                    windowMs = LibraryBrowse.DAY_WINDOW_MS,
+                ).mapNotNull { pkg ->
+                    byPkg[pkg]?.let {
+                        CarouselEntry(it.packageName, it.label, it.packageName, null)
+                    }
+                }
+                (dayApps + browsed).sortedByDescending {
+                    settings.lastLaunchedMs[it.key] ?: 0L
+                }
+            }
             q.mode == LibraryBrowse.Mode.PLAYED_THIS_WEEK &&
                 appsOk && q.text.isBlank() -> {
                 val now = System.currentTimeMillis()
@@ -697,6 +716,30 @@ class GameDeck(
             },
         )
         val nowMs = System.currentTimeMillis()
+        if (chrome.todayRail) {
+            addGap()
+            row.addView(
+                chip(
+                    LibraryBrowse.labeledChip(
+                        "Today",
+                        LibraryBrowse.playedInWindowCount(
+                            settings.lastLaunchedMs, nowMs,
+                            LibraryBrowse.DAY_WINDOW_MS,
+                        ),
+                    ),
+                    q.mode == LibraryBrowse.Mode.PLAYED_TODAY,
+                ) {
+                    setBrowse(q.copy(
+                        mode = LibraryBrowse.Mode.PLAYED_TODAY,
+                        platformId = null,
+                        genre = null,
+                        developer = null,
+                        yearDecade = null,
+                        collectionName = null,
+                    ))
+                },
+            )
+        }
         if (chrome.weekRail) {
             addGap()
             row.addView(
@@ -1567,6 +1610,7 @@ class GameDeck(
                 }
             }
             LibraryBrowse.Mode.RECENT,
+            LibraryBrowse.Mode.PLAYED_TODAY,
             LibraryBrowse.Mode.PLAYED_THIS_WEEK,
             LibraryBrowse.Mode.PLAYED_THIS_MONTH,
             LibraryBrowse.Mode.MOST_PLAYED,
@@ -1581,6 +1625,13 @@ class GameDeck(
                         live.playtimeMs.count { (k, v) ->
                             v > 0L && !SlotKey.isRom(k) && k in byPkg
                         }
+                    LibraryBrowse.Mode.PLAYED_TODAY ->
+                        LibraryBrowse.filterPlayedInWindow(
+                            live.lastLaunchedMs.keys.filter { !SlotKey.isRom(it) && it in byPkg },
+                            live.lastLaunchedMs,
+                            nowMs = now,
+                            windowMs = LibraryBrowse.DAY_WINDOW_MS,
+                        ).size
                     LibraryBrowse.Mode.PLAYED_THIS_WEEK ->
                         LibraryBrowse.filterPlayedInWindow(
                             live.lastLaunchedMs.keys.filter { !SlotKey.isRom(it) && it in byPkg },

@@ -17,6 +17,8 @@ data class BrowseChrome(
     val gamesRail: Boolean = false,
     /** Most-played (Top). */
     val topRail: Boolean = false,
+    /** Played in the last 24 hours (Today). */
+    val todayRail: Boolean = false,
     /** Played in the last 7 days (Week). */
     val weekRail: Boolean = false,
     /** Played in the last 30 days (Month). */
@@ -56,6 +58,7 @@ data class BrowseChrome(
         LibraryBrowse.Mode.FAVORITES,
         LibraryBrowse.Mode.COLLECTION,
         -> true
+        LibraryBrowse.Mode.PLAYED_TODAY -> todayRail
         LibraryBrowse.Mode.PLAYED_THIS_WEEK -> weekRail
         LibraryBrowse.Mode.PLAYED_THIS_MONTH -> monthRail
         LibraryBrowse.Mode.MOST_PLAYED -> topRail
@@ -77,6 +80,7 @@ data class BrowseChrome(
             add("Fav" to LibraryBrowse.Mode.FAVORITES)
             if (gamesRail) add("Games" to LibraryBrowse.Mode.GAMES)
             if (installedRail) add("Installed" to LibraryBrowse.Mode.RECENTLY_INSTALLED)
+            if (todayRail) add("Today" to LibraryBrowse.Mode.PLAYED_TODAY)
             if (weekRail) add("Week" to LibraryBrowse.Mode.PLAYED_THIS_WEEK)
             if (monthRail) add("Month" to LibraryBrowse.Mode.PLAYED_THIS_MONTH)
             if (alphaRail) add("A–Z" to LibraryBrowse.Mode.ALPHA)
@@ -115,6 +119,7 @@ data class BrowseChrome(
         .put("installedRail", installedRail)
         .put("gamesRail", gamesRail)
         .put("topRail", topRail)
+        .put("todayRail", todayRail)
         .put("weekRail", weekRail)
         .put("monthRail", monthRail)
         .put("alphaRail", alphaRail)
@@ -137,6 +142,7 @@ data class BrowseChrome(
             installedRail = true,
             gamesRail = true,
             topRail = true,
+            todayRail = true,
             weekRail = true,
             monthRail = true,
             alphaRail = true,
@@ -157,6 +163,7 @@ data class BrowseChrome(
                 installedRail = o.optBoolean("installedRail", false),
                 gamesRail = o.optBoolean("gamesRail", false),
                 topRail = o.optBoolean("topRail", false),
+                todayRail = o.optBoolean("todayRail", false),
                 weekRail = o.optBoolean("weekRail", false),
                 monthRail = o.optBoolean("monthRail", false),
                 alphaRail = o.optBoolean("alphaRail", false),
