@@ -19,11 +19,17 @@ class PackageManagerAppsSource(
             // query yet have no usable launch intent; tapping them no-ops.
             .filter { pm.getLaunchIntentForPackage(it.packageName) != null }
             .map { info ->
+                val installMs = try {
+                    pm.getPackageInfo(info.packageName, 0).firstInstallTime
+                } catch (_: Exception) {
+                    0L
+                }
                 AppEntry(
                     packageName = info.packageName,
                     label = pm.getApplicationLabel(info).toString(),
                     isGame = info.category == ApplicationInfo.CATEGORY_GAME ||
                         (info.flags and ApplicationInfo.FLAG_IS_GAME) != 0,
+                    firstInstallMs = installMs,
                 )
             }
     }

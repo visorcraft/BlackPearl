@@ -122,6 +122,32 @@ class GameDeck(
                     settings.playtimeMs[it.key] ?: 0L
                 }
             }
+            // Recently installed: all non-hidden launchable apps by firstInstallTime
+            // (not just curated grid). Platform chips are ROM-only → empty here.
+            q.mode == LibraryBrowse.Mode.RECENTLY_INSTALLED &&
+                q.platformId == null -> {
+                val apps = library.visible(settings).let { list ->
+                    if (q.text.isBlank()) list
+                    else {
+                        val needle = q.text.trim()
+                        list.filter {
+                            it.label.contains(needle, ignoreCase = true) ||
+                                it.packageName.contains(needle, ignoreCase = true)
+                        }
+                    }
+                }
+                val installMap = apps.associate { it.packageName to it.firstInstallMs }
+                val ordered = LibraryBrowse.orderByInstallTime(
+                    apps.map { it.packageName },
+                    installMap,
+                )
+                val byPkg = apps.associateBy { it.packageName }
+                ordered.mapNotNull { pkg ->
+                    byPkg[pkg]?.let {
+                        CarouselEntry(it.packageName, it.label, it.packageName, null)
+                    }
+                }
+            }
             q.mode == LibraryBrowse.Mode.ALPHA &&
                 q.platformId == null && q.text.isBlank() -> {
                 val apps = library.curated(settings).map {
@@ -480,6 +506,14 @@ class GameDeck(
         row.addView(chip("Recent", q.mode == LibraryBrowse.Mode.RECENT) {
             setQuery(q.copy(
                 mode = LibraryBrowse.Mode.RECENT,
+                platformId = null,
+                collectionName = null,
+            ))
+        })
+        row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
+        row.addView(chip("Installed", q.mode == LibraryBrowse.Mode.RECENTLY_INSTALLED) {
+            setQuery(q.copy(
+                mode = LibraryBrowse.Mode.RECENTLY_INSTALLED,
                 platformId = null,
                 collectionName = null,
             ))

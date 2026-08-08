@@ -237,4 +237,23 @@ class LibraryBrowseTest {
         assertEquals(4, LibraryBrowse.firstIndexForLetter(labels, '#'))
         assertEquals(-1, LibraryBrowse.firstIndexForLetter(labels, 'Q'))
     }
+
+    @Test
+    fun `orderByInstallTime ranks newest installs first`() {
+        val keys = listOf("old", "new", "mid", "unknown")
+        val install = mapOf("new" to 300L, "mid" to 200L, "old" to 100L)
+        assertEquals(
+            listOf("new", "mid", "old", "unknown"),
+            LibraryBrowse.orderByInstallTime(keys, install),
+        )
+    }
+
+    @Test
+    fun `browseRoms RECENTLY_INSTALLED is app-only empty for ROMs`() {
+        val out = LibraryBrowse.browseRoms(
+            library,
+            LibraryBrowse.BrowseQuery(mode = LibraryBrowse.Mode.RECENTLY_INSTALLED),
+        )
+        assertEquals(emptyList<String>(), out.map { it.name })
+    }
 }

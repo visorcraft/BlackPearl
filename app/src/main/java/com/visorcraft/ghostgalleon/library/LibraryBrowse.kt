@@ -5,12 +5,22 @@ import com.visorcraft.ghostgalleon.settings.SlotKey
 
 /**
  * Pure library browse ops for Game Mode / pickers: platform filter, text
- * search, recents / most-played / A–Z / unplayed ordering, letter jump
- * index. Host-tested; no Android types.
+ * search, recents / most-played / recently-installed / A–Z / unplayed
+ * ordering, letter jump index. Host-tested; no Android types.
  */
 object LibraryBrowse {
 
-    enum class Mode { ALL, RECENT, FAVORITES, COLLECTION, MOST_PLAYED, ALPHA, UNPLAYED }
+    enum class Mode {
+        ALL,
+        RECENT,
+        FAVORITES,
+        COLLECTION,
+        MOST_PLAYED,
+        /** Apps ordered by package install time (newest first). ROMs omitted. */
+        RECENTLY_INSTALLED,
+        ALPHA,
+        UNPLAYED,
+    }
 
     data class BrowseQuery(
         val mode: Mode = Mode.ALL,
@@ -58,6 +68,18 @@ object LibraryBrowse {
         return keys.withIndex().sortedWith(
             compareByDescending<IndexedValue<String>> { playtimeMs[it.value] ?: Long.MIN_VALUE }
                 .thenBy { it.index },
+        ).map { it.value }
+    }
+
+    /**
+     * Order keys by install time descending (newest installs first). Missing
+     * or non-positive stamps fall to the end, stable on input order.
+     */
+    fun orderByInstallTime(keys: List<String>, firstInstallMs: Map<String, Long>): List<String> {
+        return keys.withIndex().sortedWith(
+            compareByDescending<IndexedValue<String>> {
+                firstInstallMs[it.value] ?: Long.MIN_VALUE
+            }.thenBy { it.index },
         ).map { it.value }
     }
 
@@ -113,6 +135,8 @@ object LibraryBrowse {
                     .toList()
                 orderByPlaytime(topKeys, playtimeMs).mapNotNull { byKey[it] }
             }
+            // Install-time rail is app-only (PackageManager firstInstallTime).
+            Mode.RECENTLY_INSTALLED -> emptyList()
             Mode.FAVORITES -> {
                 val favIds = favorites.mapNotNull { key ->
                     if (SlotKey.isRom(key)) SlotKey.romId(key) else null
