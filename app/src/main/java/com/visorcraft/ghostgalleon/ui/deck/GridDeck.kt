@@ -426,15 +426,6 @@ class GridDeck(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         content.addView(gridFrame, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-        // Dual: Swap/Settings only on the larger physical panel (may be this
-        // deck when primary is the big screen). Single: always show.
-        // X/START key mappings still work on both panels.
-        if (shouldHostSystemChromeIcons(activity)) {
-            content.addView(
-                buildSystemChromeRow(context, activity, state),
-                systemChromeRowLayoutParams(),
-            )
-        }
         // Bottom stack: HintBar above the dock bar, so the dock sits at the
         // very bottom edge. The hint text follows focus —
         // grid actions normally, dock actions while the dock is focused.
@@ -463,6 +454,11 @@ class GridDeck(
                 StatusPill.build(context, compact = true),
                 StatusPill.overlayLayoutParams(context),
             )
+        }
+        // Dual: Swap/Settings only on the larger panel, pinned bottom-left /
+        // bottom-right so dock+hints never push them mid-screen. Single: same.
+        if (shouldHostSystemChromeIcons(activity)) {
+            attachSystemChromeOverlay(root, context, activity, state)
         }
         // A rebuild while the dock holds focus (settings save, mode
         // toggle) must repaint the ring immediately — updateFocus

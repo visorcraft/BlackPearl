@@ -1453,15 +1453,6 @@ object CompanionPanel {
         content.addView(hero, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
 
-        // Swap/Settings: dual → only on the physically larger panel (not
-        // “companion role”). Single-display always shows the row.
-        if (shouldHostSystemChromeIcons(activity)) {
-            content.addView(
-                buildSystemChromeRow(context, activity, state),
-                systemChromeRowLayoutParams(),
-            )
-        }
-
         if (settings.showHints) {
             content.addView(HintBar.build(context), LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
@@ -1478,6 +1469,11 @@ object CompanionPanel {
             }, FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT))
+        }
+        // Dual: only larger panel. Overlay pins Swap/Settings to bottom
+        // corners (above rain so they stay tappable).
+        if (shouldHostSystemChromeIcons(activity)) {
+            attachSystemChromeOverlay(root, context, activity, state)
         }
         return root
     }

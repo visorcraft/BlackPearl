@@ -476,13 +476,6 @@ class GameDeck(
         recycler = rv
         content.addView(rv, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-        // Dual: Swap/Settings only on the larger physical panel. Single: always.
-        if (shouldHostSystemChromeIcons(activity)) {
-            content.addView(
-                buildSystemChromeRow(context, activity, state),
-                systemChromeRowLayoutParams(),
-            )
-        }
         if (settings.showHints) {
             val hints = HintBar.build(context) as TextView
             hints.text = HintBar.textFor(state.dockSlot != null)
@@ -508,6 +501,10 @@ class GameDeck(
                 StatusPill.build(context, compact = true),
                 StatusPill.overlayLayoutParams(context),
             )
+        }
+        // Larger panel only (or single): Swap bottom-left, Settings bottom-right.
+        if (shouldHostSystemChromeIcons(activity)) {
+            attachSystemChromeOverlay(root, context, activity, state)
         }
         // A rebuild while the dock holds focus must repaint the ring
         // immediately — updateFocus otherwise only runs on selection updates.
@@ -1015,15 +1012,21 @@ class GameDeck(
             LibraryBrowse.presentPlatformCounts(platformRoms).forEach { (pid, count) ->
                 addGap()
                 val short = Platforms.byId(pid)?.shortName ?: pid
-                row.addView(chip(LibraryBrowse.labeledChip(short, count), q.platformId == pid) {
-                    setBrowse(
-                        q.copy(
-                            mode = LibraryBrowse.Mode.ALL,
-                            platformId = if (q.platformId == pid) null else pid,
-                            collectionName = null,
-                        ),
-                    )
-                })
+                row.addView(
+                    chip(
+                        LibraryBrowse.labeledChip(short, count),
+                        q.platformId == pid,
+                        onLongClick = { showPlatformChipMenu(pid, short) },
+                    ) {
+                        setBrowse(
+                            q.copy(
+                                mode = LibraryBrowse.Mode.ALL,
+                                platformId = if (q.platformId == pid) null else pid,
+                                collectionName = null,
+                            ),
+                        )
+                    },
+                )
             }
         }
         // Genre chips (opt-in): gamelist meta, ROM-only filter + counts.
@@ -2059,6 +2062,32 @@ class GameDeck(
             else -> "Reordered"
         }
         Toast.makeText(activity, toast, Toast.LENGTH_SHORT).show()
+    }
+
+    /**
+     * Long-press platform chip: filter / clear / sort on that platform.
+     * No always-on chrome — depth of core platform chips.
+     */
+    private fun showPlatformChipMenu(platformId: String, shortName: String) {
+        val actions = LibraryBrowse.platformChipActions(
+            state.libraryBrowse,
+            platformId,
+            shortName,
+        )
+        if (actions.isEmpty()) return
+        val labels = actions.map { it.label }.toTypedArray()
+        android.app.AlertDialog.Builder(activity)
+            .setTitle(shortName.ifBlank { platformId })
+            .setItems(labels) { _, which ->
+                if (which !in actions.indices) return@setItems
+                val action = actions[which]
+                val next = settings.browseChrome.sanitize(action.query)
+                state.setLibraryBrowse(next, force = true)
+                toastIfEmptyBrowse(next)
+                Toast.makeText(activity, action.label, Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     /**
