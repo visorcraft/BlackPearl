@@ -101,6 +101,11 @@ data class Settings(
      * (within schema v8; no bump). Power users enable extras in Settings → Display & Grid.
      */
     val browseChrome: BrowseChrome = BrowseChrome.MINIMAL,
+    /**
+     * Recent library search queries (newest first). Long-press Search / Search
+     * dialog history. Absent on disk → empty (within schema v8; no bump).
+     */
+    val searchHistory: List<String> = emptyList(),
     val schemaVersion: Int = 8,
 ) {
     companion object {

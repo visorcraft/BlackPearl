@@ -76,10 +76,12 @@ class SettingsStoreTest {
             interactiveDisplayMode = "secondary",
             orientationMode = "sensor_landscape",
             userPinnedPrimaryId = 1,
+            searchHistory = listOf("zelda", "mario"),
         )
         store.save(s)
         val loaded = SettingsStore(f).load()
         assertEquals(s, loaded)
+        assertEquals(listOf("zelda", "mario"), loaded.searchHistory)
         assertEquals(true, loaded.setupDismissed)
         assertEquals(CompanionRole.PERF_HUD.name, loaded.companionRole)
         assertEquals("com.example.pin", loaded.companionPinnedPackage)

@@ -26,6 +26,7 @@ import com.visorcraft.ghostgalleon.library.GameDetails
 import com.visorcraft.ghostgalleon.library.HiddenRoms
 import com.visorcraft.ghostgalleon.library.LibraryBrowse
 import com.visorcraft.ghostgalleon.library.PlayStats
+import com.visorcraft.ghostgalleon.library.SearchHistory
 import com.visorcraft.ghostgalleon.library.SessionMath
 import com.visorcraft.ghostgalleon.rom.Platforms
 import com.visorcraft.ghostgalleon.rom.PlatformTile
@@ -857,9 +858,15 @@ class GameDeck(
             }
         }
         addGap()
-        row.addView(chip(if (q.text.isBlank()) "Search" else "\"${q.text}\"", q.text.isNotBlank()) {
-            openSearchDialog()
-        })
+        row.addView(
+            chip(
+                if (q.text.isBlank()) "Search" else "\"${q.text}\"",
+                q.text.isNotBlank(),
+                onLongClick = { showSearchHistory() },
+            ) {
+                openSearchDialog()
+            },
+        )
         addGap()
         row.addView(chip(
             if (state.multiSelectEnabled) "Select (${state.multiSelectKeys.size})" else "Select",
@@ -883,14 +890,22 @@ class GameDeck(
         val romCount = state.multiSelectKeys.count {
             com.visorcraft.ghostgalleon.settings.SlotKey.isRom(it)
         }
+        val live = app().settings
+        val favInSel = com.visorcraft.ghostgalleon.library.MultiSelectOps
+            .favoriteCountInSelection(live.favorites, state.multiSelectKeys)
+        val railKeys = entries.map { it.key }
         val activeCol = activeCollectionName()
         val labels = mutableListOf(
+            "Select all on rail (${railKeys.size})",
             "Favorite selected ($n)",
-            "Pin selected to grid ($n)",
-            "Pin selected to dock ($n)",
-            "Add to collection…",
-            "Hide selected ROMs ($romCount)",
         )
+        if (favInSel > 0) {
+            labels.add("Unfavorite selected ($favInSel)")
+        }
+        labels.add("Pin selected to grid ($n)")
+        labels.add("Pin selected to dock ($n)")
+        labels.add("Add to collection…")
+        labels.add("Hide selected ROMs ($romCount)")
         if (activeCol != null) {
             labels.add("Remove from $activeCol ($n)")
         }
@@ -901,24 +916,41 @@ class GameDeck(
             .setItems(labels.toTypedArray()) { _, which ->
                 val label = labels[which]
                 when {
+                    label.startsWith("Select all on rail") -> {
+                        val all = com.visorcraft.ghostgalleon.library.MultiSelectOps
+                            .selectAll(railKeys)
+                        state.setMultiSelectKeys(all)
+                        Toast.makeText(
+                            activity,
+                            "Selected ${all.size}",
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                    }
                     label.startsWith("Favorite selected") -> {
                         val fav = com.visorcraft.ghostgalleon.library.MultiSelectOps.bulkFavorite(
-                            settings.favorites, state.multiSelectKeys, add = true)
-                        app().updateSettings(settings.copy(favorites = fav))
+                            app().settings.favorites, state.multiSelectKeys, add = true)
+                        app().updateSettings(app().settings.copy(favorites = fav))
                         state.clearMultiSelect()
+                    }
+                    label.startsWith("Unfavorite selected") -> {
+                        val fav = com.visorcraft.ghostgalleon.library.MultiSelectOps.bulkFavorite(
+                            app().settings.favorites, state.multiSelectKeys, add = false)
+                        app().updateSettings(app().settings.copy(favorites = fav))
+                        state.clearMultiSelect()
+                        Toast.makeText(activity, "Unfavorited", Toast.LENGTH_SHORT).show()
                     }
                     label.startsWith("Pin selected to grid") -> {
                         val slots = com.visorcraft.ghostgalleon.library.MultiSelectOps.bulkPinToGrid(
-                            settings.gridSlots, state.multiSelectKeys)
-                        app().updateSettings(settings.copy(gridSlots = slots))
+                            app().settings.gridSlots, state.multiSelectKeys)
+                        app().updateSettings(app().settings.copy(gridSlots = slots))
                         state.clearMultiSelect()
                         Toast.makeText(activity, "Pinned to grid", Toast.LENGTH_SHORT).show()
                     }
                     label.startsWith("Pin selected to dock") -> {
                         val (dock, added) =
                             com.visorcraft.ghostgalleon.library.MultiSelectOps.bulkPinToDock(
-                                settings.dockSlots, state.multiSelectKeys)
-                        app().updateSettings(settings.copy(dockSlots = dock))
+                                app().settings.dockSlots, state.multiSelectKeys)
+                        app().updateSettings(app().settings.copy(dockSlots = dock))
                         state.clearMultiSelect()
                         Toast.makeText(
                             activity,
@@ -931,7 +963,7 @@ class GameDeck(
                     label.startsWith("Hide selected") -> {
                         val (hidden, added) =
                             com.visorcraft.ghostgalleon.library.MultiSelectOps.bulkHideRoms(
-                                settings.hiddenRomIds, state.multiSelectKeys,
+                                app().settings.hiddenRomIds, state.multiSelectKeys,
                             )
                         if (added == 0) {
                             Toast.makeText(
@@ -940,7 +972,7 @@ class GameDeck(
                                 Toast.LENGTH_SHORT,
                             ).show()
                         } else {
-                            app().updateSettings(settings.copy(hiddenRomIds = hidden))
+                            app().updateSettings(app().settings.copy(hiddenRomIds = hidden))
                             state.clearMultiSelect()
                             Toast.makeText(
                                 activity,
@@ -1204,27 +1236,68 @@ class GameDeck(
             hint = "Name, genre, developer, year…"
             setSingleLine()
         }
-        android.app.AlertDialog.Builder(activity)
+        val hasHistory = app().settings.searchHistory.isNotEmpty()
+        val builder = android.app.AlertDialog.Builder(activity)
             .setTitle("Search library")
             .setView(input)
             .setPositiveButton("Search") { _, _ ->
-                val text = input.text?.toString().orEmpty()
-                val next = state.libraryBrowse.copy(text = text)
-                state.setLibraryBrowse(next)
-                val n = estimateCarouselSize(next)
-                Toast.makeText(
-                    activity,
-                    BrowseFeedback.searchApplied(n, text),
-                    Toast.LENGTH_SHORT,
-                ).show()
+                applySearch(input.text?.toString().orEmpty())
             }
-            .setNeutralButton("Clear") { _, _ ->
-                state.setLibraryBrowse(state.libraryBrowse.copy(text = ""))
-                Toast.makeText(
-                    activity,
-                    BrowseFeedback.searchApplied(0, ""),
-                    Toast.LENGTH_SHORT,
-                ).show()
+            .setNegativeButton("Cancel", null)
+        if (hasHistory) {
+            builder.setNeutralButton("History") { _, _ ->
+                showSearchHistory()
+            }
+        } else {
+            builder.setNeutralButton("Clear") { _, _ ->
+                applySearch("")
+            }
+        }
+        builder.show()
+    }
+
+    /** Apply a library text filter and remember non-blank queries. */
+    private fun applySearch(raw: String) {
+        val text = raw.trim()
+        val next = state.libraryBrowse.copy(text = text)
+        state.setLibraryBrowse(next)
+        if (text.isNotEmpty()) {
+            val live = app().settings
+            val history = SearchHistory.push(live.searchHistory, text)
+            if (history != live.searchHistory) {
+                app().updateSettings(live.copy(searchHistory = history))
+            }
+        }
+        val n = estimateCarouselSize(next)
+        Toast.makeText(
+            activity,
+            BrowseFeedback.searchApplied(n, text),
+            Toast.LENGTH_SHORT,
+        ).show()
+    }
+
+    /**
+     * Long-press Search (or Search dialog → History): pick a recent query.
+     * Depth of core Search without new always-on chrome.
+     */
+    private fun showSearchHistory() {
+        val live = app().settings
+        val history = live.searchHistory
+        if (history.isEmpty()) {
+            Toast.makeText(activity, "No search history", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val items = history.toTypedArray()
+        android.app.AlertDialog.Builder(activity)
+            .setTitle("Recent searches")
+            .setItems(items) { _, which ->
+                if (which in items.indices) {
+                    applySearch(items[which])
+                }
+            }
+            .setNeutralButton("Clear history") { _, _ ->
+                app().updateSettings(live.copy(searchHistory = SearchHistory.clear()))
+                Toast.makeText(activity, "Search history cleared", Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton("Cancel", null)
             .show()

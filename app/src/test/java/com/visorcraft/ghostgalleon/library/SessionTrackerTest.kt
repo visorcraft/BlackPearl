@@ -87,6 +87,16 @@ class MultiSelectOpsTest {
     }
 
     @Test
+    fun `favoriteCountInSelection and selectAll`() {
+        assertEquals(
+            2,
+            MultiSelectOps.favoriteCountInSelection(setOf("a", "b", "c"), setOf("a", "c", "x")),
+        )
+        assertEquals(0, MultiSelectOps.favoriteCountInSelection(emptySet(), setOf("a")))
+        assertEquals(setOf("a", "b"), MultiSelectOps.selectAll(listOf("a", "b", "a")))
+    }
+
+    @Test
     fun `bulkPinToGrid fills empty slots`() {
         val slots = listOf<String?>(null, "keep", null)
         val next = MultiSelectOps.bulkPinToGrid(slots, setOf("x", "y"))

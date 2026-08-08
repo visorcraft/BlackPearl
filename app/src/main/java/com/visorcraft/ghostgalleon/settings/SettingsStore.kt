@@ -162,6 +162,10 @@ class SettingsStore(private val file: File) {
                     null
                 },
             ),
+            // Within schema v8: absent searchHistory → empty recent queries.
+            searchHistory = o.optJSONArray("searchHistory").toStringList()
+                .map { it.trim() }
+                .filter { it.isNotEmpty() },
             schemaVersion = CURRENT_SCHEMA,
         )
         }
@@ -266,6 +270,7 @@ class SettingsStore(private val file: File) {
                 s.userPinnedPrimaryId?.let { it } ?: JSONObject.NULL,
             )
             .put("browseChrome", s.browseChrome.toJson())
+            .put("searchHistory", JSONArray(s.searchHistory))
             .put("schemaVersion", CURRENT_SCHEMA)
         }
 

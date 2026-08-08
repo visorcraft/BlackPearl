@@ -120,6 +120,15 @@ object MultiSelectOps {
 
     fun clearSelection(): Set<String> = emptySet()
 
+    /**
+     * How many of [selected] are currently in [favorites] (for bulk
+     * Unfavorite affordance labels).
+     */
+    fun favoriteCountInSelection(
+        favorites: Set<String>,
+        selected: Set<String>,
+    ): Int = selected.count { it in favorites }
+
     fun bulkFavorite(
         favorites: Set<String>,
         selected: Set<String>,
