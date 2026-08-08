@@ -32,6 +32,9 @@ class GameDetailsTest {
                 kind = "ROM",
                 platformId = "switch",
                 genre = "Platform / Indie",
+                developer = "Maddy Makes Games",
+                year = "2018",
+                rating = "9.5",
                 lastLaunchedMs = 1_000L,
                 playtimeMs = 90 * 60_000L, // 1h 30m
                 favorite = true,
@@ -42,7 +45,10 @@ class GameDetailsTest {
         assertTrue(body.contains("Celeste"))
         assertTrue(body.contains("Type: ROM"))
         assertTrue(body.contains("Platform: switch"))
+        assertTrue(body.contains("Year: 2018"))
         assertTrue(body.contains("Genre: Platform / Indie"))
+        assertTrue(body.contains("Developer: Maddy Makes Games"))
+        assertTrue(body.contains("Rating: 9.5"))
         assertTrue(body.contains("Last played: 5m ago"))
         assertTrue(body.contains("Playtime: 1h 30m"))
         assertTrue(body.contains("Favorite: Yes"))

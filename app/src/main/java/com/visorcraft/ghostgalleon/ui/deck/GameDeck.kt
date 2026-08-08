@@ -1058,7 +1058,7 @@ class GameDeck(
     private fun openSearchDialog() {
         val input = android.widget.EditText(activity).apply {
             setText(state.libraryBrowse.text)
-            hint = "Search apps & ROMs"
+            hint = "Name, genre, developer, year…"
             setSingleLine()
         }
         android.app.AlertDialog.Builder(activity)
@@ -1276,6 +1276,9 @@ class GameDeck(
                 kind = if (rom != null) "ROM" else "App",
                 platformId = rom?.platformId,
                 genre = rom?.genre,
+                developer = rom?.developer,
+                year = rom?.year,
+                rating = rom?.rating,
                 lastLaunchedMs = settings.lastLaunchedMs[key],
                 playtimeMs = settings.playtimeMs[key] ?: 0L,
                 favorite = key in settings.favorites,

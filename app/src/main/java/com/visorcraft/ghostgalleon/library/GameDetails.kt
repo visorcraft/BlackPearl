@@ -12,6 +12,9 @@ object GameDetails {
         val kind: String, // "App" | "ROM" | custom
         val platformId: String? = null,
         val genre: String? = null,
+        val developer: String? = null,
+        val year: String? = null,
+        val rating: String? = null,
         val lastLaunchedMs: Long? = null,
         val playtimeMs: Long = 0L,
         val favorite: Boolean = false,
@@ -44,8 +47,17 @@ object GameDetails {
         input.platformId?.trim()?.takeIf { it.isNotEmpty() }?.let {
             lines.add("Platform: $it")
         }
+        input.year?.trim()?.takeIf { it.isNotEmpty() }?.let {
+            lines.add("Year: $it")
+        }
         input.genre?.trim()?.takeIf { it.isNotEmpty() }?.let {
             lines.add("Genre: $it")
+        }
+        input.developer?.trim()?.takeIf { it.isNotEmpty() }?.let {
+            lines.add("Developer: $it")
+        }
+        input.rating?.trim()?.takeIf { it.isNotEmpty() }?.let {
+            lines.add("Rating: $it")
         }
         lines.add("Key: ${input.key}")
         lines.add("")

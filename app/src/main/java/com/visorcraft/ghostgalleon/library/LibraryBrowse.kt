@@ -118,7 +118,27 @@ object LibraryBrowse {
             .map { display[it.key] ?: it.key }
     }
 
-    /** Case-insensitive substring match on ROM name (and id as fallback). */
+    /**
+     * True when [rom] matches a search [needle] (already lowercased, non-empty).
+     * Hits name, id, platform, genre, developer, year, and description.
+     */
+    fun romMatchesSearch(rom: RomEntry, needle: String): Boolean {
+        if (needle.isEmpty()) return true
+        fun hit(raw: String?): Boolean =
+            !raw.isNullOrBlank() && raw.lowercase().contains(needle)
+        return hit(rom.name) ||
+            hit(rom.id) ||
+            hit(rom.platformId) ||
+            hit(rom.genre) ||
+            hit(rom.developer) ||
+            hit(rom.year) ||
+            hit(rom.description)
+    }
+
+    /**
+     * Case-insensitive substring search across ROM name, id, platform, genre,
+     * developer, year, and description (gamelist meta when present).
+     */
     fun searchRoms(
         roms: List<RomEntry>,
         query: String,
@@ -128,11 +148,7 @@ object LibraryBrowse {
         val q = query.trim()
         if (q.isEmpty()) return listed
         val needle = q.lowercase()
-        return listed.filter {
-            it.name.lowercase().contains(needle) ||
-                it.id.lowercase().contains(needle) ||
-                it.platformId.lowercase().contains(needle)
-        }
+        return listed.filter { romMatchesSearch(it, needle) }
     }
 
     /**

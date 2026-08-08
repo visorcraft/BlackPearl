@@ -13,6 +13,9 @@ class LibraryBrowseTest {
         name: String,
         visible: Boolean = true,
         genre: String? = null,
+        developer: String? = null,
+        year: String? = null,
+        description: String? = null,
     ) = RomEntry(
         id = "$platform:$name.rom",
         name = name,
@@ -21,14 +24,21 @@ class LibraryBrowseTest {
         path = "/storage/x/$name.rom",
         visibleInUi = visible,
         genre = genre,
+        developer = developer,
+        year = year,
+        description = description,
     )
 
     private val library = listOf(
-        rom("snes", "Zelda", genre = "Action / Adventure"),
-        rom("snes", "Mario", genre = "Platform"),
-        rom("3ds", "Pokemon", genre = "RPG"),
+        rom("snes", "Zelda", genre = "Action / Adventure", developer = "Nintendo", year = "1991"),
+        rom("snes", "Mario", genre = "Platform", developer = "Nintendo", year = "1990"),
+        rom("3ds", "Pokemon", genre = "RPG", developer = "Game Freak", year = "2013"),
         rom("nds", "Hidden", visible = false, genre = "RPG"),
-        rom("switch", "BotW", genre = "Action, Adventure"),
+        rom(
+            "switch", "BotW", genre = "Action, Adventure",
+            developer = "Nintendo EPD", year = "2017",
+            description = "Open-world exploration on Hyrule",
+        ),
     )
 
     @Test
@@ -42,6 +52,31 @@ class LibraryBrowseTest {
     fun `searchRoms matches name case-insensitively`() {
         val hits = LibraryBrowse.searchRoms(library, "zel")
         assertEquals(listOf("Zelda"), hits.map { it.name })
+    }
+
+    @Test
+    fun `searchRoms matches genre developer year and description`() {
+        assertEquals(
+            setOf("Zelda", "BotW"),
+            LibraryBrowse.searchRoms(library, "adventure").map { it.name }.toSet(),
+        )
+        assertEquals(
+            listOf("Pokemon"),
+            LibraryBrowse.searchRoms(library, "game freak").map { it.name },
+        )
+        assertEquals(
+            listOf("BotW"),
+            LibraryBrowse.searchRoms(library, "2017").map { it.name },
+        )
+        assertEquals(
+            listOf("BotW"),
+            LibraryBrowse.searchRoms(library, "hyrule").map { it.name },
+        )
+        // Still matches platform id
+        assertEquals(
+            setOf("Zelda", "Mario"),
+            LibraryBrowse.searchRoms(library, "snes").map { it.name }.toSet(),
+        )
     }
 
     @Test
