@@ -70,7 +70,9 @@ class GameDeck(
         if (q != state.libraryBrowse) {
             state.setLibraryBrowse(q, force = true)
         }
-        val appsOk = q.platformId == null && q.genre.isNullOrBlank()
+        val appsOk = q.platformId == null &&
+            q.genre.isNullOrBlank() &&
+            q.developer.isNullOrBlank()
         val browsed = LibraryBrowse.browseRoms(
             roms, q,
             lastLaunchedMs = settings.lastLaunchedMs,
@@ -101,10 +103,16 @@ class GameDeck(
                         if (!LibraryBrowse.matchesGenre(rom, q.genre)) {
                             return@mapNotNull null
                         }
+                        if (!LibraryBrowse.matchesDeveloper(rom, q.developer)) {
+                            return@mapNotNull null
+                        }
                         CarouselEntry(SlotKey.rom(rom.id), rom.name, null, rom)
                     } ?: byPkg[k]?.let {
-                        // Platform/genre chips are ROM-only — drop apps when set.
-                        if (q.platformId != null || !q.genre.isNullOrBlank()) {
+                        // Platform/genre/developer chips are ROM-only — drop apps when set.
+                        if (q.platformId != null ||
+                            !q.genre.isNullOrBlank() ||
+                            !q.developer.isNullOrBlank()
+                        ) {
                             return@mapNotNull null
                         }
                         CarouselEntry(it.packageName, it.label, it.packageName, null)
@@ -374,6 +382,18 @@ class GameDeck(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
             ))
         }
+        state.libraryBrowse.developer?.trim()?.takeIf { it.isNotEmpty() }?.let { dev ->
+            content.addView(TextView(context).apply {
+                text = "Developer · $dev"
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                setTextColor(settings.accentColor)
+                gravity = Gravity.CENTER
+                setPadding(0, dp(4), 0, 0)
+            }, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ))
+        }
         content.addView(
             buildBrowseBar(context, ::dp),
             LinearLayout.LayoutParams(
@@ -617,6 +637,7 @@ class GameDeck(
         // on screen even though the filter was cleared).
         row.addView(chip("All", q.mode == LibraryBrowse.Mode.ALL && q.platformId == null &&
             q.genre.isNullOrBlank() &&
+            q.developer.isNullOrBlank() &&
             q.text.isBlank() && q.collectionName == null) {
             val live = app().settings
             val firstKey = library.curated(live).firstOrNull()?.packageName
@@ -647,6 +668,7 @@ class GameDeck(
                     mode = LibraryBrowse.Mode.RECENT,
                     platformId = null,
                     genre = null,
+                    developer = null,
                     collectionName = null,
                 ))
             },
@@ -669,6 +691,7 @@ class GameDeck(
                         mode = LibraryBrowse.Mode.PLAYED_THIS_WEEK,
                         platformId = null,
                         genre = null,
+                        developer = null,
                         collectionName = null,
                     ))
                 },
@@ -691,6 +714,7 @@ class GameDeck(
                         mode = LibraryBrowse.Mode.PLAYED_THIS_MONTH,
                         platformId = null,
                         genre = null,
+                        developer = null,
                         collectionName = null,
                     ))
                 },
@@ -703,6 +727,7 @@ class GameDeck(
                     mode = LibraryBrowse.Mode.RECENTLY_INSTALLED,
                     platformId = null,
                     genre = null,
+                    developer = null,
                     collectionName = null,
                 ))
             })
@@ -714,6 +739,7 @@ class GameDeck(
                     mode = LibraryBrowse.Mode.GAMES,
                     platformId = null,
                     genre = null,
+                    developer = null,
                     collectionName = null,
                 ))
             })
@@ -732,6 +758,7 @@ class GameDeck(
                         mode = LibraryBrowse.Mode.MOST_PLAYED,
                         platformId = null,
                         genre = null,
+                        developer = null,
                         collectionName = null,
                     ))
                 },
@@ -775,6 +802,7 @@ class GameDeck(
                     mode = LibraryBrowse.Mode.FAVORITES,
                     platformId = null,
                     genre = null,
+                    developer = null,
                     collectionName = null,
                 ))
             },
@@ -786,6 +814,7 @@ class GameDeck(
                     mode = LibraryBrowse.Mode.ALPHA,
                     platformId = null,
                     genre = null,
+                    developer = null,
                     collectionName = null,
                 ))
             })
@@ -797,6 +826,7 @@ class GameDeck(
                     mode = LibraryBrowse.Mode.UNPLAYED,
                     platformId = null,
                     genre = null,
+                    developer = null,
                     collectionName = null,
                 ))
             })
@@ -850,6 +880,24 @@ class GameDeck(
                             q.copy(
                                 mode = LibraryBrowse.Mode.ALL,
                                 genre = if (selected) null else genre,
+                                collectionName = null,
+                            ),
+                        )
+                    },
+                )
+            }
+        }
+        // Developer chips (opt-in): gamelist meta, ROM-only filter + counts.
+        if (chrome.developerChips) {
+            LibraryBrowse.presentDeveloperCounts(roms, settings.hiddenRomIds).forEach { (dev, count) ->
+                addGap()
+                val selected = q.developer?.equals(dev, ignoreCase = true) == true
+                row.addView(
+                    chip(LibraryBrowse.labeledChip(dev, count), selected) {
+                        setBrowse(
+                            q.copy(
+                                mode = LibraryBrowse.Mode.ALL,
+                                developer = if (selected) null else dev,
                                 collectionName = null,
                             ),
                         )
@@ -1204,19 +1252,21 @@ class GameDeck(
     }
 
     /**
-     * Select a random visible library item. Switches browse mode to ALL so
-     * the pick lands in the carousel and A/CONFIRM launches the same key
-     * (not a stale filter list).
+     * Select a random item. Prefers the **current rail/filter** (Random stays
+     * inside what you see). Falls back to the full library and resets browse
+     * to All when the carousel is empty.
      */
     private fun pickRandomEntry() {
         val live = app().settings
-        val pool = buildList {
+        val filtered = entries.map { it.key }
+        val full = buildList {
             addAll(library.curated(live).map { it.packageName })
             addAll(
                 HiddenRoms.listed(roms, live.hiddenRomIds)
                     .map { SlotKey.rom(it.id) },
             )
         }
+        val pool = LibraryBrowse.randomPool(filtered, full)
         val key = LibraryBrowse.pickRandom(pool) { size ->
             java.util.concurrent.ThreadLocalRandom.current().nextInt(size)
         }
@@ -1224,10 +1274,13 @@ class GameDeck(
             Toast.makeText(activity, "Library empty", Toast.LENGTH_SHORT).show()
             return
         }
-        // Full library view so the selection is present in entries after rebuild.
-        state.setLibraryBrowse(LibraryBrowse.BrowseQuery(), force = true)
+        if (filtered.isEmpty()) {
+            // Full library view so the selection is present after rebuild.
+            state.setLibraryBrowse(LibraryBrowse.BrowseQuery(), force = true)
+        }
         state.select(key, force = true)
-        Toast.makeText(activity, "Random pick", Toast.LENGTH_SHORT).show()
+        val scope = if (filtered.isNotEmpty()) "Random (filtered)" else "Random pick"
+        Toast.makeText(activity, scope, Toast.LENGTH_SHORT).show()
     }
 
     private fun openSearchDialog() {
@@ -1327,7 +1380,9 @@ class GameDeck(
             hiddenRomIds = live.hiddenRomIds,
             nowMs = now,
         )
-        val appsOk = q.platformId == null && q.genre.isNullOrBlank()
+        val appsOk = q.platformId == null &&
+            q.genre.isNullOrBlank() &&
+            q.developer.isNullOrBlank()
         if (q.mode == LibraryBrowse.Mode.RECENTLY_INSTALLED) {
             val apps = library.visible(live)
             if (q.text.isBlank()) return apps.size

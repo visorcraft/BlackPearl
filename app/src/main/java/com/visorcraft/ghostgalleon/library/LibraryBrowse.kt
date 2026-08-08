@@ -54,6 +54,11 @@ object LibraryBrowse {
          * any slash/comma segment of [RomEntry.genre] case-insensitively.
          */
         val genre: String? = null,
+        /**
+         * Optional developer / publisher filter (gamelist meta). ROM-only;
+         * case-insensitive exact match on trimmed [RomEntry.developer].
+         */
+        val developer: String? = null,
     )
 
     /** Listed ROMs only (scanner-visible, not user-hidden), optional platform. */
@@ -88,6 +93,47 @@ object LibraryBrowse {
     fun filterByGenre(roms: List<RomEntry>, genre: String?): List<RomEntry> {
         if (genre.isNullOrBlank()) return roms
         return roms.filter { matchesGenre(it, genre) }
+    }
+
+    /** True when [rom] matches optional [developer] (case-insensitive exact). */
+    fun matchesDeveloper(rom: RomEntry, developer: String?): Boolean {
+        val needle = developer?.trim().orEmpty()
+        if (needle.isEmpty()) return true
+        val raw = rom.developer?.trim().orEmpty()
+        return raw.isNotEmpty() && raw.equals(needle, ignoreCase = true)
+    }
+
+    fun filterByDeveloper(roms: List<RomEntry>, developer: String?): List<RomEntry> {
+        if (developer.isNullOrBlank()) return roms
+        return roms.filter { matchesDeveloper(it, developer) }
+    }
+
+    /**
+     * Distinct developers present in the listed library with ROM counts,
+     * sorted by count descending then name. [limit] caps chip bar length
+     * (default 10). Used for labeled chips like "Nintendo · 42".
+     */
+    fun presentDeveloperCounts(
+        roms: List<RomEntry>,
+        hiddenRomIds: Set<String> = emptySet(),
+        limit: Int = 10,
+    ): List<Pair<String, Int>> {
+        val counts = linkedMapOf<String, Int>()
+        val display = linkedMapOf<String, String>()
+        HiddenRoms.listed(roms, hiddenRomIds).forEach { rom ->
+            val raw = rom.developer?.trim().orEmpty()
+            if (raw.isEmpty()) return@forEach
+            val key = raw.lowercase()
+            if (key !in display) display[key] = raw
+            counts[key] = (counts[key] ?: 0) + 1
+        }
+        return counts.entries
+            .sortedWith(
+                compareByDescending<Map.Entry<String, Int>> { it.value }
+                    .thenBy { it.key },
+            )
+            .take(limit.coerceAtLeast(0))
+            .map { (key, n) -> (display[key] ?: key) to n }
     }
 
     /**
@@ -252,9 +298,16 @@ object LibraryBrowse {
         items.filter(isGame)
 
     /**
-     * Full browse pipeline: mode → platform → genre → text. Recents /
-     * week / month / most-played / favorites / A–Z / unplayed are applied by
-     * restricting first, then filter/search.
+     * Prefer [filteredKeys] when non-empty for Random (stay in current rail /
+     * filter); otherwise fall back to [fullKeys]. Pure; host-tested.
+     */
+    fun randomPool(filteredKeys: List<String>, fullKeys: List<String>): List<String> =
+        if (filteredKeys.isNotEmpty()) filteredKeys else fullKeys
+
+    /**
+     * Full browse pipeline: mode → platform → genre → developer → text.
+     * Recents / week / month / most-played / favorites / A–Z / unplayed are
+     * applied by restricting first, then filter/search.
      *
      * [nowMs] is used by [Mode.PLAYED_THIS_WEEK] and [Mode.PLAYED_THIS_MONTH]
      * (default 0 → empty window).
@@ -336,7 +389,8 @@ object LibraryBrowse {
         // re-filter away members that were intentionally kept (none).
         val platformed = filterByPlatform(base, query.platformId, emptySet())
         val genred = filterByGenre(platformed, query.genre)
-        return searchRoms(genred, query.text, emptySet())
+        val developed = filterByDeveloper(genred, query.developer)
+        return searchRoms(developed, query.text, emptySet())
     }
 
     /** Distinct platform ids present in the listed library, sorted. */

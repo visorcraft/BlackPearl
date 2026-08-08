@@ -23,6 +23,10 @@ class BrowseFeedbackTest {
             BrowseFeedback.emptyHint(LibraryBrowse.BrowseQuery(genre = "RPG")),
         )
         assertEquals(
+            "No titles by Nintendo",
+            BrowseFeedback.emptyHint(LibraryBrowse.BrowseQuery(developer = "Nintendo")),
+        )
+        assertEquals(
             "No titles on snes",
             BrowseFeedback.emptyHint(LibraryBrowse.BrowseQuery(platformId = "snes")),
         )

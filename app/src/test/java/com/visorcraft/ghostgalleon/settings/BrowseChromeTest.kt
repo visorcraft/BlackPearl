@@ -21,6 +21,7 @@ class BrowseChromeTest {
         assertFalse(c.unplayedRail)
         assertFalse(c.randomChip)
         assertFalse(c.genreChips)
+        assertFalse(c.developerChips)
         assertFalse(c.deckStatusPill)
         assertFalse(c.quickPanelBrowse)
         assertTrue(c.platformChips)
@@ -34,6 +35,7 @@ class BrowseChromeTest {
         assertTrue(c.installedRail && c.gamesRail && c.topRail && c.alphaRail)
         assertTrue(c.weekRail && c.monthRail)
         assertTrue(c.unplayedRail && c.randomChip && c.genreChips)
+        assertTrue(c.developerChips)
         assertTrue(c.deckStatusPill && c.quickPanelBrowse)
         assertTrue(c.isFull())
     }
@@ -63,6 +65,15 @@ class BrowseChromeTest {
         val c = BrowseChrome.MINIMAL
         val q = LibraryBrowse.BrowseQuery(genre = "RPG")
         assertEquals(null, c.sanitize(q).genre)
+    }
+
+    @Test
+    fun `sanitize clears developer when developer chips off`() {
+        val c = BrowseChrome.MINIMAL
+        val q = LibraryBrowse.BrowseQuery(developer = "Nintendo")
+        assertEquals(null, c.sanitize(q).developer)
+        val on = BrowseChrome.MINIMAL.copy(developerChips = true)
+        assertEquals("Nintendo", on.sanitize(q).developer)
     }
 
     @Test

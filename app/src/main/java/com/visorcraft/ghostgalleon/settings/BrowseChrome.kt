@@ -29,6 +29,8 @@ data class BrowseChrome(
     val randomChip: Boolean = false,
     /** Genre chips from gamelist meta. */
     val genreChips: Boolean = false,
+    /** Developer / publisher chips from gamelist meta. */
+    val developerChips: Boolean = false,
     /** Platform filter chips (SNES, Switch, …). Default on — core for ROMs. */
     val platformChips: Boolean = true,
     /** Named user collection chips (not Favorites). Default on if user created any. */
@@ -76,7 +78,7 @@ data class BrowseChrome(
         }
     }
 
-    /** Drop disallowed mode/genre into a safe query for the current chrome. */
+    /** Drop disallowed mode/genre/developer into a safe query for the current chrome. */
     fun sanitize(q: LibraryBrowse.BrowseQuery): LibraryBrowse.BrowseQuery {
         var next = q
         if (!allowsMode(next.mode)) {
@@ -84,6 +86,9 @@ data class BrowseChrome(
         }
         if (!genreChips && !next.genre.isNullOrBlank()) {
             next = next.copy(genre = null)
+        }
+        if (!developerChips && !next.developer.isNullOrBlank()) {
+            next = next.copy(developer = null)
         }
         if (!platformChips && next.platformId != null) {
             next = next.copy(platformId = null)
@@ -107,6 +112,7 @@ data class BrowseChrome(
         .put("unplayedRail", unplayedRail)
         .put("randomChip", randomChip)
         .put("genreChips", genreChips)
+        .put("developerChips", developerChips)
         .put("platformChips", platformChips)
         .put("collectionRails", collectionRails)
         .put("deckStatusPill", deckStatusPill)
@@ -127,6 +133,7 @@ data class BrowseChrome(
             unplayedRail = true,
             randomChip = true,
             genreChips = true,
+            developerChips = true,
             platformChips = true,
             collectionRails = true,
             deckStatusPill = true,
@@ -145,6 +152,7 @@ data class BrowseChrome(
                 unplayedRail = o.optBoolean("unplayedRail", false),
                 randomChip = o.optBoolean("randomChip", false),
                 genreChips = o.optBoolean("genreChips", false),
+                developerChips = o.optBoolean("developerChips", false),
                 platformChips = o.optBoolean("platformChips", true),
                 collectionRails = o.optBoolean("collectionRails", true),
                 deckStatusPill = o.optBoolean("deckStatusPill", false),

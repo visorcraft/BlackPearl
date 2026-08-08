@@ -18,6 +18,9 @@ object BrowseFeedback {
         if (!query.genre.isNullOrBlank()) {
             return "No titles in ${query.genre.trim()}"
         }
+        if (!query.developer.isNullOrBlank()) {
+            return "No titles by ${query.developer.trim()}"
+        }
         if (query.platformId != null) {
             return "No titles on ${query.platformId}"
         }

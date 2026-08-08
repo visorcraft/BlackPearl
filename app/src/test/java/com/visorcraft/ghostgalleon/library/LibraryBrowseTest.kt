@@ -3,6 +3,7 @@ package com.visorcraft.ghostgalleon.library
 import com.visorcraft.ghostgalleon.rom.RomEntry
 import com.visorcraft.ghostgalleon.settings.SlotKey
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -538,6 +539,34 @@ class LibraryBrowseTest {
         assertEquals(1, counts["RPG"])
         // Names still rank by frequency first
         assertEquals("Action", LibraryBrowse.presentGenreCounts(library).first().first)
+    }
+
+    @Test
+    fun `presentDeveloperCounts and developer filter`() {
+        val counts = LibraryBrowse.presentDeveloperCounts(library, limit = 10).toMap()
+        assertEquals(2, counts["Nintendo"])
+        assertEquals(1, counts["Game Freak"])
+        assertEquals(1, counts["Nintendo EPD"])
+        assertEquals("Nintendo", LibraryBrowse.presentDeveloperCounts(library).first().first)
+        val filtered = LibraryBrowse.browseRoms(
+            library,
+            LibraryBrowse.BrowseQuery(developer = "Nintendo"),
+        )
+        assertEquals(listOf("Zelda", "Mario"), filtered.map { it.name })
+        assertTrue(LibraryBrowse.matchesDeveloper(library[0], "nintendo"))
+        assertFalse(LibraryBrowse.matchesDeveloper(library[0], "Sony"))
+    }
+
+    @Test
+    fun `randomPool prefers filtered when non empty`() {
+        assertEquals(
+            listOf("a", "b"),
+            LibraryBrowse.randomPool(listOf("a", "b"), listOf("x", "y")),
+        )
+        assertEquals(
+            listOf("x", "y"),
+            LibraryBrowse.randomPool(emptyList(), listOf("x", "y")),
+        )
     }
 
     @Test
