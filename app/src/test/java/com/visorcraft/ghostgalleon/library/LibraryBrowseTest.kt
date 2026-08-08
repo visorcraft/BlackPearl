@@ -12,6 +12,7 @@ class LibraryBrowseTest {
         platform: String,
         name: String,
         visible: Boolean = true,
+        genre: String? = null,
     ) = RomEntry(
         id = "$platform:$name.rom",
         name = name,
@@ -19,14 +20,15 @@ class LibraryBrowseTest {
         uri = "content://x/$name",
         path = "/storage/x/$name.rom",
         visibleInUi = visible,
+        genre = genre,
     )
 
     private val library = listOf(
-        rom("snes", "Zelda"),
-        rom("snes", "Mario"),
-        rom("3ds", "Pokemon"),
-        rom("nds", "Hidden", visible = false),
-        rom("switch", "BotW"),
+        rom("snes", "Zelda", genre = "Action / Adventure"),
+        rom("snes", "Mario", genre = "Platform"),
+        rom("3ds", "Pokemon", genre = "RPG"),
+        rom("nds", "Hidden", visible = false, genre = "RPG"),
+        rom("switch", "BotW", genre = "Action, Adventure"),
     )
 
     @Test
@@ -323,5 +325,41 @@ class LibraryBrowseTest {
             LibraryBrowse.Mode.FAVORITES,
             LibraryBrowse.railQuery(LibraryBrowse.Mode.FAVORITES).mode,
         )
+    }
+
+    @Test
+    fun `genreTokens splits multi-genre strings`() {
+        assertEquals(
+            listOf("Action", "Adventure"),
+            LibraryBrowse.genreTokens("Action / Adventure"),
+        )
+        assertEquals(listOf("RPG"), LibraryBrowse.genreTokens("RPG"))
+        assertEquals(emptyList<String>(), LibraryBrowse.genreTokens(null))
+        assertEquals(emptyList<String>(), LibraryBrowse.genreTokens("  "))
+    }
+
+    @Test
+    fun `browseRoms genre filter matches any segment`() {
+        val out = LibraryBrowse.browseRoms(
+            library,
+            LibraryBrowse.BrowseQuery(genre = "Adventure"),
+        )
+        assertEquals(setOf("Zelda", "BotW"), out.map { it.name }.toSet())
+    }
+
+    @Test
+    fun `presentGenres ranks by frequency and respects hide`() {
+        val genres = LibraryBrowse.presentGenres(library, limit = 10)
+        assertTrue(genres.any { it.equals("Action", true) })
+        assertTrue(genres.any { it.equals("Adventure", true) })
+        // Action appears twice (Zelda + BotW) so should rank at or near top
+        assertEquals("Action", genres.first())
+        // Hide Pokemon — only RPG source among listed → RPG drops
+        val withoutPokemon = LibraryBrowse.presentGenres(
+            library,
+            hiddenRomIds = setOf("3ds:Pokemon.rom"),
+            limit = 10,
+        )
+        assertTrue(withoutPokemon.none { it.equals("RPG", true) })
     }
 }

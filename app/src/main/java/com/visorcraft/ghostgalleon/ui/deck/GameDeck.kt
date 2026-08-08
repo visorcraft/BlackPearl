@@ -56,11 +56,13 @@ class GameDeck(
         val rom: RomEntry?,
     )
 
-    // Curated apps (when browse mode is ALL and no platform filter/search),
-    // then browsed ROMs via LibraryBrowse (platform / search / recent / top /
-    // A–Z / unplayed / fav). Ranked modes interleave apps by the same maps.
+    // Curated apps (when browse mode is ALL and no platform/genre filter/search),
+    // then browsed ROMs via LibraryBrowse (platform / genre / search / recent /
+    // top / A–Z / unplayed / fav). Ranked modes interleave apps by the same maps.
+    // Genre is ROM-only: when set, app interleaving is skipped.
     private val entries: List<CarouselEntry> by lazy {
         val q = state.libraryBrowse
+        val appsOk = q.platformId == null && q.genre.isNullOrBlank()
         val browsed = LibraryBrowse.browseRoms(
             roms, q,
             lastLaunchedMs = settings.lastLaunchedMs,
@@ -86,7 +88,7 @@ class GameDeck(
                 apps + browsed
             }
             q.mode == LibraryBrowse.Mode.RECENT &&
-                q.platformId == null && q.text.isBlank() -> {
+                appsOk && q.text.isBlank() -> {
                 val byPkg = library.curated(settings)
                     .associateBy { it.packageName }
                 val appKeys = settings.lastLaunchedMs.keys
@@ -104,7 +106,7 @@ class GameDeck(
                 }
             }
             q.mode == LibraryBrowse.Mode.MOST_PLAYED &&
-                q.platformId == null && q.text.isBlank() -> {
+                appsOk && q.text.isBlank() -> {
                 val byPkg = library.curated(settings)
                     .associateBy { it.packageName }
                 val appKeys = settings.playtimeMs
@@ -127,7 +129,7 @@ class GameDeck(
             // Recently installed: all non-hidden launchable apps by firstInstallTime
             // (not just curated grid). Platform chips are ROM-only → empty here.
             q.mode == LibraryBrowse.Mode.RECENTLY_INSTALLED &&
-                q.platformId == null -> {
+                appsOk -> {
                 val apps = library.visible(settings).let { list ->
                     if (q.text.isBlank()) list
                     else {
@@ -152,7 +154,7 @@ class GameDeck(
             }
             // Games: CATEGORY_GAME apps (all visible, not only curated) + ROMs.
             q.mode == LibraryBrowse.Mode.GAMES &&
-                q.platformId == null -> {
+                appsOk -> {
                 val apps = LibraryBrowse.filterGameApps(library.visible(settings)) { it.isGame }
                     .let { list ->
                         if (q.text.isBlank()) list
@@ -170,14 +172,14 @@ class GameDeck(
                 LibraryBrowse.orderByName(apps + browsed) { it.label }
             }
             q.mode == LibraryBrowse.Mode.ALPHA &&
-                q.platformId == null && q.text.isBlank() -> {
+                appsOk && q.text.isBlank() -> {
                 val apps = library.curated(settings).map {
                     CarouselEntry(it.packageName, it.label, it.packageName, null)
                 }
                 LibraryBrowse.orderByName(apps + browsed) { it.label }
             }
             q.mode == LibraryBrowse.Mode.UNPLAYED &&
-                q.platformId == null && q.text.isBlank() -> {
+                appsOk && q.text.isBlank() -> {
                 val apps = library.curated(settings)
                     .filter {
                         LibraryBrowse.isUnplayed(it.packageName, settings.lastLaunchedMs)
@@ -188,7 +190,7 @@ class GameDeck(
                 LibraryBrowse.orderByName(apps + browsed) { it.label }
             }
             q.mode == LibraryBrowse.Mode.FAVORITES &&
-                q.platformId == null -> {
+                appsOk -> {
                 val favApps = library.curated(settings)
                     .filter { it.packageName in settings.favorites }
                     .map {
@@ -197,15 +199,15 @@ class GameDeck(
                 favApps + browsed
             }
             q.mode == LibraryBrowse.Mode.ALL &&
-                q.platformId == null &&
+                appsOk &&
                 q.text.isBlank() -> {
                 library.curated(settings).map {
                     CarouselEntry(it.packageName, it.label, it.packageName, null)
                 } + browsed
             }
             // Unified text search: include matching curated apps when there is
-            // no platform chip (platform chips are ROM-only).
-            q.text.isNotBlank() && q.platformId == null &&
+            // no platform/genre chip (those filters are ROM-only).
+            q.text.isNotBlank() && appsOk &&
                 q.mode != LibraryBrowse.Mode.COLLECTION -> {
                 val needle = q.text.trim()
                 val matchedApps = library.curated(settings)
@@ -287,6 +289,18 @@ class GameDeck(
                 setTextColor(com.visorcraft.ghostgalleon.rom.PlatformLook.accentColor(pid))
                 gravity = Gravity.CENTER
                 setPadding(0, dp(6), 0, 0)
+            }, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ))
+        }
+        state.libraryBrowse.genre?.trim()?.takeIf { it.isNotEmpty() }?.let { genre ->
+            content.addView(TextView(context).apply {
+                text = "Genre · $genre"
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                setTextColor(settings.accentColor)
+                gravity = Gravity.CENTER
+                setPadding(0, dp(4), 0, 0)
             }, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -513,11 +527,12 @@ class GameDeck(
         fun setQuery(next: LibraryBrowse.BrowseQuery, force: Boolean = false) {
             state.setLibraryBrowse(next, force = force)
         }
-        // All = full reset: clear platform/search/collection AND jump the
+        // All = full reset: clear platform/genre/search/collection AND jump the
         // carousel to the first unrestricted entry. Keeping the prior NDS
         // selection centered made "All" look like a no-op (same cards still
         // on screen even though the filter was cleared).
         row.addView(chip("All", q.mode == LibraryBrowse.Mode.ALL && q.platformId == null &&
+            q.genre.isNullOrBlank() &&
             q.text.isBlank() && q.collectionName == null) {
             val live = app().settings
             val firstKey = library.curated(live).firstOrNull()?.packageName
@@ -531,6 +546,7 @@ class GameDeck(
             setQuery(q.copy(
                 mode = LibraryBrowse.Mode.RECENT,
                 platformId = null,
+                genre = null,
                 collectionName = null,
             ))
         })
@@ -539,6 +555,7 @@ class GameDeck(
             setQuery(q.copy(
                 mode = LibraryBrowse.Mode.RECENTLY_INSTALLED,
                 platformId = null,
+                genre = null,
                 collectionName = null,
             ))
         })
@@ -547,6 +564,7 @@ class GameDeck(
             setQuery(q.copy(
                 mode = LibraryBrowse.Mode.GAMES,
                 platformId = null,
+                genre = null,
                 collectionName = null,
             ))
         })
@@ -555,6 +573,7 @@ class GameDeck(
             setQuery(q.copy(
                 mode = LibraryBrowse.Mode.MOST_PLAYED,
                 platformId = null,
+                genre = null,
                 collectionName = null,
             ))
         })
@@ -596,13 +615,19 @@ class GameDeck(
         })
         row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
         row.addView(chip("Fav", q.mode == LibraryBrowse.Mode.FAVORITES) {
-            setQuery(q.copy(mode = LibraryBrowse.Mode.FAVORITES, platformId = null, collectionName = null))
+            setQuery(q.copy(
+                mode = LibraryBrowse.Mode.FAVORITES,
+                platformId = null,
+                genre = null,
+                collectionName = null,
+            ))
         })
         row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
         row.addView(chip("A–Z", q.mode == LibraryBrowse.Mode.ALPHA) {
             setQuery(q.copy(
                 mode = LibraryBrowse.Mode.ALPHA,
                 platformId = null,
+                genre = null,
                 collectionName = null,
             ))
         })
@@ -611,6 +636,7 @@ class GameDeck(
             setQuery(q.copy(
                 mode = LibraryBrowse.Mode.UNPLAYED,
                 platformId = null,
+                genre = null,
                 collectionName = null,
             ))
         })
@@ -636,6 +662,20 @@ class GameDeck(
                     q.copy(
                         mode = LibraryBrowse.Mode.ALL,
                         platformId = if (q.platformId == pid) null else pid,
+                        collectionName = null,
+                    ),
+                )
+            })
+        }
+        // Genre chips from gamelist meta (top by frequency); ROM-only filter.
+        LibraryBrowse.presentGenres(roms, settings.hiddenRomIds).forEach { genre ->
+            row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
+            val selected = q.genre?.equals(genre, ignoreCase = true) == true
+            row.addView(chip(genre, selected) {
+                setQuery(
+                    q.copy(
+                        mode = LibraryBrowse.Mode.ALL,
+                        genre = if (selected) null else genre,
                         collectionName = null,
                     ),
                 )

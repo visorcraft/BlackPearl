@@ -33,6 +33,11 @@ object LibraryBrowse {
         val text: String = "",
         /** When [mode] is COLLECTION, members of this named list. */
         val collectionName: String? = null,
+        /**
+         * Optional genre token (from gamelist meta). ROM-only filter; matches
+         * any slash/comma segment of [RomEntry.genre] case-insensitively.
+         */
+        val genre: String? = null,
     )
 
     /** Listed ROMs only (scanner-visible, not user-hidden), optional platform. */
@@ -44,6 +49,57 @@ object LibraryBrowse {
         val visible = HiddenRoms.listed(roms, hiddenRomIds)
         if (platformId == null) return visible
         return visible.filter { it.platformId == platformId }
+    }
+
+    /**
+     * Split a raw genre string into tokens (comma / slash / pipe / semicolon).
+     * Empty or blank → empty list.
+     */
+    fun genreTokens(raw: String?): List<String> {
+        if (raw.isNullOrBlank()) return emptyList()
+        return raw.split(',', '/', '|', ';')
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+    }
+
+    /** True when [rom] matches optional [genre] token (any segment). */
+    fun matchesGenre(rom: RomEntry, genre: String?): Boolean {
+        val needle = genre?.trim().orEmpty()
+        if (needle.isEmpty()) return true
+        return genreTokens(rom.genre).any { it.equals(needle, ignoreCase = true) }
+    }
+
+    fun filterByGenre(roms: List<RomEntry>, genre: String?): List<RomEntry> {
+        if (genre.isNullOrBlank()) return roms
+        return roms.filter { matchesGenre(it, genre) }
+    }
+
+    /**
+     * Distinct genre tokens present in the listed library, sorted by count
+     * descending then name. [limit] caps chip bar length (default 12).
+     */
+    fun presentGenres(
+        roms: List<RomEntry>,
+        hiddenRomIds: Set<String> = emptySet(),
+        limit: Int = 12,
+    ): List<String> {
+        val counts = linkedMapOf<String, Int>()
+        // canonical display form: first-seen casing per lowercase key
+        val display = linkedMapOf<String, String>()
+        HiddenRoms.listed(roms, hiddenRomIds).forEach { rom ->
+            genreTokens(rom.genre).forEach { token ->
+                val key = token.lowercase()
+                if (key !in display) display[key] = token
+                counts[key] = (counts[key] ?: 0) + 1
+            }
+        }
+        return counts.entries
+            .sortedWith(
+                compareByDescending<Map.Entry<String, Int>> { it.value }
+                    .thenBy { it.key },
+            )
+            .take(limit.coerceAtLeast(0))
+            .map { display[it.key] ?: it.key }
     }
 
     /** Case-insensitive substring match on ROM name (and id as fallback). */
@@ -119,9 +175,9 @@ object LibraryBrowse {
         items.filter(isGame)
 
     /**
-     * Full browse pipeline: mode → platform → text. Recents / most-played /
-     * favorites / A–Z / unplayed are applied by restricting first, then
-     * filter/search.
+     * Full browse pipeline: mode → platform → genre → text. Recents /
+     * most-played / favorites / A–Z / unplayed are applied by restricting
+     * first, then filter/search.
      */
     fun browseRoms(
         roms: List<RomEntry>,
@@ -177,7 +233,8 @@ object LibraryBrowse {
         // base already listed; pass empty hidden set so platform/search do not
         // re-filter away members that were intentionally kept (none).
         val platformed = filterByPlatform(base, query.platformId, emptySet())
-        return searchRoms(platformed, query.text, emptySet())
+        val genred = filterByGenre(platformed, query.genre)
+        return searchRoms(genred, query.text, emptySet())
     }
 
     /** Distinct platform ids present in the listed library, sorted. */
