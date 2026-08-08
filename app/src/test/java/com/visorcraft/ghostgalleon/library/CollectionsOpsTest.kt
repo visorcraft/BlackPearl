@@ -64,4 +64,17 @@ class CollectionsOpsTest {
         val c = CollectionsOps.bulkAddToCollection(emptyMap(), "Co-op", listOf("a", "b", "a"))
         assertEquals(listOf("a", "b"), c["Co-op"])
     }
+
+    @Test
+    fun `addToCollectionResult reports new insert vs no-op`() {
+        val (c1, ok1) = CollectionsOps.addToCollectionResult(emptyMap(), "RPGs", "rom:a")
+        assertTrue(ok1)
+        assertEquals(listOf("rom:a"), c1["RPGs"])
+        val (c2, ok2) = CollectionsOps.addToCollectionResult(c1, "RPGs", "rom:a")
+        assertFalse(ok2)
+        assertEquals(c1, c2)
+        val (c3, ok3) = CollectionsOps.addToCollectionResult(c1, "  ", "rom:b")
+        assertFalse(ok3)
+        assertEquals(c1, c3)
+    }
 }

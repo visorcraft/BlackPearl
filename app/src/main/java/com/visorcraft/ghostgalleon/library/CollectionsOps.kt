@@ -116,4 +116,27 @@ object CollectionsOps {
         }
         return c
     }
+
+    /**
+     * Add [key] to [name], creating the collection when missing. Returns the
+     * updated map and whether the key was newly inserted (false if blank,
+     * already a member, or empty name).
+     */
+    fun addToCollectionResult(
+        collections: Map<String, List<String>>,
+        name: String,
+        key: String,
+    ): Pair<Map<String, List<String>>, Boolean> {
+        val n = name.trim()
+        val k = key.trim()
+        if (n.isEmpty() || k.isEmpty()) return collections to false
+        val existing = collections[n].orEmpty()
+        if (k in existing) return collections to false
+        val next = if (n in collections) {
+            collections + (n to (existing + k))
+        } else {
+            collections + (n to listOf(k))
+        }
+        return next to true
+    }
 }

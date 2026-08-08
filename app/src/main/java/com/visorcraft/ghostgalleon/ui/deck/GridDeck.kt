@@ -26,6 +26,8 @@ import com.visorcraft.ghostgalleon.GhostGalleonApp
 import com.visorcraft.ghostgalleon.art.ArtTile
 import com.visorcraft.ghostgalleon.library.AppEntry
 import com.visorcraft.ghostgalleon.library.AppLibrary
+import com.visorcraft.ghostgalleon.library.CollectionsOps
+import com.visorcraft.ghostgalleon.library.LibraryBrowse
 import com.visorcraft.ghostgalleon.rom.Platforms
 import com.visorcraft.ghostgalleon.rom.PlatformTile
 import com.visorcraft.ghostgalleon.rom.PlayerResolver
@@ -881,6 +883,39 @@ class GridDeck(
         updateDockSlots(DockSlots.fill(current, blank, key), "Pinned to dock")
     }
 
+    private fun promptAddToCollection(key: String) {
+        val app = activity.application as GhostGalleonApp
+        val live = app.settings
+        val names = LibraryBrowse.presentCollectionRails(live.collections).toMutableList()
+        names.add(0, "+ New collection")
+        android.app.AlertDialog.Builder(activity)
+            .setTitle("Add to collection")
+            .setItems(names.toTypedArray()) { _, which ->
+                if (which == 0) {
+                    val input = android.widget.EditText(activity).apply { hint = "Name" }
+                    android.app.AlertDialog.Builder(activity)
+                        .setTitle("New collection")
+                        .setView(input)
+                        .setPositiveButton("Create") { _, _ ->
+                            val name = input.text?.toString().orEmpty()
+                            var cols = CollectionsOps.createCollection(live.collections, name)
+                            cols = CollectionsOps.bulkAddToCollection(cols, name, listOf(key))
+                            app.updateSettings(app.settings.copy(collections = cols))
+                            Toast.makeText(activity, "Added to $name", Toast.LENGTH_SHORT).show()
+                        }
+                        .setNegativeButton("Cancel", null)
+                        .show()
+                } else {
+                    val name = names[which]
+                    val cols = CollectionsOps.bulkAddToCollection(
+                        live.collections, name, listOf(key))
+                    app.updateSettings(app.settings.copy(collections = cols))
+                    Toast.makeText(activity, "Added to $name", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .show()
+    }
+
     private fun updateGridSlots(slots: List<String?>, focusSlot: Int) {
         val app = activity.application as GhostGalleonApp
         app.updateSettings(app.settings.copy(gridSlots = slots))
@@ -1061,6 +1096,7 @@ class GridDeck(
                     add(SlotMenu.Choice.MOVE)
                     add(SlotMenu.Choice.PIN_TO_DOCK)
                     add(if (fav) SlotMenu.Choice.UNFAVORITE else SlotMenu.Choice.FAVORITE)
+                    add(SlotMenu.Choice.ADD_TO_COLLECTION)
                     if (isRom) {
                         add(SlotMenu.Choice.OPEN_WITH)
                         add(SlotMenu.Choice.PLAYER)
@@ -1089,6 +1125,9 @@ class GridDeck(
                     val next = com.visorcraft.ghostgalleon.library.CollectionsOps
                         .toggleFavorite(app.settings.favorites, k)
                     app.updateSettings(app.settings.copy(favorites = next))
+                }
+                SlotMenu.Choice.ADD_TO_COLLECTION -> key?.let { k ->
+                    promptAddToCollection(k)
                 }
                 SlotMenu.Choice.OPEN_WITH -> key?.let { k ->
                     val id = SlotKey.romId(k) ?: return@let

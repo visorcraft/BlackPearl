@@ -733,7 +733,7 @@ class GameDeck(
                         state.clearMultiSelect()
                         Toast.makeText(activity, "Pinned to grid", Toast.LENGTH_SHORT).show()
                     }
-                    2 -> promptAddSelectionToCollection()
+                    2 -> promptAddToCollection(state.multiSelectKeys.toList(), clearMulti = true)
                     3 -> {
                         val (hidden, added) =
                             com.visorcraft.ghostgalleon.library.MultiSelectOps.bulkHideRoms(
@@ -763,7 +763,15 @@ class GameDeck(
             .show()
     }
 
-    private fun promptAddSelectionToCollection() {
+    /**
+     * Add [keys] (package or rom: ids) to an existing or new collection.
+     * When [clearMulti] is true, exits multi-select after a successful add.
+     */
+    private fun promptAddToCollection(keys: List<String>, clearMulti: Boolean = false) {
+        if (keys.isEmpty()) {
+            Toast.makeText(activity, "Nothing selected", Toast.LENGTH_SHORT).show()
+            return
+        }
         val names = LibraryBrowse.presentCollectionRails(settings.collections).toMutableList()
         names.add(0, "+ New collection")
         android.app.AlertDialog.Builder(activity)
@@ -777,19 +785,20 @@ class GameDeck(
                         .setPositiveButton("Create") { _, _ ->
                             val name = input.text?.toString().orEmpty()
                             var cols = CollectionsOps.createCollection(settings.collections, name)
-                            cols = CollectionsOps.bulkAddToCollection(
-                                cols, name, state.multiSelectKeys.toList())
+                            cols = CollectionsOps.bulkAddToCollection(cols, name, keys)
                             app().updateSettings(settings.copy(collections = cols))
-                            state.clearMultiSelect()
+                            if (clearMulti) state.clearMultiSelect()
+                            Toast.makeText(activity, "Added to $name", Toast.LENGTH_SHORT).show()
                         }
                         .setNegativeButton("Cancel", null)
                         .show()
                 } else {
                     val name = names[which]
                     val cols = CollectionsOps.bulkAddToCollection(
-                        settings.collections, name, state.multiSelectKeys.toList())
+                        settings.collections, name, keys)
                     app().updateSettings(settings.copy(collections = cols))
-                    state.clearMultiSelect()
+                    if (clearMulti) state.clearMultiSelect()
+                    Toast.makeText(activity, "Added to $name", Toast.LENGTH_SHORT).show()
                 }
             }
             .show()
@@ -973,6 +982,7 @@ class GameDeck(
         val fav = key in settings.favorites
         val choices = buildList {
             add(if (fav) SlotMenu.Choice.UNFAVORITE else SlotMenu.Choice.FAVORITE)
+            add(SlotMenu.Choice.ADD_TO_COLLECTION)
             if (entry.rom != null) {
                 add(SlotMenu.Choice.OPEN_WITH)
                 add(SlotMenu.Choice.PLAYER)
@@ -986,6 +996,7 @@ class GameDeck(
             closeSlotMenu()
             when (choice) {
                 SlotMenu.Choice.FAVORITE, SlotMenu.Choice.UNFAVORITE -> toggleFavorite(key)
+                SlotMenu.Choice.ADD_TO_COLLECTION -> promptAddToCollection(listOf(key))
                 SlotMenu.Choice.OPEN_WITH -> openWithMenu(entry)
                 SlotMenu.Choice.PLAYER -> entry.rom?.let { showPlayerProfileMenu(it) }
                 SlotMenu.Choice.SET_ART -> entry.rom?.let { setArtOverride(it) }
