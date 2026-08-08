@@ -92,4 +92,20 @@ class MultiSelectOpsTest {
         val next = MultiSelectOps.bulkPinToGrid(slots, setOf("x", "y"))
         assertEquals(listOf("x", "keep", "y"), next)
     }
+
+    @Test
+    fun `bulkHideRoms hides rom keys and skips packages`() {
+        val selected = setOf(
+            "rom:snes:a.sfc",
+            "com.example.app",
+            "rom:nds:b.nds",
+            "rom:snes:a.sfc", // dup set
+        )
+        val (hidden, added) = MultiSelectOps.bulkHideRoms(emptySet(), selected)
+        assertEquals(setOf("snes:a.sfc", "nds:b.nds"), hidden)
+        assertEquals(2, added)
+        val (again, added2) = MultiSelectOps.bulkHideRoms(hidden, setOf("rom:snes:a.sfc"))
+        assertEquals(hidden, again)
+        assertEquals(0, added2)
+    }
 }

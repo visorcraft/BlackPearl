@@ -133,4 +133,24 @@ object MultiSelectOps {
         selected: Set<String>,
     ): List<String?> =
         CollectionsOps.bulkFillSlots(gridSlots, selected.toList())
+
+    /**
+     * Hide ROM entry ids from selected slot keys (package keys ignored).
+     * Returns the updated [hiddenRomIds] set and how many ROMs were newly hidden.
+     */
+    fun bulkHideRoms(
+        hiddenRomIds: Set<String>,
+        selected: Set<String>,
+    ): Pair<Set<String>, Int> {
+        var next = hiddenRomIds
+        var added = 0
+        selected.forEach { key ->
+            val romId = com.visorcraft.ghostgalleon.settings.SlotKey.romId(key) ?: return@forEach
+            if (romId !in next) {
+                next = HiddenRoms.hide(next, romId)
+                added++
+            }
+        }
+        return next to added
+    }
 }

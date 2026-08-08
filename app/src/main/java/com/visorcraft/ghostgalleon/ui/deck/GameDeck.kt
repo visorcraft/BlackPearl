@@ -705,10 +705,14 @@ class GameDeck(
 
     private fun showBulkActions() {
         val n = state.multiSelectKeys.size
+        val romCount = state.multiSelectKeys.count {
+            com.visorcraft.ghostgalleon.settings.SlotKey.isRom(it)
+        }
         val labels = arrayOf(
             "Favorite selected ($n)",
             "Pin selected to grid ($n)",
             "Add to collection…",
+            "Hide selected ROMs ($romCount)",
             "Clear selection",
             "Cancel select mode",
         )
@@ -730,8 +734,29 @@ class GameDeck(
                         Toast.makeText(activity, "Pinned to grid", Toast.LENGTH_SHORT).show()
                     }
                     2 -> promptAddSelectionToCollection()
-                    3 -> state.setMultiSelectKeys(emptySet())
-                    4 -> state.clearMultiSelect()
+                    3 -> {
+                        val (hidden, added) =
+                            com.visorcraft.ghostgalleon.library.MultiSelectOps.bulkHideRoms(
+                                settings.hiddenRomIds, state.multiSelectKeys,
+                            )
+                        if (added == 0) {
+                            Toast.makeText(
+                                activity,
+                                "No ROMs in selection",
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                        } else {
+                            app().updateSettings(settings.copy(hiddenRomIds = hidden))
+                            state.clearMultiSelect()
+                            Toast.makeText(
+                                activity,
+                                "Hidden $added ROM(s)",
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                        }
+                    }
+                    4 -> state.setMultiSelectKeys(emptySet())
+                    5 -> state.clearMultiSelect()
                 }
             }
             .setNegativeButton("Close", null)
