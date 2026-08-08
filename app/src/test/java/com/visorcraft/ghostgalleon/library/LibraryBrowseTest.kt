@@ -309,6 +309,16 @@ class LibraryBrowseTest {
     }
 
     @Test
+    fun `presentLetterCounts pairs buckets with sizes`() {
+        val labels = listOf("Alpha", "apple", "Beta", "007", "!")
+        assertEquals(
+            listOf('A' to 2, 'B' to 1, '#' to 2),
+            LibraryBrowse.presentLetterCounts(labels),
+        )
+        assertEquals(emptyList<Pair<Char, Int>>(), LibraryBrowse.presentLetterCounts(emptyList()))
+    }
+
+    @Test
     fun `presentLetterIndex lists A-Z then hash only when present`() {
         val labels = listOf("Zelda", "Mario", "007", "alpha", "Pokemon")
         assertEquals(
@@ -599,5 +609,34 @@ class LibraryBrowseTest {
             "Zelda",
             LibraryBrowse.continueHistoryLine("Zelda", null, now),
         )
+    }
+
+    @Test
+    fun `continueChipLabel truncates target name`() {
+        assertEquals("Continue", LibraryBrowse.continueChipLabel(null))
+        assertEquals("Continue", LibraryBrowse.continueChipLabel("  "))
+        assertEquals("Continue · Eden", LibraryBrowse.continueChipLabel("Eden"))
+        assertEquals(
+            "Continue · Super long na…",
+            LibraryBrowse.continueChipLabel("Super long name here", maxNameLen = 14),
+        )
+    }
+
+    @Test
+    fun `unplayedRomCount ignores played and hidden`() {
+        val last = mapOf(
+            SlotKey.rom("snes:Zelda.rom") to 100L,
+        )
+        // library: Zelda (played), Mario, Pokemon, Hidden (invisible), BotW
+        assertEquals(3, LibraryBrowse.unplayedRomCount(library, last))
+        assertEquals(
+            2,
+            LibraryBrowse.unplayedRomCount(
+                library,
+                last,
+                hiddenRomIds = setOf("3ds:Pokemon.rom"),
+            ),
+        )
+        assertEquals(0, LibraryBrowse.unplayedRomCount(emptyList(), last))
     }
 }

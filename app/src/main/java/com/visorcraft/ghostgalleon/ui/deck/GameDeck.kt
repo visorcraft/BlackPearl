@@ -552,8 +552,8 @@ class GameDeck(
             return null
         }
         val labels = entries.map { it.label }
-        val letters = LibraryBrowse.presentLetterIndex(labels)
-        if (letters.isEmpty()) {
+        val letterCounts = LibraryBrowse.presentLetterCounts(labels)
+        if (letterCounts.isEmpty()) {
             letterChipViews = emptyList()
             return null
         }
@@ -566,13 +566,13 @@ class GameDeck(
             setPadding(dp(12), dp(0), dp(12), dp(6))
         }
         val chips = mutableListOf<Pair<Char, TextView>>()
-        letters.forEachIndexed { i, letter ->
+        letterCounts.forEachIndexed { i, (letter, count) ->
             if (i > 0) {
                 row.addView(View(context), LinearLayout.LayoutParams(dp(4), 1))
             }
             val on = letter == selectedLetter
             val chip = TextView(context).apply {
-                text = letter.toString()
+                text = LibraryBrowse.labeledChip(letter.toString(), count)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
                 setTextColor(if (on) Color.BLACK else Color.WHITE)
                 setBackgroundColor(
@@ -580,12 +580,16 @@ class GameDeck(
                     else TileBackgrounds.chipIdleColor(context),
                 )
                 setPadding(dp(10), dp(4), dp(10), dp(4))
-                contentDescription = "Jump to $letter"
+                contentDescription = "Jump to $letter ($count)"
                 setOnClickListener {
                     val idx = LibraryBrowse.firstIndexForLetter(labels, letter)
                     val key = entries.getOrNull(idx)?.key ?: return@setOnClickListener
                     state.select(key, force = true)
-                    Toast.makeText(activity, letter.toString(), Toast.LENGTH_SHORT).show()
+                    Toast.makeText(
+                        activity,
+                        LibraryBrowse.labeledChip(letter.toString(), count),
+                        Toast.LENGTH_SHORT,
+                    ).show()
                 }
             }
             chips.add(letter to chip)
@@ -765,9 +769,17 @@ class GameDeck(
             )
         }
         addGap()
+        // Continue chip shows short target name when known (depth, not clutter).
+        val contTargetKey = LibraryBrowse.continueKey(
+            availableContinueKeys(settings),
+            settings.lastLaunchedMs,
+        )
+        val contChipLabel = LibraryBrowse.continueChipLabel(
+            contTargetKey?.let { continueLabel(it, settings) },
+        )
         row.addView(
             chip(
-                "Continue",
+                contChipLabel,
                 false,
                 onLongClick = { showContinueHistory() },
             ) {
@@ -821,15 +833,27 @@ class GameDeck(
         }
         if (chrome.unplayedRail) {
             addGap()
-            row.addView(chip("New", q.mode == LibraryBrowse.Mode.UNPLAYED) {
-                setBrowse(q.copy(
-                    mode = LibraryBrowse.Mode.UNPLAYED,
-                    platformId = null,
-                    genre = null,
-                    developer = null,
-                    collectionName = null,
-                ))
-            })
+            row.addView(
+                chip(
+                    LibraryBrowse.labeledChip(
+                        "New",
+                        LibraryBrowse.unplayedRomCount(
+                            roms,
+                            settings.lastLaunchedMs,
+                            settings.hiddenRomIds,
+                        ),
+                    ),
+                    q.mode == LibraryBrowse.Mode.UNPLAYED,
+                ) {
+                    setBrowse(q.copy(
+                        mode = LibraryBrowse.Mode.UNPLAYED,
+                        platformId = null,
+                        genre = null,
+                        developer = null,
+                        collectionName = null,
+                    ))
+                },
+            )
         }
         if (chrome.collectionRails) {
             LibraryBrowse.presentCollectionRails(settings.collections).forEach { name ->

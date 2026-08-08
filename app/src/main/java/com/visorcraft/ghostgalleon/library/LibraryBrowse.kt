@@ -453,6 +453,37 @@ object LibraryBrowse {
     fun topPlayedCount(playtimeMs: Map<String, Long>): Int =
         playtimeMs.count { it.value > 0L }
 
+    /**
+     * Listed ROMs with no positive last-launch stamp (New rail size proxy).
+     * Hidden ROMs are excluded.
+     */
+    fun unplayedRomCount(
+        roms: List<RomEntry>,
+        lastLaunchedMs: Map<String, Long>,
+        hiddenRomIds: Set<String> = emptySet(),
+    ): Int =
+        HiddenRoms.listed(roms, hiddenRomIds).count {
+            isUnplayed(SlotKey.rom(it.id), lastLaunchedMs)
+        }
+
+    /**
+     * Continue chip label: `"Continue · Eden"` when a target name is known,
+     * truncated to [maxNameLen] (default 14). Blank target → plain [base].
+     * Pure; host-tested. No new always-on chrome — depth of core Continue.
+     */
+    fun continueChipLabel(
+        targetLabel: String?,
+        base: String = "Continue",
+        maxNameLen: Int = 14,
+    ): String {
+        val name = targetLabel?.trim().orEmpty()
+        if (name.isEmpty()) return base.trim().ifEmpty { "Continue" }
+        val cap = maxNameLen.coerceAtLeast(1)
+        val short = if (name.length <= cap) name else name.take(cap - 1) + "…"
+        val head = base.trim().ifEmpty { "Continue" }
+        return "$head · $short"
+    }
+
     /** Named collection titles suitable for Game Mode rails (stable sort). */
     fun presentCollectionRails(collections: Map<String, List<String>>): List<String> =
         collections.keys.filter { it.isNotBlank() }.sortedBy { it.lowercase() }
@@ -614,15 +645,28 @@ object LibraryBrowse {
     }
 
     /**
+     * Letter buckets with counts for the A–Z jump strip (A–Z then optional
+     * '#'). Empty input → empty list. Used for labels like `"M · 12"`.
+     */
+    fun presentLetterCounts(labels: List<String>): List<Pair<Char, Int>> {
+        if (labels.isEmpty()) return emptyList()
+        val counts = linkedMapOf<Char, Int>()
+        labels.forEach { label ->
+            val b = letterBucket(label)
+            counts[b] = (counts[b] ?: 0) + 1
+        }
+        val letters = ('A'..'Z').mapNotNull { c ->
+            counts[c]?.let { n -> c to n }
+        }
+        return if ('#' in counts) letters + ('#' to counts.getValue('#')) else letters
+    }
+
+    /**
      * Distinct letter buckets present in [labels], A–Z then optional '#'.
      * Empty input → empty list (no strip).
      */
-    fun presentLetterIndex(labels: List<String>): List<Char> {
-        if (labels.isEmpty()) return emptyList()
-        val present = labels.map { letterBucket(it) }.toSet()
-        val letters = ('A'..'Z').filter { it in present }
-        return if ('#' in present) letters + '#' else letters
-    }
+    fun presentLetterIndex(labels: List<String>): List<Char> =
+        presentLetterCounts(labels).map { it.first }
 
     /**
      * First index in [labels] whose [letterBucket] equals [letter]
