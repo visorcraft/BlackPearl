@@ -124,25 +124,118 @@ class SettingsActivity : AppCompatActivity() {
             })
         }
 
-    private fun loadBundledExamplePack() {
+    /** Bundled pack asset basenames under assets/platform_packs/. */
+    private fun listBundledPackAssets(): List<String> =
+        runCatching {
+            assets.list("platform_packs")
+                ?.filter { it.endsWith(".json", ignoreCase = true) }
+                ?.sorted()
+                .orEmpty()
+        }.getOrDefault(emptyList())
+
+    private fun loadBundledPackAsset(assetName: String) {
         val text = runCatching {
-            assets.open("platform_packs/pcengine.json").bufferedReader().use { it.readText() }
+            assets.open("platform_packs/$assetName").bufferedReader().use { it.readText() }
         }.getOrNull()
         if (text == null) {
-            Toast.makeText(this, "Example pack missing from APK", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Pack missing from APK: $assetName", Toast.LENGTH_SHORT).show()
             return
         }
         val parsed = app.platformPackStore.importJson(text)
         if (parsed == null) {
-            Toast.makeText(this, "Invalid example pack", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Invalid pack: $assetName", Toast.LENGTH_LONG).show()
         } else {
             Toast.makeText(
                 this,
-                "Loaded example: ${parsed.platforms.joinToString { it.id }}",
+                "Loaded $assetName: ${parsed.platforms.joinToString { it.id }}",
                 Toast.LENGTH_LONG,
             ).show()
             recreate()
         }
+    }
+
+    /** Merge all bundled packs into one overlay (later packs win on id clash). */
+    private fun loadAllBundledPacks() {
+        val names = listBundledPackAssets()
+        if (names.isEmpty()) {
+            Toast.makeText(this, "No bundled packs in APK", Toast.LENGTH_SHORT).show()
+            return
+        }
+        var merged = emptyList<com.visorcraft.ghostgalleon.rom.Platform>()
+        var loaded = 0
+        for (name in names) {
+            val text = runCatching {
+                assets.open("platform_packs/$name").bufferedReader().use { it.readText() }
+            }.getOrNull() ?: continue
+            val parsed = com.visorcraft.ghostgalleon.rom.PlatformPack.parse(text) ?: continue
+            merged = com.visorcraft.ghostgalleon.rom.PlatformPack.merge(merged, parsed.platforms)
+            loaded++
+        }
+        if (merged.isEmpty()) {
+            Toast.makeText(this, "No valid packs found", Toast.LENGTH_LONG).show()
+            return
+        }
+        // Serialize merged pack and install via the real store path.
+        val root = org.json.JSONObject()
+            .put("schemaVersion", 1)
+            .put("platforms", org.json.JSONArray().apply {
+                merged.forEach { p ->
+                    put(org.json.JSONObject()
+                        .put("id", p.id)
+                        .put("displayName", p.displayName)
+                        .put("shortName", p.shortName)
+                        .put("folderNames", org.json.JSONArray(p.folderNames))
+                        .put("extensions", org.json.JSONArray(p.extensions))
+                        .put("players", org.json.JSONArray().apply {
+                            p.players.forEach { pl ->
+                                put(org.json.JSONObject()
+                                    .put("id", pl.id)
+                                    .put("displayName", pl.displayName)
+                                    .put("component", pl.component)
+                                    .put("action", pl.action ?: "")
+                                    .put("uriStyle", pl.uriStyle.name)
+                                    .put("grantRead", pl.grantRead)
+                                    .put("flags", pl.flags)
+                                    .put("extras", org.json.JSONObject().apply {
+                                        pl.extras.forEach { (k, v) -> put(k, v) }
+                                    }))
+                            }
+                        }))
+                }
+            })
+        val result = app.platformPackStore.importJson(root.toString())
+        if (result == null) {
+            Toast.makeText(this, "Failed to install merged packs", Toast.LENGTH_LONG).show()
+        } else {
+            Toast.makeText(
+                this,
+                "Loaded $loaded packs (${result.platforms.size} platforms)",
+                Toast.LENGTH_LONG,
+            ).show()
+            recreate()
+        }
+    }
+
+    private fun showBundledPackCatalog() {
+        val names = listBundledPackAssets()
+        if (names.isEmpty()) {
+            Toast.makeText(this, "No bundled packs in APK", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val labels = names.map { it.removeSuffix(".json") }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("Bundled platform packs")
+            .setItems(labels) { _, which ->
+                loadBundledPackAsset(names[which])
+            }
+            .setNeutralButton("Load all") { _, _ -> loadAllBundledPacks() }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun loadBundledExamplePack() {
+        // Backward-compatible entry: open the multi-pack catalog.
+        showBundledPackCatalog()
     }
 
     private fun refreshAppsRows() {
@@ -1486,6 +1579,7 @@ class SettingsActivity : AppCompatActivity() {
             ) { result ->
                 scanning = false
                 rescanLabel.text = "Rescan library"
+                app.noteRescanOutcome(result)
                 if (result is RomLibrary.RescanResult.Success) {
                     app.publishRomEntries(result.entries)
                 }
@@ -1746,19 +1840,20 @@ class SettingsActivity : AppCompatActivity() {
         })
         libraryCard.addView(packRow, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))
-        // Bundled example: assets/platform_packs/pcengine.json
+        // Bundled catalog: assets/platform_packs/*.json (multi-select + load all).
+        val bundledCount = listBundledPackAssets().size
         val examplePackRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             isFocusable = true
-            setOnClickListener { loadBundledExamplePack() }
+            setOnClickListener { showBundledPackCatalog() }
         }
-        examplePackRow.addView(rowLabel("Load example pack (PC Engine)"), LinearLayout.LayoutParams(
+        examplePackRow.addView(rowLabel("Bundled platform packs"), LinearLayout.LayoutParams(
             0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         examplePackRow.addView(TextView(this).apply {
-            text = "assets"
+            text = if (bundledCount > 0) "$bundledCount packs" else "none"
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
-            setTextColor(0x66FFFFFF.toInt())
+            setTextColor(accent)
         })
         libraryCard.addView(examplePackRow, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))

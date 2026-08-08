@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "platforms": [
+    {
+      "id": "psvita",
+      "displayName": "PlayStation Vita",
+      "shortName": "Vita",
+      "folderNames": ["psvita", "vita", "psv"],
+      "extensions": ["vpk", "zip"],
+      "players": [
+        {
+          "id": "vita3k",
+          "displayName": "Vita3K",
+          "component": "org.vita3k.emulator/.EmulationActivity",
+          "action": "android.intent.action.VIEW",
+          "uriStyle": "URI",
+          "extras": {},
+          "grantRead": true
+        }
+      ]
+    }
+  ]
+}

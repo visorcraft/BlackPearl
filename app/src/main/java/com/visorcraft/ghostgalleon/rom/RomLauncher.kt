@@ -92,6 +92,15 @@ object RomLauncher {
             toast(activity, "ROM path unavailable")
             return false
         }
+        // PATH players (RetroArch): refuse launch when the reconstructed path
+        // is missing or unreadable (card ejected / not mounted yet).
+        when (val gate = PathGate.decide(template.uriStyle, entry.path)) {
+            is PathGate.Decision.Blocked -> {
+                toast(activity, gate.reason)
+                return false
+            }
+            PathGate.Decision.Ok -> {}
+        }
         val intent = Intent()
             .setClassName(plan.packageName, plan.className)
             .apply {

@@ -150,7 +150,7 @@ class GameDeck(
             setBackgroundColor(
                 platformFilter
                     ?.takeIf { com.visorcraft.ghostgalleon.rom.PlatformLook.hasFilter(it) }
-                    ?.let { com.visorcraft.ghostgalleon.rom.PlatformLook.panelTint(it) }
+                    ?.let { com.visorcraft.ghostgalleon.rom.PlatformLook.wallpaperTint(it) }
                     ?: Color.BLACK,
             )
             clipChildren = false
@@ -301,7 +301,8 @@ class GameDeck(
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
                 setTextColor(if (selected) Color.BLACK else Color.WHITE)
                 setBackgroundColor(
-                    if (selected) settings.accentColor else 0xFF2A2A32.toInt())
+                    if (selected) settings.accentColor
+                    else TileBackgrounds.chipIdleColor(context))
                 setPadding(dp(12), dp(6), dp(12), dp(6))
                 setOnClickListener { onClick() }
             }

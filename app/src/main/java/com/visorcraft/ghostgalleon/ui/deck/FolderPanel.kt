@@ -13,7 +13,7 @@ import com.visorcraft.ghostgalleon.settings.Action
 
 /**
  * Modal list of folder members. A launches the selected member; B closes.
- * D-pad navigates rows.
+ * Long-press or Y removes the selected member. D-pad navigates rows.
  */
 class FolderPanel(
     private val context: Context,
@@ -22,9 +22,11 @@ class FolderPanel(
     private val members: List<Pair<String, String>>, // key -> label
     private val onLaunch: (String) -> Unit,
     private val onClose: () -> Unit,
+    private val onRemoveMember: ((String) -> Unit)? = null,
 ) {
     private var selection = 0
     private val rows = mutableListOf<TextView>()
+    private var memberKeys: MutableList<Pair<String, String>> = members.toMutableList()
 
     val view: View by lazy {
         val density = context.resources.displayMetrics.density
@@ -47,7 +49,7 @@ class FolderPanel(
             gravity = Gravity.CENTER
             setPadding(0, 0, 0, dp(8))
         })
-        if (members.isEmpty()) {
+        if (memberKeys.isEmpty()) {
             card.addView(TextView(context).apply {
                 text = "Empty folder\nLong-press → Add member"
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
@@ -59,7 +61,7 @@ class FolderPanel(
             val list = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
             }
-            members.forEachIndexed { index, (key, label) ->
+            memberKeys.forEachIndexed { index, (key, label) ->
                 val row = TextView(context).apply {
                     text = label
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
@@ -70,6 +72,12 @@ class FolderPanel(
                         selection = index
                         paintRows()
                         onLaunch(key)
+                    }
+                    setOnLongClickListener {
+                        selection = index
+                        paintRows()
+                        removeSelected()
+                        true
                     }
                 }
                 rows.add(row)
@@ -91,7 +99,11 @@ class FolderPanel(
             ))
         }
         card.addView(TextView(context).apply {
-            text = "B · Close"
+            text = if (onRemoveMember != null) {
+                "A · Launch  ·  Y / long-press · Remove  ·  B · Close"
+            } else {
+                "B · Close"
+            }
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
             setTextColor(0x66FFFFFF.toInt())
             gravity = Gravity.CENTER
@@ -115,24 +127,37 @@ class FolderPanel(
         }
     }
 
+    private fun removeSelected() {
+        val remove = onRemoveMember ?: return
+        if (memberKeys.isEmpty()) return
+        val key = memberKeys[selection].first
+        remove(key)
+        // Close so the host rebuilds with fresh membership (keeps UI honest).
+        onClose()
+    }
+
     fun handleAction(action: Action): Boolean {
         when (action) {
             Action.NAV_UP -> {
-                if (members.isNotEmpty()) {
-                    selection = (selection + members.size - 1) % members.size
+                if (memberKeys.isNotEmpty()) {
+                    selection = (selection + memberKeys.size - 1) % memberKeys.size
                     paintRows()
                 }
             }
             Action.NAV_DOWN -> {
-                if (members.isNotEmpty()) {
-                    selection = (selection + 1) % members.size
+                if (memberKeys.isNotEmpty()) {
+                    selection = (selection + 1) % memberKeys.size
                     paintRows()
                 }
             }
             Action.CONFIRM -> {
-                if (members.isNotEmpty()) {
-                    onLaunch(members[selection].first)
+                if (memberKeys.isNotEmpty()) {
+                    onLaunch(memberKeys[selection].first)
                 }
+            }
+            Action.TOGGLE_MODE -> {
+                // Y: remove selected member (same as long-press).
+                removeSelected()
             }
             Action.BACK -> onClose()
             else -> {}

@@ -37,6 +37,7 @@ import com.visorcraft.ghostgalleon.library.RetroAchievements
 import com.visorcraft.ghostgalleon.library.SessionMath
 import com.visorcraft.ghostgalleon.library.SessionTracker
 import com.visorcraft.ghostgalleon.rom.HeroDetail
+import com.visorcraft.ghostgalleon.rom.PlatformLook
 import com.visorcraft.ghostgalleon.rom.PlatformTile
 import com.visorcraft.ghostgalleon.rom.Platforms
 import com.visorcraft.ghostgalleon.rom.RomEntry
@@ -70,11 +71,15 @@ object CompanionPanel {
     // the center band, plus a huge soft radial glow behind the hero icon
     // tinted with the glow color at ~18% alpha.
     private fun panelBackground(context: Context, glowColor: Int): Drawable {
+        val lift = com.visorcraft.ghostgalleon.settings.ThemePack.resolve(
+            (context.applicationContext as? GhostGalleonApp)?.settings
+                ?: com.visorcraft.ghostgalleon.settings.Settings.DEFAULT,
+        ).panelLift
         val gradient = GradientDrawable(
             GradientDrawable.Orientation.TOP_BOTTOM,
             intArrayOf(
                 0xFF000000.toInt(),
-                0xFF202028.toInt(),
+                lift,
                 0xFF000000.toInt(),
             ),
         )
@@ -201,8 +206,10 @@ object CompanionPanel {
                 rom,
             )
             bindHeroVideo(view.findViewWithTag(TAG_HERO_VIDEO), rom)
+            // Platform-tinted glow (stronger atmosphere via PlatformLook accent).
             view.findViewWithTag<View>(TAG_PANEL_ROOT)?.background =
-                panelBackground(context, PlatformTile.colorFor(rom.platformId))
+                panelBackground(context, PlatformLook.accentColor(rom.platformId))
+            appCtx.requestRaProgress(rom.id, rom.name)
             return true
         }
         val entry = library.visible(settings)
@@ -1037,7 +1044,10 @@ object CompanionPanel {
                 // horizon line (~32px below center at this density).
                 topMargin = dp(16)
             })
-            frontRain = loadAnimated(context, "hero_rain_anim")
+            val tokens = com.visorcraft.ghostgalleon.settings.ThemePack.resolve(settings)
+            if (tokens.heroRain) {
+                frontRain = loadAnimated(context, "hero_rain_anim")
+            }
         }
         content.addView(hero, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
@@ -1051,8 +1061,14 @@ object CompanionPanel {
         }
         actions.addView(
             iconButton(context, R.drawable.ic_swap, "Swap screens") {
-                (activity.application as? com.visorcraft.ghostgalleon.GhostGalleonApp)
-                    ?.swapInteractiveDisplay()
+                val appCtx = activity.application as? GhostGalleonApp
+                if (appCtx != null && !appCtx.swapInteractiveDisplay()) {
+                    android.widget.Toast.makeText(
+                        context,
+                        "Only one display — swap unavailable",
+                        android.widget.Toast.LENGTH_SHORT,
+                    ).show()
+                }
             },
             LinearLayout.LayoutParams(dp(40), dp(40)))
         actions.addView(View(context), LinearLayout.LayoutParams(0, 1, 1f))
@@ -1104,7 +1120,8 @@ object CompanionPanel {
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
                 setTextColor(if (current == role) Color.BLACK else Color.WHITE)
                 setBackgroundColor(
-                    if (current == role) settings.accentColor else 0xFF2A2A32.toInt())
+                    if (current == role) settings.accentColor
+                    else TileBackgrounds.chipIdleColor(context))
                 setPadding(dp(10), dp(6), dp(10), dp(6))
                 setOnClickListener { onPick(role) }
             }, LinearLayout.LayoutParams(

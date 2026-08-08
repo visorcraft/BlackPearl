@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "platforms": [
+    {
+      "id": "n64",
+      "displayName": "Nintendo 64",
+      "shortName": "N64",
+      "folderNames": ["n64"],
+      "extensions": ["n64", "z64", "v64"],
+      "players": [
+        {
+          "id": "ra-mupen-extra",
+          "displayName": "RetroArch (Mupen64Plus GLES3)",
+          "component": "com.retroarch.aarch64/com.retroarch.browser.retroactivity.RetroActivityFuture",
+          "action": "android.intent.action.MAIN",
+          "uriStyle": "PATH",
+          "extras": {
+            "ROM": "{file.path}",
+            "LIBRETRO": "/data/data/com.retroarch.aarch64/cores/mupen64plus_next_gles3_libretro_android.so",
+            "CONFIGFILE": "/storage/emulated/0/Android/data/com.retroarch.aarch64/files/retroarch.cfg",
+            "IME": "com.android.inputmethod.latin/.LatinIME",
+            "DATADIR": "/data/data/com.retroarch.aarch64",
+            "SDCARD": "/storage/emulated/0",
+            "EXTERNAL": "/storage/emulated/0/Android/data/com.retroarch.aarch64/files"
+          },
+          "grantRead": false
+        }
+      ]
+    }
+  ]
+}

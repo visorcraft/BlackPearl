@@ -17,6 +17,7 @@ import com.visorcraft.ghostgalleon.library.DrawerListCache
 import com.visorcraft.ghostgalleon.library.DrawerListKey
 import com.visorcraft.ghostgalleon.library.OpenSession
 import com.visorcraft.ghostgalleon.library.PlayStats
+import com.visorcraft.ghostgalleon.library.RaFetcher
 import com.visorcraft.ghostgalleon.library.RaProgress
 import com.visorcraft.ghostgalleon.library.RetroAchievements
 import com.visorcraft.ghostgalleon.library.SessionMath
@@ -27,6 +28,7 @@ import com.visorcraft.ghostgalleon.display.DisplayTopology
 import com.visorcraft.ghostgalleon.display.ResolvedTopology
 import com.visorcraft.ghostgalleon.display.SurfaceMode
 import com.visorcraft.ghostgalleon.rom.PlatformPackStore
+import com.visorcraft.ghostgalleon.rom.RemountPolicy
 import com.visorcraft.ghostgalleon.rom.RomEntry
 import com.visorcraft.ghostgalleon.rom.RomLibrary
 import com.visorcraft.ghostgalleon.settings.DataMigrator
@@ -110,12 +112,16 @@ class GhostGalleonApp : Application() {
         return topo
     }
 
-    /** Topology-aware swap + sticky pin so Auto refresh does not undo it. */
-    fun swapInteractiveDisplay() {
+    /**
+     * Topology-aware swap + sticky pin so Auto refresh does not undo it.
+     * @return true when a dual-display swap occurred; false on single-display
+     * (honest no-op — callers may toast).
+     */
+    fun swapInteractiveDisplay(): Boolean {
         val topo = refreshDisplayConfig()
-        if (topo.mode != SurfaceMode.DUAL) return
+        if (topo.mode != SurfaceMode.DUAL) return false
         val companion = topo.allIds.firstOrNull { it != deckState.primaryDisplayId }
-            ?: return
+            ?: return false
         val current = ResolvedTopology(
             mode = SurfaceMode.DUAL,
             primaryDisplayId = deckState.primaryDisplayId,
@@ -131,6 +137,7 @@ class GhostGalleonApp : Application() {
         settings = settings.copy(userPinnedPrimaryId = pin)
         settingsStore.save(settings)
         displayConfig = swapped
+        return true
     }
 
     private fun registerDisplayListener() {
@@ -196,6 +203,7 @@ class GhostGalleonApp : Application() {
 
     fun putRaProgress(romId: String, progress: RaProgress) {
         raProgressByRomId = raProgressByRomId + (romId to progress)
+        persistRaCache()
         Handler(Looper.getMainLooper()).post { deckState.notifyChanged() }
     }
 
@@ -210,6 +218,7 @@ class GhostGalleonApp : Application() {
             raProgressByRomId = if (parsed.isEmpty) raProgressByRomId - id
             else raProgressByRomId + (id to parsed)
         }
+        persistRaCache()
         Handler(Looper.getMainLooper()).post { deckState.notifyChanged() }
     }
 
@@ -233,6 +242,137 @@ class GhostGalleonApp : Application() {
                 if (!progress.isEmpty) next[romId] = progress
             }
             raProgressByRomId = next
+        }
+    }
+
+    /** Persist in-memory RA map so process death keeps last-known progress. */
+    private fun persistRaCache() {
+        val snapshot = raProgressByRomId
+        RA_IO.execute {
+            runCatching {
+                val root = JSONObject()
+                snapshot.forEach { (romId, progress) ->
+                    if (progress.isEmpty) return@forEach
+                    root.put(
+                        romId,
+                        JSONObject()
+                            .put("ID", progress.gameId ?: JSONObject.NULL)
+                            .put("Title", progress.title ?: JSONObject.NULL)
+                            .put("NumAwardedToUser", progress.numAwarded)
+                            .put("NumAchievements", progress.numPossible)
+                            .put("Score", progress.userScore ?: JSONObject.NULL)
+                            .put("HardcoreMode", if (progress.hardcore) 1 else 0),
+                    )
+                }
+                val file = File(filesDir, "ra_cache.json")
+                val tmp = File(filesDir, "ra_cache.json.tmp")
+                tmp.writeText(root.toString())
+                if (!tmp.renameTo(file)) {
+                    tmp.copyTo(file, overwrite = true)
+                    tmp.delete()
+                }
+            }
+        }
+    }
+
+    /**
+     * Background RA fetch for [romId] when credentials are set. Uses cache
+     * immediately; network updates overwrite + persist. Failures are silent.
+     */
+    fun requestRaProgress(romId: String, titleHint: String?) {
+        val user = settings.raUsername?.trim().orEmpty()
+        val key = settings.raApiKey?.trim().orEmpty()
+        if (user.isEmpty() || key.isEmpty()) return
+        val id = romId.trim()
+        if (id.isEmpty()) return
+        // Debounce: skip if already have non-empty cache and a fetch is in flight.
+        if (id in raFetchInFlight) return
+        raFetchInFlight = raFetchInFlight + id
+        val cachedGameId = raProgressByRomId[id]?.gameId
+        RA_IO.execute {
+            val progress = RaFetcher.fetchProgress(
+                username = user,
+                apiKey = key,
+                gameId = cachedGameId,
+                titleHint = titleHint,
+            )
+            Handler(Looper.getMainLooper()).post {
+                raFetchInFlight = raFetchInFlight - id
+                if (!progress.isEmpty) putRaProgress(id, progress)
+            }
+        }
+    }
+
+    @Volatile
+    private var raFetchInFlight: Set<String> = emptySet()
+
+    // --- Remount / quiet resume rescan ------------------------------------
+    @Volatile
+    var lastHadUnreadableTree: Boolean = false
+        private set
+    @Volatile
+    var hadSuccessfulScan: Boolean = false
+        private set
+    @Volatile
+    private var quietRescanInFlight: Boolean = false
+    private var lastQuietRescanUptimeMs: Long = 0L
+
+    /**
+     * Note the outcome of any rescan (Settings or quiet resume) for the
+     * remount policy. Call from the main-thread rescan callback.
+     */
+    fun noteRescanOutcome(result: RomLibrary.RescanResult) {
+        when (result) {
+            is RomLibrary.RescanResult.Success -> {
+                hadSuccessfulScan = true
+                lastHadUnreadableTree = RemountPolicy.nextHadUnreadableFlag(
+                    allUnreadable = false,
+                    retainedUnreadableTreeCount = 0,
+                )
+            }
+            RomLibrary.RescanResult.Unreadable -> {
+                lastHadUnreadableTree = RemountPolicy.nextHadUnreadableFlag(
+                    allUnreadable = true,
+                )
+            }
+        }
+    }
+
+    /**
+     * If remount policy says so, start a quiet incremental rescan (no toast
+     * unless the library was empty and we recover entries). Debounced so
+     * dual-display resume does not double-scan.
+     */
+    fun maybeQuietRescanOnResume(context: android.content.Context) {
+        if (quietRescanInFlight) return
+        val now = android.os.SystemClock.uptimeMillis()
+        if (now - lastQuietRescanUptimeMs < 8_000L) return
+        if (!RemountPolicy.shouldQuietRescanOnResume(
+                grantedTreeCount = settings.romTreeUris.size,
+                libraryEntryCount = romEntries.size,
+                lastHadUnreadableTree = lastHadUnreadableTree,
+                hadSuccessfulScan = hadSuccessfulScan,
+            )
+        ) {
+            return
+        }
+        lastQuietRescanUptimeMs = now
+        quietRescanInFlight = true
+        val beforeCount = romEntries.size
+        romLibrary.rescan(context.applicationContext, settings, force = false) { result ->
+            quietRescanInFlight = false
+            noteRescanOutcome(result)
+            if (result is RomLibrary.RescanResult.Success) {
+                publishRomEntries(result.entries)
+                // Only toast when we recovered from empty after remount.
+                if (beforeCount == 0 && result.entries.isNotEmpty()) {
+                    android.widget.Toast.makeText(
+                        context.applicationContext,
+                        "Library restored (${result.entries.size} ROMs)",
+                        android.widget.Toast.LENGTH_SHORT,
+                    ).show()
+                }
+            }
         }
     }
 
@@ -405,6 +545,9 @@ class GhostGalleonApp : Application() {
         // Do not auto-launch — selection only so the companion shows the game.
         seedColdStartSelection()
         reloadRomEntries()
+        // If the on-disk index already has entries, treat as a prior successful scan
+        // so quiet resume does not thrash a healthy library.
+        hadSuccessfulScan = romLibrary.load().isNotEmpty()
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
             override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
                 if (activity is BaseDeckActivity) liveDeckActivities.add(activity)
@@ -544,5 +687,6 @@ class GhostGalleonApp : Application() {
 
     private companion object {
         val ROM_IO = java.util.concurrent.Executors.newSingleThreadExecutor()
+        val RA_IO = java.util.concurrent.Executors.newSingleThreadExecutor()
     }
 }

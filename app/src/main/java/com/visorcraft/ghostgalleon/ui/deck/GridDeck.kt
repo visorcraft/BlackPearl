@@ -361,6 +361,12 @@ class GridDeck(
                 launchSlotKey(activity, state, roms, memberKey)
             },
             onClose = { closeFolderPanel() },
+            onRemoveMember = { memberKey ->
+                val app = activity.application as GhostGalleonApp
+                val folders = Folders.removeMember(app.settings.folders, fid, memberKey)
+                app.updateSettings(app.settings.copy(folders = folders))
+                Toast.makeText(activity, "Removed from folder", Toast.LENGTH_SHORT).show()
+            },
         )
         folderPanel = panel
         rootView?.addView(panel.view, FrameLayout.LayoutParams(

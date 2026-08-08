@@ -24,7 +24,11 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import android.widget.LinearLayout
 import com.visorcraft.ghostgalleon.GhostGalleonApp
+import com.visorcraft.ghostgalleon.display.CompanionHeroStyle
+import com.visorcraft.ghostgalleon.display.LayoutMetricsResolver
+import com.visorcraft.ghostgalleon.display.SurfaceMode
 import com.visorcraft.ghostgalleon.input.KeyMap
 import com.visorcraft.ghostgalleon.input.NavRepeater
 import com.visorcraft.ghostgalleon.library.AppLibrary
@@ -33,6 +37,7 @@ import com.visorcraft.ghostgalleon.library.SetupNeeds
 import com.visorcraft.ghostgalleon.sensor.OrientationController
 import com.visorcraft.ghostgalleon.settings.Action
 import com.visorcraft.ghostgalleon.settings.Settings
+import com.visorcraft.ghostgalleon.settings.SlotKey
 import com.visorcraft.ghostgalleon.state.DeckState
 import com.visorcraft.ghostgalleon.state.UIMode
 import com.visorcraft.ghostgalleon.ui.deck.AppIconLoader
@@ -67,14 +72,18 @@ abstract class BaseDeckActivity : AppCompatActivity() {
     private fun onDeckStateChanged() {
         if (deckState.lastChange == DeckState.Change.SELECTION && ::currentDeck.isInitialized) {
             val role = DisplayRole.roleFor(display?.displayId ?: 0, deckState)
+            val content = findViewById<ViewGroup>(android.R.id.content)
+            val stripUpdated = content != null && content.childCount > 0 &&
+                CompanionPanel.updateSelection(
+                    content, this, deckState, appLibrary, app.romEntries, settings)
             val updated = when (role) {
-                DisplayRole.PRIMARY -> currentDeck.updateSelection()
-                DisplayRole.COMPANION -> {
-                    val content = findViewById<ViewGroup>(android.R.id.content)
-                    content != null && content.childCount > 0 &&
-                        CompanionPanel.updateSelection(
-                            content, this, deckState, appLibrary, app.romEntries, settings)
+                DisplayRole.PRIMARY -> {
+                    // Update deck selection; also refresh TOP_STRIP hero when present.
+                    val deckOk = currentDeck.updateSelection()
+                    requestRaForSelection()
+                    deckOk || stripUpdated
                 }
+                DisplayRole.COMPANION -> stripUpdated
             }
             if (updated) return
         }
@@ -151,10 +160,21 @@ abstract class BaseDeckActivity : AppCompatActivity() {
         }
         stoppedSinceResume = false
         orientationController.start()
+        // Quiet remount rescan when policy says a tree may be back.
+        app.maybeQuietRescanOnResume(this)
+        // Live RA for current selection when credentials are set.
+        requestRaForSelection()
         if (pendingAppDrawer) {
             pendingAppDrawer = false
             openAppDrawer()
         }
+    }
+
+    private fun requestRaForSelection() {
+        val key = deckState.selectedKey ?: return
+        val romId = SlotKey.romId(key) ?: return
+        val name = app.romEntries.firstOrNull { it.id == romId }?.name
+        app.requestRaProgress(romId, name)
     }
 
     override fun onPause() {
@@ -353,7 +373,7 @@ abstract class BaseDeckActivity : AppCompatActivity() {
         currentDeck = deckForMode()
         setContentView(
             when (role) {
-                DisplayRole.PRIMARY -> currentDeck.primaryView(this)
+                DisplayRole.PRIMARY -> primaryContentWithOptionalHeroStrip()
                 DisplayRole.COMPANION ->
                     CompanionPanel.build(
                         this, deckState, appLibrary, app.romEntries, settings)
@@ -361,6 +381,54 @@ abstract class BaseDeckActivity : AppCompatActivity() {
         )
         appliedContentEpoch = app.contentEpoch
         if (role == DisplayRole.PRIMARY) maybeShowSetup()
+        requestRaForSelection()
+    }
+
+    /**
+     * Interactive deck, optionally topped with a selection hero strip when
+     * topology is SINGLE and [LayoutMetricsResolver] selects TOP_STRIP.
+     */
+    private fun primaryContentWithOptionalHeroStrip(): View {
+        val deckView = currentDeck.primaryView(this)
+        val dm = resources.displayMetrics
+        val topo = app.displayConfig
+        val metrics = LayoutMetricsResolver.fromWindow(
+            windowWidthPx = dm.widthPixels,
+            windowHeightPx = dm.heightPixels,
+            densityDpi = dm.densityDpi,
+            topologyMode = topo.mode,
+            isCompanionRole = false,
+        )
+        if (metrics.companionHeroStyle != CompanionHeroStyle.TOP_STRIP ||
+            topo.mode != SurfaceMode.SINGLE
+        ) {
+            return deckView
+        }
+        val density = dm.density
+        val stripHeight = (200 * density).toInt().coerceAtMost(dm.heightPixels / 3)
+        val column = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.BLACK)
+        }
+        val strip = CompanionPanel.build(
+            this, deckState, appLibrary, app.romEntries, settings,
+        )
+        column.addView(
+            strip,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                stripHeight,
+            ),
+        )
+        column.addView(
+            deckView,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                0,
+                1f,
+            ),
+        )
+        return column
     }
 
     fun openQuickPanel() {
@@ -692,7 +760,13 @@ abstract class BaseDeckActivity : AppCompatActivity() {
         Action.SWAP_SCREENS -> {
             if (repeatCount == 0) {
                 haptic(HapticFeedbackConstants.KEYBOARD_TAP)
-                app.swapInteractiveDisplay()
+                if (!app.swapInteractiveDisplay()) {
+                    Toast.makeText(
+                        this,
+                        "Only one display — swap unavailable",
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                }
             }
             true
         }

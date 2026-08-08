@@ -21,6 +21,15 @@ class PlatformLookTest {
     }
 
     @Test
+    fun `wallpaperTint is stronger than panelTint`() {
+        val wash = PlatformLook.wallpaperTint("snes")
+        val soft = PlatformLook.panelTint("snes")
+        assertEquals(0x38, (wash ushr 24) and 0xFF)
+        assertTrue(((wash ushr 24) and 0xFF) > ((soft ushr 24) and 0xFF))
+        assertEquals(wash and 0x00FFFFFF, soft and 0x00FFFFFF)
+    }
+
+    @Test
     fun `filterBadge uses shortName`() {
         assertEquals("SNES", PlatformLook.filterBadge("snes"))
         assertTrue(PlatformLook.hasFilter("snes"))

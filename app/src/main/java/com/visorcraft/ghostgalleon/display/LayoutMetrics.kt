@@ -52,9 +52,17 @@ object LayoutMetricsResolver {
         val columns = (wDp / 96f).roundToInt().coerceIn(4, 7)
         val cardDp = (min(wDp, hDp) * 0.42f).roundToInt().coerceIn(140, 280)
         val dockSlot = (wDp / 12f).roundToInt().coerceIn(48, 72)
+        // Dual companion panel: full second-display hero. Single-display:
+        // selection context as a TOP_STRIP above the interactive deck when
+        // the window is tall enough (not compact height). Dual primary has
+        // no in-pane strip (hero lives on the other display).
         val hero = when {
             topologyMode == SurfaceMode.DUAL && isCompanionRole ->
                 CompanionHeroStyle.SECOND_DISPLAY
+            topologyMode == SurfaceMode.SINGLE &&
+                !isCompanionRole &&
+                heightClass != HeightClass.COMPACT ->
+                CompanionHeroStyle.TOP_STRIP
             else -> CompanionHeroStyle.NONE
         }
         return LayoutMetrics(
