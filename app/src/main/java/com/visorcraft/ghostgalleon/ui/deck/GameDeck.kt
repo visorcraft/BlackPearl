@@ -150,6 +150,25 @@ class GameDeck(
                     }
                 }
             }
+            // Games: CATEGORY_GAME apps (all visible, not only curated) + ROMs.
+            q.mode == LibraryBrowse.Mode.GAMES &&
+                q.platformId == null -> {
+                val apps = LibraryBrowse.filterGameApps(library.visible(settings)) { it.isGame }
+                    .let { list ->
+                        if (q.text.isBlank()) list
+                        else {
+                            val needle = q.text.trim()
+                            list.filter {
+                                it.label.contains(needle, ignoreCase = true) ||
+                                    it.packageName.contains(needle, ignoreCase = true)
+                            }
+                        }
+                    }
+                    .map {
+                        CarouselEntry(it.packageName, it.label, it.packageName, null)
+                    }
+                LibraryBrowse.orderByName(apps + browsed) { it.label }
+            }
             q.mode == LibraryBrowse.Mode.ALPHA &&
                 q.platformId == null && q.text.isBlank() -> {
                 val apps = library.curated(settings).map {
@@ -519,6 +538,14 @@ class GameDeck(
         row.addView(chip("Installed", q.mode == LibraryBrowse.Mode.RECENTLY_INSTALLED) {
             setQuery(q.copy(
                 mode = LibraryBrowse.Mode.RECENTLY_INSTALLED,
+                platformId = null,
+                collectionName = null,
+            ))
+        })
+        row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
+        row.addView(chip("Games", q.mode == LibraryBrowse.Mode.GAMES) {
+            setQuery(q.copy(
+                mode = LibraryBrowse.Mode.GAMES,
                 platformId = null,
                 collectionName = null,
             ))

@@ -281,4 +281,27 @@ class LibraryBrowseTest {
             ),
         )
     }
+
+    @Test
+    fun `browseRoms GAMES lists all listed ROMs like ALL`() {
+        val all = LibraryBrowse.browseRoms(
+            library,
+            LibraryBrowse.BrowseQuery(mode = LibraryBrowse.Mode.ALL),
+        )
+        val games = LibraryBrowse.browseRoms(
+            library,
+            LibraryBrowse.BrowseQuery(mode = LibraryBrowse.Mode.GAMES),
+        )
+        assertEquals(all.map { it.name }.toSet(), games.map { it.name }.toSet())
+    }
+
+    @Test
+    fun `filterGameApps keeps only game-flagged items`() {
+        data class A(val name: String, val game: Boolean)
+        val items = listOf(A("a", true), A("b", false), A("c", true))
+        assertEquals(
+            listOf("a", "c"),
+            LibraryBrowse.filterGameApps(items) { it.game }.map { it.name },
+        )
+    }
 }

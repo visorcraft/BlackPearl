@@ -5,8 +5,8 @@ import com.visorcraft.ghostgalleon.settings.SlotKey
 
 /**
  * Pure library browse ops for Game Mode / pickers: platform filter, text
- * search, recents / most-played / recently-installed / A–Z / unplayed
- * ordering, letter jump index. Host-tested; no Android types.
+ * search, recents / most-played / recently-installed / games / A–Z /
+ * unplayed ordering, letter jump index. Host-tested; no Android types.
  */
 object LibraryBrowse {
 
@@ -18,6 +18,11 @@ object LibraryBrowse {
         MOST_PLAYED,
         /** Apps ordered by package install time (newest first). ROMs omitted. */
         RECENTLY_INSTALLED,
+        /**
+         * Games catalog: Android CATEGORY_GAME apps + all listed ROMs.
+         * ROM side uses the same listing as [ALL] (platform/search still apply).
+         */
+        GAMES,
         ALPHA,
         UNPLAYED,
     }
@@ -107,6 +112,13 @@ object LibraryBrowse {
         (lastLaunchedMs[key] ?: 0L) <= 0L
 
     /**
+     * Filter Android apps marked as games ([AppEntry.isGame]). Pure helper for
+     * the Games rail (host can pass any list of packages with a flag).
+     */
+    fun <T> filterGameApps(items: List<T>, isGame: (T) -> Boolean): List<T> =
+        items.filter(isGame)
+
+    /**
      * Full browse pipeline: mode → platform → text. Recents / most-played /
      * favorites / A–Z / unplayed are applied by restricting first, then
      * filter/search.
@@ -146,6 +158,8 @@ object LibraryBrowse {
             }
             // Install-time rail is app-only (PackageManager firstInstallTime).
             Mode.RECENTLY_INSTALLED -> emptyList()
+            // Games rail includes every listed ROM (emulated titles are games).
+            Mode.GAMES -> listed
             Mode.FAVORITES -> {
                 val favIds = favorites.mapNotNull { key ->
                     if (SlotKey.isRom(key)) SlotKey.romId(key) else null
