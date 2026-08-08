@@ -246,6 +246,58 @@ object LibraryBrowse {
         return q.copy(mode = Mode.ALL, sort = sort, collectionName = null)
     }
 
+    /**
+     * One row for the long-press platform-chip menu: human [label] and the
+     * [query] to apply. No always-on chrome — depth of core platform chips.
+     */
+    data class PlatformChipAction(
+        val label: String,
+        val query: BrowseQuery,
+    )
+
+    /**
+     * Long-press platform chip actions for [platformId]:
+     * - Filter · {short} when not already filtering that platform
+     * - Clear platform filter when any platform filter is active
+     * - Sort A–Z / Last played scoped to that platform (All rail)
+     * Blank [platformId] → empty. Pure; host-tested.
+     */
+    fun platformChipActions(
+        q: BrowseQuery,
+        platformId: String,
+        shortName: String = platformId,
+    ): List<PlatformChipAction> {
+        val pid = platformId.trim()
+        if (pid.isEmpty()) return emptyList()
+        val short = shortName.trim().ifEmpty { pid }
+        val baseAll = q.copy(mode = Mode.ALL, collectionName = null)
+        return buildList {
+            if (q.platformId != pid) {
+                add(PlatformChipAction("Filter · $short", baseAll.copy(platformId = pid)))
+            }
+            if (q.platformId != null) {
+                add(
+                    PlatformChipAction(
+                        "Clear platform filter",
+                        q.copy(platformId = null),
+                    ),
+                )
+            }
+            add(
+                PlatformChipAction(
+                    "Sort A–Z · $short",
+                    queryWithSort(baseAll.copy(platformId = pid), Sort.NAME),
+                ),
+            )
+            add(
+                PlatformChipAction(
+                    "Sort last played · $short",
+                    queryWithSort(baseAll.copy(platformId = pid), Sort.LAST_PLAYED),
+                ),
+            )
+        }
+    }
+
     /** Listed ROMs only (scanner-visible, not user-hidden), optional platform. */
     fun filterByPlatform(
         roms: List<RomEntry>,

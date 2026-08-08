@@ -723,6 +723,47 @@ class LibraryBrowseTest {
     }
 
     @Test
+    fun `platformChipActions filter clear and sort`() {
+        assertTrue(
+            LibraryBrowse.platformChipActions(
+                LibraryBrowse.BrowseQuery(),
+                platformId = "  ",
+            ).isEmpty(),
+        )
+        val open = LibraryBrowse.platformChipActions(
+            LibraryBrowse.BrowseQuery(mode = LibraryBrowse.Mode.RECENT),
+            platformId = "snes",
+            shortName = "SNES",
+        )
+        val labels = open.map { it.label }
+        assertTrue(labels.contains("Filter · SNES"))
+        assertFalse(labels.contains("Clear platform filter"))
+        assertTrue(labels.contains("Sort A–Z · SNES"))
+        assertTrue(labels.contains("Sort last played · SNES"))
+        val filter = open.first { it.label.startsWith("Filter") }.query
+        assertEquals(LibraryBrowse.Mode.ALL, filter.mode)
+        assertEquals("snes", filter.platformId)
+        assertNull(filter.collectionName)
+
+        val onPlat = LibraryBrowse.platformChipActions(
+            LibraryBrowse.BrowseQuery(platformId = "snes", text = "z"),
+            platformId = "snes",
+            shortName = "SNES",
+        )
+        assertFalse(onPlat.any { it.label.startsWith("Filter") })
+        val clear = onPlat.first { it.label.startsWith("Clear") }.query
+        assertNull(clear.platformId)
+        assertEquals("z", clear.text) // other meta kept
+        val az = onPlat.first { it.label.startsWith("Sort A–Z") }.query
+        assertEquals("snes", az.platformId)
+        assertEquals(LibraryBrowse.Sort.NAME, az.sort)
+        assertEquals(LibraryBrowse.Mode.ALL, az.mode)
+        val last = onPlat.first { it.label.startsWith("Sort last") }.query
+        assertEquals(LibraryBrowse.Sort.LAST_PLAYED, last.sort)
+        assertEquals("snes", last.platformId)
+    }
+
+    @Test
     fun `filterByLaunchablePlatforms and launchablePlatformIds`() {
         val ids = LibraryBrowse.launchablePlatformIds(
             mapOf(
