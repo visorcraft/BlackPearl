@@ -611,21 +611,23 @@ class GameDeck(
                 collectionName = null,
             ))
         })
-        row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
-        row.addView(chip("Week", q.mode == LibraryBrowse.Mode.PLAYED_THIS_WEEK) {
-            setQuery(q.copy(
-                mode = LibraryBrowse.Mode.PLAYED_THIS_WEEK,
-                platformId = null,
-                genre = null,
-                collectionName = null,
-            ))
-        })
         val chrome = settings.browseChrome
         fun addGap() {
             row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
         }
         fun setBrowse(next: LibraryBrowse.BrowseQuery) {
             setQuery(chrome.sanitize(next))
+        }
+        if (chrome.weekRail) {
+            addGap()
+            row.addView(chip("Week", q.mode == LibraryBrowse.Mode.PLAYED_THIS_WEEK) {
+                setBrowse(q.copy(
+                    mode = LibraryBrowse.Mode.PLAYED_THIS_WEEK,
+                    platformId = null,
+                    genre = null,
+                    collectionName = null,
+                ))
+            })
         }
         if (chrome.installedRail) {
             addGap()

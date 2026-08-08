@@ -15,6 +15,7 @@ class BrowseChromeTest {
         assertFalse(c.installedRail)
         assertFalse(c.gamesRail)
         assertFalse(c.topRail)
+        assertFalse(c.weekRail)
         assertFalse(c.alphaRail)
         assertFalse(c.unplayedRail)
         assertFalse(c.randomChip)

@@ -1398,6 +1398,7 @@ class SettingsActivity : AppCompatActivity() {
         chromeFlag("Installed rail", chrome.installedRail) { c, v -> c.copy(installedRail = v) }
         chromeFlag("Games rail", chrome.gamesRail) { c, v -> c.copy(gamesRail = v) }
         chromeFlag("Top (most played) rail", chrome.topRail) { c, v -> c.copy(topRail = v) }
+        chromeFlag("Week (last 7 days) rail", chrome.weekRail) { c, v -> c.copy(weekRail = v) }
         chromeFlag("A–Z rail + letter jump", chrome.alphaRail) { c, v -> c.copy(alphaRail = v) }
         chromeFlag("New (unplayed) rail", chrome.unplayedRail) { c, v -> c.copy(unplayedRail = v) }
         chromeFlag("Random chip", chrome.randomChip) { c, v -> c.copy(randomChip = v) }

@@ -17,6 +17,8 @@ data class BrowseChrome(
     val gamesRail: Boolean = false,
     /** Most-played (Top). */
     val topRail: Boolean = false,
+    /** Played in the last 7 days (Week). */
+    val weekRail: Boolean = false,
     /** A–Z alphabetical rail (includes letter-jump strip). */
     val alphaRail: Boolean = false,
     /** Unplayed / New ROMs. */
@@ -40,10 +42,10 @@ data class BrowseChrome(
     fun allowsMode(mode: LibraryBrowse.Mode): Boolean = when (mode) {
         LibraryBrowse.Mode.ALL,
         LibraryBrowse.Mode.RECENT,
-        LibraryBrowse.Mode.PLAYED_THIS_WEEK,
         LibraryBrowse.Mode.FAVORITES,
         LibraryBrowse.Mode.COLLECTION,
         -> true
+        LibraryBrowse.Mode.PLAYED_THIS_WEEK -> weekRail
         LibraryBrowse.Mode.MOST_PLAYED -> topRail
         LibraryBrowse.Mode.RECENTLY_INSTALLED -> installedRail
         LibraryBrowse.Mode.GAMES -> gamesRail
@@ -76,6 +78,7 @@ data class BrowseChrome(
         .put("installedRail", installedRail)
         .put("gamesRail", gamesRail)
         .put("topRail", topRail)
+        .put("weekRail", weekRail)
         .put("alphaRail", alphaRail)
         .put("unplayedRail", unplayedRail)
         .put("randomChip", randomChip)
@@ -94,6 +97,7 @@ data class BrowseChrome(
             installedRail = true,
             gamesRail = true,
             topRail = true,
+            weekRail = true,
             alphaRail = true,
             unplayedRail = true,
             randomChip = true,
@@ -110,6 +114,7 @@ data class BrowseChrome(
                 installedRail = o.optBoolean("installedRail", false),
                 gamesRail = o.optBoolean("gamesRail", false),
                 topRail = o.optBoolean("topRail", false),
+                weekRail = o.optBoolean("weekRail", false),
                 alphaRail = o.optBoolean("alphaRail", false),
                 unplayedRail = o.optBoolean("unplayedRail", false),
                 randomChip = o.optBoolean("randomChip", false),
