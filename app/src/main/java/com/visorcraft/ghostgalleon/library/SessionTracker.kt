@@ -219,4 +219,48 @@ object MultiSelectOps {
         }
         return next to added
     }
+
+    /**
+     * Clipboard body for bulk "Copy titles": trimmed non-blank labels, first
+     * occurrence order preserved, duplicates dropped (case-sensitive).
+     * Empty input → empty string. Pure; host-tested.
+     */
+    fun bulkTitlesText(labels: List<String>): String {
+        if (labels.isEmpty()) return ""
+        val seen = linkedSetOf<String>()
+        labels.forEach { raw ->
+            val t = raw.trim()
+            if (t.isNotEmpty()) seen += t
+        }
+        return seen.joinToString("\n")
+    }
+
+    /**
+     * How many distinct non-blank titles [bulkTitlesText] would copy
+     * (bulk action label). Pure; host-tested.
+     */
+    fun bulkTitlesCount(labels: List<String>): Int {
+        if (labels.isEmpty()) return 0
+        val seen = linkedSetOf<String>()
+        labels.forEach { raw ->
+            val t = raw.trim()
+            if (t.isNotEmpty()) seen += t
+        }
+        return seen.size
+    }
+
+    /**
+     * Resolve display labels for [keys] in selection order via [labelOf].
+     * Blank keys skipped. Used before [bulkTitlesText]. Pure; host-tested.
+     */
+    fun labelsForKeys(
+        keys: Collection<String>,
+        labelOf: (String) -> String,
+    ): List<String> {
+        if (keys.isEmpty()) return emptyList()
+        return keys.mapNotNull { raw ->
+            val k = raw.trim()
+            if (k.isEmpty()) null else labelOf(k)
+        }
+    }
 }

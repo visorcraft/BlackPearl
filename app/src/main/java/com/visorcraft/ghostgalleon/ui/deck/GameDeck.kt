@@ -1160,6 +1160,16 @@ class GameDeck(
         if (dockedInSel > 0) {
             labels.add("Unpin from dock ($dockedInSel)")
         }
+        if (n > 0) {
+            val titleLabels = com.visorcraft.ghostgalleon.library.MultiSelectOps.labelsForKeys(
+                state.multiSelectKeys,
+            ) { k -> continueLabel(k, live) }
+            val titleN = com.visorcraft.ghostgalleon.library.MultiSelectOps
+                .bulkTitlesCount(titleLabels)
+            if (titleN > 0) {
+                labels.add("Copy titles ($titleN)")
+            }
+        }
         labels.add("Add to collection…")
         labels.add("Hide selected ROMs ($romCount)")
         if (unplayedInSel > 0) {
@@ -1244,6 +1254,40 @@ class GameDeck(
                                 "Unpinned $removed from dock",
                                 Toast.LENGTH_SHORT,
                             ).show()
+                        }
+                    }
+                    label.startsWith("Copy titles") -> {
+                        val cur = app().settings
+                        val titleLabels =
+                            com.visorcraft.ghostgalleon.library.MultiSelectOps.labelsForKeys(
+                                state.multiSelectKeys,
+                            ) { k -> continueLabel(k, cur) }
+                        val text = com.visorcraft.ghostgalleon.library.MultiSelectOps
+                            .bulkTitlesText(titleLabels)
+                        val count = com.visorcraft.ghostgalleon.library.MultiSelectOps
+                            .bulkTitlesCount(titleLabels)
+                        if (text.isEmpty()) {
+                            Toast.makeText(activity, "Nothing to copy", Toast.LENGTH_SHORT).show()
+                        } else {
+                            val clipboard = activity.getSystemService(Context.CLIPBOARD_SERVICE)
+                                as? android.content.ClipboardManager
+                            if (clipboard == null) {
+                                Toast.makeText(
+                                    activity,
+                                    "Clipboard unavailable",
+                                    Toast.LENGTH_SHORT,
+                                ).show()
+                            } else {
+                                clipboard.setPrimaryClip(
+                                    android.content.ClipData.newPlainText("titles", text),
+                                )
+                                state.clearMultiSelect()
+                                Toast.makeText(
+                                    activity,
+                                    if (count == 1) "Copied 1 title" else "Copied $count titles",
+                                    Toast.LENGTH_SHORT,
+                                ).show()
+                            }
                         }
                     }
                     label.startsWith("Add to collection") ->

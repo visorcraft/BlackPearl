@@ -141,6 +141,32 @@ class MultiSelectOpsTest {
     }
 
     @Test
+    fun `bulkTitlesText dedupes and labelsForKeys order`() {
+        assertEquals("", MultiSelectOps.bulkTitlesText(emptyList()))
+        assertEquals(0, MultiSelectOps.bulkTitlesCount(emptyList()))
+        assertEquals(
+            "Zelda\nMario\nApp",
+            MultiSelectOps.bulkTitlesText(
+                listOf("  Zelda ", "Mario", "", "  ", "Zelda", "App"),
+            ),
+        )
+        assertEquals(
+            3,
+            MultiSelectOps.bulkTitlesCount(
+                listOf("  Zelda ", "Mario", "", "Zelda", "App"),
+            ),
+        )
+        val labels = MultiSelectOps.labelsForKeys(
+            listOf("rom:a", "  ", "pkg.b", "rom:a"),
+        ) { k -> if (k.startsWith("rom:")) "ROM-$k" else "APP-$k" }
+        assertEquals(listOf("ROM-rom:a", "APP-pkg.b", "ROM-rom:a"), labels)
+        assertEquals(
+            "ROM-rom:a\nAPP-pkg.b",
+            MultiSelectOps.bulkTitlesText(labels),
+        )
+    }
+
+    @Test
     fun `bulkUnpinFromDock and dockedCountInSelection`() {
         val dock = listOf("a", "b", "c", null, null, null, null, null, null)
         assertEquals(
