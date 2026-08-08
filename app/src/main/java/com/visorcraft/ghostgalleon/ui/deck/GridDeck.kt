@@ -874,17 +874,15 @@ class GridDeck(
     // an already-docked key) toasts instead of duplicating.
     private fun pinToDock(key: String) {
         val app = activity.application as GhostGalleonApp
-        val current = app.settings.dockSlots
-        if (key in current) {
-            Toast.makeText(activity, "Already in dock", Toast.LENGTH_SHORT).show()
-            return
+        val result = DockSlots.pinKey(app.settings.dockSlots, key)
+        when (result.status) {
+            DockSlots.PinStatus.ALREADY ->
+                Toast.makeText(activity, "Already in dock", Toast.LENGTH_SHORT).show()
+            DockSlots.PinStatus.FULL ->
+                Toast.makeText(activity, "Dock is full", Toast.LENGTH_SHORT).show()
+            DockSlots.PinStatus.PINNED ->
+                updateDockSlots(result.slots, "Pinned to dock")
         }
-        val blank = DockSlots.firstBlank(current)
-        if (blank == null) {
-            Toast.makeText(activity, "Dock is full", Toast.LENGTH_SHORT).show()
-            return
-        }
-        updateDockSlots(DockSlots.fill(current, blank, key), "Pinned to dock")
     }
 
     private fun promptAddToCollection(key: String) {

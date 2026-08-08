@@ -54,4 +54,38 @@ object DockSlots {
     // form); null when the dock is at CAPACITY.
     fun firstBlank(slots: List<String?>): Int? =
         slots.indexOfFirst { it == null }.takeIf { it >= 0 }
+
+    /** Outcome of [pinKey] — pure; host-tested. */
+    enum class PinStatus { PINNED, ALREADY, FULL }
+
+    data class PinResult(val slots: List<String?>, val status: PinStatus)
+
+    /**
+     * Pin [key] into the first blank dock slot (canonical form).
+     * Blank / whitespace keys are ignored (treated as already handled → ALREADY).
+     */
+    fun pinKey(slots: List<String?>, key: String): PinResult {
+        val k = key.trim()
+        val canon = compact(slots)
+        if (k.isEmpty()) return PinResult(canon, PinStatus.ALREADY)
+        if (k in filled(canon)) return PinResult(canon, PinStatus.ALREADY)
+        val blank = firstBlank(canon) ?: return PinResult(canon, PinStatus.FULL)
+        return PinResult(fill(canon, blank, k), PinStatus.PINNED)
+    }
+
+    /**
+     * Pin many keys in order; skips already-present and stops filling when full.
+     * Returns updated slots and how many keys were newly pinned.
+     */
+    fun pinKeys(slots: List<String?>, keys: List<String>): Pair<List<String?>, Int> {
+        var next = compact(slots)
+        var added = 0
+        for (raw in keys) {
+            val r = pinKey(next, raw)
+            next = r.slots
+            if (r.status == PinStatus.PINNED) added++
+            if (r.status == PinStatus.FULL) break
+        }
+        return next to added
+    }
 }

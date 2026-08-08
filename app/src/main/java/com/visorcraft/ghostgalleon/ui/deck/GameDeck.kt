@@ -846,6 +846,7 @@ class GameDeck(
         val labels = mutableListOf(
             "Favorite selected ($n)",
             "Pin selected to grid ($n)",
+            "Pin selected to dock ($n)",
             "Add to collection…",
             "Hide selected ROMs ($romCount)",
         )
@@ -865,12 +866,24 @@ class GameDeck(
                         app().updateSettings(settings.copy(favorites = fav))
                         state.clearMultiSelect()
                     }
-                    label.startsWith("Pin selected") -> {
+                    label.startsWith("Pin selected to grid") -> {
                         val slots = com.visorcraft.ghostgalleon.library.MultiSelectOps.bulkPinToGrid(
                             settings.gridSlots, state.multiSelectKeys)
                         app().updateSettings(settings.copy(gridSlots = slots))
                         state.clearMultiSelect()
                         Toast.makeText(activity, "Pinned to grid", Toast.LENGTH_SHORT).show()
+                    }
+                    label.startsWith("Pin selected to dock") -> {
+                        val (dock, added) =
+                            com.visorcraft.ghostgalleon.library.MultiSelectOps.bulkPinToDock(
+                                settings.dockSlots, state.multiSelectKeys)
+                        app().updateSettings(settings.copy(dockSlots = dock))
+                        state.clearMultiSelect()
+                        Toast.makeText(
+                            activity,
+                            if (added > 0) "Pinned $added to dock" else "Dock full or already pinned",
+                            Toast.LENGTH_SHORT,
+                        ).show()
                     }
                     label.startsWith("Add to collection") ->
                         promptAddToCollection(state.multiSelectKeys.toList(), clearMulti = true)
@@ -1186,6 +1199,19 @@ class GameDeck(
         Toast.makeText(activity, "Added to grid", Toast.LENGTH_SHORT).show()
     }
 
+    private fun pinToDock(key: String) {
+        val live = app().settings
+        val result = DockSlots.pinKey(live.dockSlots, key)
+        when (result.status) {
+            DockSlots.PinStatus.ALREADY ->
+                Toast.makeText(activity, "Already in dock", Toast.LENGTH_SHORT).show()
+            DockSlots.PinStatus.FULL ->
+                Toast.makeText(activity, "Dock is full", Toast.LENGTH_SHORT).show()
+            DockSlots.PinStatus.PINNED ->
+                updateDockSlots(result.slots, "Pinned to dock")
+        }
+    }
+
     private fun hideRom(rom: RomEntry) {
         val next = HiddenRoms.hide(settings.hiddenRomIds, rom.id)
         app().updateSettings(settings.copy(hiddenRomIds = next))
@@ -1318,6 +1344,7 @@ class GameDeck(
         val isApp = entry.rom == null && !SlotKey.isRom(key)
         val choices = buildList {
             add(SlotMenu.Choice.DETAILS)
+            add(SlotMenu.Choice.PIN_TO_DOCK)
             add(if (fav) SlotMenu.Choice.UNFAVORITE else SlotMenu.Choice.FAVORITE)
             add(SlotMenu.Choice.ADD_TO_COLLECTION)
             if (activeCol != null) {
@@ -1345,6 +1372,7 @@ class GameDeck(
             closeSlotMenu()
             when (choice) {
                 SlotMenu.Choice.DETAILS -> showDetails(entry)
+                SlotMenu.Choice.PIN_TO_DOCK -> pinToDock(key)
                 SlotMenu.Choice.APP_INFO -> openAppInfo(key)
                 SlotMenu.Choice.FAVORITE, SlotMenu.Choice.UNFAVORITE -> toggleFavorite(key)
                 SlotMenu.Choice.ADD_TO_COLLECTION -> promptAddToCollection(listOf(key))

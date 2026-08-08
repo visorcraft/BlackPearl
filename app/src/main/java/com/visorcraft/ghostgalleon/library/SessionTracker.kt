@@ -135,6 +135,19 @@ object MultiSelectOps {
         CollectionsOps.bulkFillSlots(gridSlots, selected.toList())
 
     /**
+     * Pin selected keys into the dock (first blanks). Returns updated dock
+     * slots and how many keys were newly added.
+     */
+    fun bulkPinToDock(
+        dockSlots: List<String?>,
+        selected: Set<String>,
+    ): Pair<List<String?>, Int> =
+        com.visorcraft.ghostgalleon.settings.DockSlots.pinKeys(
+            dockSlots,
+            selected.toList(),
+        )
+
+    /**
      * Hide ROM entry ids from selected slot keys (package keys ignored).
      * Returns the updated [hiddenRomIds] set and how many ROMs were newly hidden.
      */

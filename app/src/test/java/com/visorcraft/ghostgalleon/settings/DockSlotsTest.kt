@@ -101,4 +101,40 @@ class DockSlotsTest {
         assertNull(DockSlots.firstBlank(
             DockSlots.compact((1..9).map { "a.$it" })))
     }
+
+    @Test
+    fun `pinKey appends to first blank`() {
+        val r = DockSlots.pinKey(DockSlots.blank(), "com.example.game")
+        assertEquals(DockSlots.PinStatus.PINNED, r.status)
+        assertEquals(listOf("com.example.game"), DockSlots.filled(r.slots))
+    }
+
+    @Test
+    fun `pinKey ALREADY when present or blank key`() {
+        val base = DockSlots.compact(listOf("a.b"))
+        assertEquals(DockSlots.PinStatus.ALREADY, DockSlots.pinKey(base, "a.b").status)
+        assertEquals(DockSlots.PinStatus.ALREADY, DockSlots.pinKey(base, "  ").status)
+    }
+
+    @Test
+    fun `pinKey FULL when capacity reached`() {
+        val full = DockSlots.compact((1..9).map { "a.$it" })
+        val r = DockSlots.pinKey(full, "a.extra")
+        assertEquals(DockSlots.PinStatus.FULL, r.status)
+        assertEquals(9, DockSlots.filled(r.slots).size)
+    }
+
+    @Test
+    fun `pinKeys adds until full and counts new pins`() {
+        val (slots, added) = DockSlots.pinKeys(
+            DockSlots.compact(listOf("keep")),
+            listOf("keep", "new1", "new2"),
+        )
+        assertEquals(2, added)
+        assertEquals(listOf("keep", "new1", "new2"), DockSlots.filled(slots))
+        val almostFull = DockSlots.compact((1..8).map { "a.$it" })
+        val (s2, added2) = DockSlots.pinKeys(almostFull, listOf("x", "y", "z"))
+        assertEquals(1, added2)
+        assertEquals(9, DockSlots.filled(s2).size)
+    }
 }
