@@ -380,6 +380,32 @@ class LibraryBrowseTest {
     }
 
     @Test
+    fun `browseRoms PLAYED_THIS_MONTH keeps 30-day window newest first`() {
+        val now = 2_000_000_000_000L
+        val week = LibraryBrowse.WEEK_WINDOW_MS
+        val month = LibraryBrowse.MONTH_WINDOW_MS
+        val last = mapOf(
+            SlotKey.rom("switch:BotW.rom") to now - 1_000L, // this week
+            SlotKey.rom("snes:Zelda.rom") to now - week - 5_000L, // older than week, in month
+            SlotKey.rom("snes:Mario.rom") to now - month - 5_000L, // outside month
+            SlotKey.rom("3ds:Pokemon.rom") to 0L,
+        )
+        val out = LibraryBrowse.browseRoms(
+            library,
+            LibraryBrowse.BrowseQuery(mode = LibraryBrowse.Mode.PLAYED_THIS_MONTH),
+            lastLaunchedMs = last,
+            nowMs = now,
+        )
+        assertEquals(listOf("BotW", "Zelda"), out.map { it.name })
+        val empty = LibraryBrowse.browseRoms(
+            library,
+            LibraryBrowse.BrowseQuery(mode = LibraryBrowse.Mode.PLAYED_THIS_MONTH),
+            lastLaunchedMs = last,
+        )
+        assertTrue(empty.isEmpty())
+    }
+
+    @Test
     fun `genreTokens splits multi-genre strings`() {
         assertEquals(
             listOf("Action", "Adventure"),

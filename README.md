@@ -63,7 +63,7 @@ On dual-screen hardware one panel hosts the interactive deck (grid or carousel) 
 ### Highlights
 
 - **Grid Mode** — 3DS/Wii-style icon grid with a dock, blank “+” slots, long-press Move/Remove, swap-reorder, favorites, and folders. Optional deck clock/battery (off by default).
-- **Game Mode** — card carousel with a **minimal** default chip bar (All / Recent / Continue / Fav + platforms + Search/Select). Power-user rails (Installed, Games, Top, A–Z, New, Random, genre chips, letter jump) and Quick Panel browse shortcuts are **opt-in** under Settings → Display & Grid → Browse chrome.
+- **Game Mode** — card carousel with a **minimal** default chip bar (All / Recent / Continue / Fav + platforms + Search/Select). Power-user rails (Installed, Games, Top, Week, Month, A–Z, New, Random, genre chips, letter jump) and Quick Panel browse shortcuts are **opt-in** under Settings → Display & Grid → Browse chrome.
 - **Portable display topology** — resolves interactive vs companion vs launch displays from `DisplayManager` (no hard-coded 0/1). Profiles: Auto, One X Sugar, Generic dual, Single.
 - **Live screen swap** — X (default) swaps interactive and companion roles with a sticky pin so Auto refresh does not undo it.
 - **Companion roles** — Hero, Now Playing, Perf HUD, or pinned app on the non-interactive panel (large status pill).

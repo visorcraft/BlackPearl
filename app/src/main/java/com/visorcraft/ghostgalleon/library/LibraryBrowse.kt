@@ -5,13 +5,16 @@ import com.visorcraft.ghostgalleon.settings.SlotKey
 
 /**
  * Pure library browse ops for Game Mode / pickers: platform filter, text
- * search, recents / week / most-played / recently-installed / games / A–Z /
- * unplayed ordering, letter jump index. Host-tested; no Android types.
+ * search, recents / week / month / most-played / recently-installed / games /
+ * A–Z / unplayed ordering, letter jump index. Host-tested; no Android types.
  */
 object LibraryBrowse {
 
     /** Default rolling window for [Mode.PLAYED_THIS_WEEK] (7 days). */
     const val WEEK_WINDOW_MS: Long = 7L * 24L * 60L * 60L * 1000L
+
+    /** Default rolling window for [Mode.PLAYED_THIS_MONTH] (30 days). */
+    const val MONTH_WINDOW_MS: Long = 30L * 24L * 60L * 60L * 1000L
 
     enum class Mode {
         ALL,
@@ -21,6 +24,11 @@ object LibraryBrowse {
          * Empty when nothing has been played in the window.
          */
         PLAYED_THIS_WEEK,
+        /**
+         * Titles launched within the last 30 days (rolling), newest first.
+         * Empty when nothing has been played in the window.
+         */
+        PLAYED_THIS_MONTH,
         FAVORITES,
         COLLECTION,
         MOST_PLAYED,
@@ -218,10 +226,11 @@ object LibraryBrowse {
 
     /**
      * Full browse pipeline: mode → platform → genre → text. Recents /
-     * week / most-played / favorites / A–Z / unplayed are applied by restricting
-     * first, then filter/search.
+     * week / month / most-played / favorites / A–Z / unplayed are applied by
+     * restricting first, then filter/search.
      *
-     * [nowMs] is only used by [Mode.PLAYED_THIS_WEEK] (default 0 → empty week).
+     * [nowMs] is used by [Mode.PLAYED_THIS_WEEK] and [Mode.PLAYED_THIS_MONTH]
+     * (default 0 → empty window).
      */
     fun browseRoms(
         roms: List<RomEntry>,
@@ -254,8 +263,19 @@ object LibraryBrowse {
                     byKey.keys.toList(),
                     lastLaunchedMs,
                     nowMs = nowMs,
+                    windowMs = WEEK_WINDOW_MS,
                 )
                 weekKeys.mapNotNull { byKey[it] }
+            }
+            Mode.PLAYED_THIS_MONTH -> {
+                val byKey = listed.associateBy { SlotKey.rom(it.id) }
+                val monthKeys = filterPlayedInWindow(
+                    byKey.keys.toList(),
+                    lastLaunchedMs,
+                    nowMs = nowMs,
+                    windowMs = MONTH_WINDOW_MS,
+                )
+                monthKeys.mapNotNull { byKey[it] }
             }
             Mode.MOST_PLAYED -> {
                 val byKey = listed.associateBy { SlotKey.rom(it.id) }

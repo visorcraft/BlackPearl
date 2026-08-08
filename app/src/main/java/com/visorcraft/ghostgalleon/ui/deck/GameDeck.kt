@@ -141,12 +141,32 @@ class GameDeck(
                     .filter { !SlotKey.isRom(it) && it in byPkg }
                 val weekApps = LibraryBrowse.filterPlayedInWindow(
                     appKeys, settings.lastLaunchedMs, nowMs = now,
+                    windowMs = LibraryBrowse.WEEK_WINDOW_MS,
                 ).mapNotNull { pkg ->
                     byPkg[pkg]?.let {
                         CarouselEntry(it.packageName, it.label, it.packageName, null)
                     }
                 }
                 (weekApps + browsed).sortedByDescending {
+                    settings.lastLaunchedMs[it.key] ?: 0L
+                }
+            }
+            q.mode == LibraryBrowse.Mode.PLAYED_THIS_MONTH &&
+                appsOk && q.text.isBlank() -> {
+                val now = System.currentTimeMillis()
+                val byPkg = library.curated(settings)
+                    .associateBy { it.packageName }
+                val appKeys = settings.lastLaunchedMs.keys
+                    .filter { !SlotKey.isRom(it) && it in byPkg }
+                val monthApps = LibraryBrowse.filterPlayedInWindow(
+                    appKeys, settings.lastLaunchedMs, nowMs = now,
+                    windowMs = LibraryBrowse.MONTH_WINDOW_MS,
+                ).mapNotNull { pkg ->
+                    byPkg[pkg]?.let {
+                        CarouselEntry(it.packageName, it.label, it.packageName, null)
+                    }
+                }
+                (monthApps + browsed).sortedByDescending {
                     settings.lastLaunchedMs[it.key] ?: 0L
                 }
             }
@@ -623,6 +643,17 @@ class GameDeck(
             row.addView(chip("Week", q.mode == LibraryBrowse.Mode.PLAYED_THIS_WEEK) {
                 setBrowse(q.copy(
                     mode = LibraryBrowse.Mode.PLAYED_THIS_WEEK,
+                    platformId = null,
+                    genre = null,
+                    collectionName = null,
+                ))
+            })
+        }
+        if (chrome.monthRail) {
+            addGap()
+            row.addView(chip("Month", q.mode == LibraryBrowse.Mode.PLAYED_THIS_MONTH) {
+                setBrowse(q.copy(
+                    mode = LibraryBrowse.Mode.PLAYED_THIS_MONTH,
                     platformId = null,
                     genre = null,
                     collectionName = null,

@@ -16,6 +16,7 @@ class BrowseChromeTest {
         assertFalse(c.gamesRail)
         assertFalse(c.topRail)
         assertFalse(c.weekRail)
+        assertFalse(c.monthRail)
         assertFalse(c.alphaRail)
         assertFalse(c.unplayedRail)
         assertFalse(c.randomChip)
@@ -31,6 +32,7 @@ class BrowseChromeTest {
     fun `full enables all chrome`() {
         val c = BrowseChrome.FULL
         assertTrue(c.installedRail && c.gamesRail && c.topRail && c.alphaRail)
+        assertTrue(c.weekRail && c.monthRail)
         assertTrue(c.unplayedRail && c.randomChip && c.genreChips)
         assertTrue(c.deckStatusPill && c.quickPanelBrowse)
         assertTrue(c.isFull())
@@ -81,5 +83,10 @@ class BrowseChromeTest {
         val c = BrowseChrome.MINIMAL.copy(topRail = true)
         assertTrue(c.allowsMode(LibraryBrowse.Mode.MOST_PLAYED))
         assertFalse(c.allowsMode(LibraryBrowse.Mode.GAMES))
+        assertFalse(c.allowsMode(LibraryBrowse.Mode.PLAYED_THIS_MONTH))
+        assertTrue(
+            BrowseChrome.MINIMAL.copy(monthRail = true)
+                .allowsMode(LibraryBrowse.Mode.PLAYED_THIS_MONTH),
+        )
     }
 }
