@@ -171,12 +171,18 @@ object CompanionPanel {
             PlatformTile.restyle(tile, context, rom.platformId)
             // Rebind the art chain: stale art clears immediately, HERO
             // banner / grid art fill in async, placeholder shows on a miss.
+            val dens = context.resources.displayMetrics.density
+            val hDp = context.resources.displayMetrics.heightPixels / dens
+            val artPx = (
+                CompanionHeroMetrics.forPanel(hDp).artSizeDp * dens
+                ).toInt()
             bindRomHeroArt(
                 banner,
                 tileFrame,
                 (context.applicationContext as GhostGalleonApp).artCache,
                 rom,
                 settings.artOverrides,
+                artPx,
             )
             name.text = rom.name
             val platform = Platforms.byId(rom.platformId)
@@ -443,6 +449,7 @@ object CompanionPanel {
         cache: ArtCache,
         rom: RomEntry,
         artOverrides: Map<String, String> = emptyMap(),
+        artSizePx: Int = 0,
     ) {
         val context = bannerFrame.context
         val metrics = context.resources.displayMetrics
@@ -451,10 +458,11 @@ object CompanionPanel {
         image.setImageDrawable(null)
         image.tag = rom.id
         tileFrame.visibility = View.VISIBLE
+        val tilePx = if (artSizePx > 0) artSizePx else (240 * metrics.density).toInt()
         ArtTile.overlay(tileFrame)?.let { overlay ->
             ArtTile.bind(
                 overlay, cache, rom,
-                targetPx = (240 * metrics.density).toInt(),
+                targetPx = tilePx,
                 artOverrides = artOverrides,
             )
         }
@@ -735,6 +743,13 @@ object CompanionPanel {
         val context: Context = activity
         val density = context.resources.displayMetrics.density
         fun dp(value: Int) = (value * density).toInt()
+        // Usable panel size in dp — bottom Sugar is short; scale hero art/name
+        // so the title is never clipped by actions/hints (see CompanionHeroMetrics).
+        val dm = context.resources.displayMetrics
+        val panelHeightDp = dm.heightPixels / density
+        val panelWidthDp = dm.widthPixels / density
+        val heroSpec = CompanionHeroMetrics.forPanel(panelHeightDp, panelWidthDp)
+        val artPx = dp(heroSpec.artSizeDp)
 
         // FrameLayout root so the fallback brand scene (clouds/sea behind,
         // rain in front) can span the WHOLE panel; all normal content lives
@@ -743,7 +758,9 @@ object CompanionPanel {
         val content = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             tag = TAG_PANEL_ROOT
-            setPadding(dp(24), dp(20), dp(24), 0)
+            setPadding(dp(24), dp(12), dp(24), 0)
+            clipChildren = false
+            clipToPadding = false
         }
 
         val app = activity.application as GhostGalleonApp
@@ -944,7 +961,12 @@ object CompanionPanel {
         var frontRain: android.graphics.drawable.AnimatedImageDrawable? = null
         val hero = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
+            // TOP + horizontal center: when space is tight, prefer keeping the
+            // title (below art) over vertical centering that clips mid-glyph.
+            gravity = Gravity.CENTER_HORIZONTAL or Gravity.TOP
+            clipChildren = false
+            clipToPadding = false
+            setPadding(0, dp(4), 0, dp(4))
         }
         // Resume chip = jump to a *different* last-played title. Never show
         // for the already-selected key (hero already is that game), and never
@@ -1001,15 +1023,16 @@ object CompanionPanel {
             // placeholder — then ROM name and platform label.
             val cache = (activity.application as GhostGalleonApp).artCache
             val banner = bannerFrame(context)
+            val bannerH = CompanionHeroMetrics.bannerHeightPx(dm.heightPixels, heroSpec)
             hero.addView(banner, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                context.resources.displayMetrics.heightPixels * 2 / 5,
+                bannerH,
             ))
             val artFrame = ArtTile.view(
                 context,
                 cache,
                 selectedRom,
-                targetPx = dp(240),
+                targetPx = artPx,
                 // bindRomHeroArt below owns the single art bind for this
                 // tile; binding GRID art here too would queue a redundant
                 // decode that the rebind immediately obsoletes.
@@ -1018,19 +1041,25 @@ object CompanionPanel {
             // updateSelection finds the placeholder tile by this tag for
             // in-place restyle; the art overlay sits next to it in the frame.
             artFrame.children.filterIsInstance<TextView>().first().tag = TAG_HERO_ICON
-            hero.addView(artFrame, LinearLayout.LayoutParams(dp(240), dp(240)))
-            bindRomHeroArt(banner, artFrame, cache, selectedRom, settings.artOverrides)
-            // MATCH_PARENT + horizontal pad so long names ellipsize inside the
-            // panel instead of drawing past the rounded display edge.
+            hero.addView(artFrame, LinearLayout.LayoutParams(artPx, artPx))
+            bindRomHeroArt(
+                banner, artFrame, cache, selectedRom, settings.artOverrides, artPx,
+            )
+            // Title must fit above actions on short secondary panels.
             hero.addView(TextView(context).apply {
                 tag = TAG_HERO_NAME
                 text = selectedRom.name
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 32f)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, heroSpec.nameSp)
                 setTextColor(Color.WHITE)
                 gravity = Gravity.CENTER
-                maxLines = 2
+                maxLines = heroSpec.nameMaxLines
                 ellipsize = android.text.TextUtils.TruncateAt.END
-                setPadding(dp(24), dp(24), dp(24), 0)
+                setPadding(
+                    dp(heroSpec.nameSidePadDp),
+                    dp(heroSpec.nameTopPadDp),
+                    dp(heroSpec.nameSidePadDp),
+                    dp(4),
+                )
             }, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -1039,10 +1068,15 @@ object CompanionPanel {
                 tag = TAG_HERO_SUB
                 text = Platforms.byId(selectedRom.platformId)?.displayName
                     ?: selectedRom.platformId
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
+                setTextSize(
+                    TypedValue.COMPLEX_UNIT_SP,
+                    if (heroSpec.artSizeDp < 180) 14f else 18f,
+                )
                 setTextColor(0x99FFFFFF.toInt())
                 gravity = Gravity.CENTER
-                setPadding(dp(24), dp(6), dp(24), 0)
+                maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                setPadding(dp(heroSpec.nameSidePadDp), dp(4), dp(heroSpec.nameSidePadDp), 0)
             }, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -1050,10 +1084,12 @@ object CompanionPanel {
             hero.addView(TextView(context).apply {
                 tag = TAG_HERO_META
                 text = romMetaLine(settings, SlotKey.rom(selectedRom.id))
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
                 setTextColor(0x88FFFFFF.toInt())
                 gravity = Gravity.CENTER
-                setPadding(dp(24), dp(4), dp(24), 0)
+                maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                setPadding(dp(heroSpec.nameSidePadDp), dp(2), dp(heroSpec.nameSidePadDp), 0)
             }, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -1062,11 +1098,17 @@ object CompanionPanel {
             hero.addView(TextView(context).apply {
                 tag = TAG_HERO_METADATA
                 text = metadataText.orEmpty()
-                visibility = if (metadataText != null) View.VISIBLE else View.GONE
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                visibility = if (metadataText != null && heroSpec.showExtraMedia) {
+                    View.VISIBLE
+                } else {
+                    View.GONE
+                }
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
                 setTextColor(0x88FFFFFF.toInt())
                 gravity = Gravity.CENTER
-                setPadding(dp(24), dp(2), dp(24), 0)
+                maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                setPadding(dp(heroSpec.nameSidePadDp), dp(2), dp(heroSpec.nameSidePadDp), 0)
             }, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -1090,9 +1132,11 @@ object CompanionPanel {
                     preferredPlayer,
                     installed,
                 ).orEmpty()
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
                 setTextColor(0x99FFFFFF.toInt())
                 gravity = Gravity.CENTER
+                maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
                 setPadding(0, dp(2), 0, 0)
             })
             val raLine = RetroAchievements.heroLine(
@@ -1107,138 +1151,151 @@ object CompanionPanel {
                 setTextColor(
                     (settings.accentColor and 0x00FFFFFF) or (0xBB shl 24))
                 gravity = Gravity.CENTER
+                maxLines = 1
                 setPadding(0, dp(2), 0, 0)
             })
             val descText = HeroDetail.descriptionText(selectedRom.description)
             hero.addView(TextView(context).apply {
                 tag = TAG_HERO_DESC
                 text = descText.orEmpty()
-                visibility = if (descText != null) View.VISIBLE else View.GONE
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-                setTextColor(0xA0FFFFFF.toInt())
-                gravity = Gravity.START
-                // Scrollable multi-line blurb (up to ~8 lines before ellipsis).
-                maxLines = 8
-                ellipsize = android.text.TextUtils.TruncateAt.END
-                setPadding(dp(16), dp(8), dp(16), 0)
-            })
-            val shot = ImageView(context).apply {
-                tag = TAG_HERO_SHOT
-                scaleType = ImageView.ScaleType.CENTER_CROP
-                visibility = View.GONE
-                clipToOutline = true
-                outlineProvider = object : ViewOutlineProvider() {
-                    override fun getOutline(view: View, outline: Outline) {
-                        outline.setRoundRect(0, 0, view.width, view.height, dp(12).toFloat())
-                    }
-                }
-            }
-            hero.addView(shot, LinearLayout.LayoutParams(dp(320), dp(180)).apply {
-                topMargin = dp(10)
-                gravity = Gravity.CENTER_HORIZONTAL
-            })
-            bindScreenshot(shot, cache, selectedRom)
-            // Optional video snap (muted loop) below/alongside screenshot.
-            val video = VideoView(context).apply {
-                tag = TAG_HERO_VIDEO
-                visibility = View.GONE
-                clipToOutline = true
-                outlineProvider = object : ViewOutlineProvider() {
-                    override fun getOutline(view: View, outline: Outline) {
-                        outline.setRoundRect(0, 0, view.width, view.height, dp(12).toFloat())
-                    }
-                }
-            }
-            hero.addView(video, LinearLayout.LayoutParams(dp(320), dp(180)).apply {
-                topMargin = dp(10)
-                gravity = Gravity.CENTER_HORIZONTAL
-            })
-            bindHeroVideo(video, selectedRom)
-            // Hero quick actions for the selected ROM (Phase 3).
-            val quick = LinearLayout(context).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER
-                setPadding(0, dp(12), 0, 0)
-            }
-            fun quickChip(label: String, onClick: () -> Unit) =
-                TextView(context).apply {
-                    text = label
-                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-                    setTextColor(Color.WHITE)
-                    setBackgroundColor(0xFF2A2A32.toInt())
-                    setPadding(dp(12), dp(8), dp(12), dp(8))
-                    setOnClickListener { onClick() }
-                }
-            val romKey = SlotKey.rom(selectedRom.id)
-            quick.addView(quickChip(
-                if (romKey in settings.favorites) "Unfav" else "Fav",
-            ) {
-                val next = CollectionsOps.toggleFavorite(settings.favorites, romKey)
-                app.updateSettings(settings.copy(favorites = next))
-            })
-            quick.addView(View(context), LinearLayout.LayoutParams(dp(8), 1))
-            quick.addView(quickChip("Pin") {
-                val filled = CollectionsOps.bulkFillSlots(
-                    settings.gridSlots, listOf(romKey))
-                app.updateSettings(settings.copy(gridSlots = filled))
-                android.widget.Toast.makeText(
-                    activity, "Pinned to grid", android.widget.Toast.LENGTH_SHORT).show()
-            })
-            quick.addView(View(context), LinearLayout.LayoutParams(dp(8), 1))
-            quick.addView(quickChip("Art") {
-                (activity as? com.visorcraft.ghostgalleon.ui.BaseDeckActivity)
-                    ?.requestCustomIcon { uri ->
-                        app.artCache.invalidate(selectedRom.id)
-                        app.updateSettings(settings.copy(
-                            artOverrides = settings.artOverrides +
-                                (selectedRom.id to uri.toString())))
-                    }
-            })
-            quick.addView(View(context), LinearLayout.LayoutParams(dp(8), 1))
-            quick.addView(quickChip("Open with") {
-                // Reuse grid's player picker via a small inline dialog.
-                val openPlatform = Platforms.byId(selectedRom.platformId)
-                val players = openPlatform?.players.orEmpty()
-                if (players.isEmpty()) {
-                    android.widget.Toast.makeText(
-                        activity, "No players", android.widget.Toast.LENGTH_SHORT).show()
+                visibility = if (descText != null && heroSpec.showExtraMedia) {
+                    View.VISIBLE
                 } else {
-                    android.app.AlertDialog.Builder(activity)
-                        .setTitle("Open with")
-                        .setItems(players.map { it.displayName }.toTypedArray()) { _, which ->
-                            val p = players[which]
-                            app.updateSettings(
-                                settings.copy(
-                                    defaultPlayers = settings.defaultPlayers +
-                                        (selectedRom.platformId to p.id),
-                                ),
-                                notify = false,
-                            )
-                            launchSlotKey(
-                                activity, state, roms, romKey, playerId = p.id)
-                        }
-                        .setNegativeButton("Cancel", null)
-                        .show()
+                    View.GONE
                 }
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                setTextColor(0xA0FFFFFF.toInt())
+                gravity = Gravity.CENTER
+                maxLines = if (heroSpec.showExtraMedia) 4 else 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                setPadding(dp(heroSpec.nameSidePadDp), dp(4), dp(heroSpec.nameSidePadDp), 0)
             })
-            hero.addView(quick)
+            if (heroSpec.showExtraMedia) {
+                val shot = ImageView(context).apply {
+                    tag = TAG_HERO_SHOT
+                    scaleType = ImageView.ScaleType.CENTER_CROP
+                    visibility = View.GONE
+                    clipToOutline = true
+                    outlineProvider = object : ViewOutlineProvider() {
+                        override fun getOutline(view: View, outline: Outline) {
+                            outline.setRoundRect(
+                                0, 0, view.width, view.height, dp(12).toFloat())
+                        }
+                    }
+                }
+                hero.addView(shot, LinearLayout.LayoutParams(dp(280), dp(140)).apply {
+                    topMargin = dp(6)
+                    gravity = Gravity.CENTER_HORIZONTAL
+                })
+                bindScreenshot(shot, cache, selectedRom)
+                val video = VideoView(context).apply {
+                    tag = TAG_HERO_VIDEO
+                    visibility = View.GONE
+                    clipToOutline = true
+                    outlineProvider = object : ViewOutlineProvider() {
+                        override fun getOutline(view: View, outline: Outline) {
+                            outline.setRoundRect(
+                                0, 0, view.width, view.height, dp(12).toFloat())
+                        }
+                    }
+                }
+                hero.addView(video, LinearLayout.LayoutParams(dp(280), dp(140)).apply {
+                    topMargin = dp(6)
+                    gravity = Gravity.CENTER_HORIZONTAL
+                })
+                bindHeroVideo(video, selectedRom)
+            }
+            // Hero quick actions for the selected ROM (Phase 3).
+            if (heroSpec.showQuickChips) {
+                val quick = LinearLayout(context).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER
+                    setPadding(0, dp(8), 0, 0)
+                }
+                fun quickChip(label: String, onClick: () -> Unit) =
+                    TextView(context).apply {
+                        text = label
+                        setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                        setTextColor(Color.WHITE)
+                        setBackgroundColor(0xFF2A2A32.toInt())
+                        setPadding(dp(12), dp(8), dp(12), dp(8))
+                        setOnClickListener { onClick() }
+                    }
+                val romKey = SlotKey.rom(selectedRom.id)
+                quick.addView(quickChip(
+                    if (romKey in settings.favorites) "Unfav" else "Fav",
+                ) {
+                    val next = CollectionsOps.toggleFavorite(settings.favorites, romKey)
+                    app.updateSettings(settings.copy(favorites = next))
+                })
+                quick.addView(View(context), LinearLayout.LayoutParams(dp(8), 1))
+                quick.addView(quickChip("Pin") {
+                    val filled = CollectionsOps.bulkFillSlots(
+                        settings.gridSlots, listOf(romKey))
+                    app.updateSettings(settings.copy(gridSlots = filled))
+                    android.widget.Toast.makeText(
+                        activity, "Pinned to grid", android.widget.Toast.LENGTH_SHORT).show()
+                })
+                quick.addView(View(context), LinearLayout.LayoutParams(dp(8), 1))
+                quick.addView(quickChip("Art") {
+                    (activity as? com.visorcraft.ghostgalleon.ui.BaseDeckActivity)
+                        ?.requestCustomIcon { uri ->
+                            app.artCache.invalidate(selectedRom.id)
+                            app.updateSettings(settings.copy(
+                                artOverrides = settings.artOverrides +
+                                    (selectedRom.id to uri.toString())))
+                        }
+                })
+                quick.addView(View(context), LinearLayout.LayoutParams(dp(8), 1))
+                quick.addView(quickChip("Open with") {
+                    val openPlatform = Platforms.byId(selectedRom.platformId)
+                    val players = openPlatform?.players.orEmpty()
+                    if (players.isEmpty()) {
+                        android.widget.Toast.makeText(
+                            activity, "No players", android.widget.Toast.LENGTH_SHORT).show()
+                    } else {
+                        android.app.AlertDialog.Builder(activity)
+                            .setTitle("Open with")
+                            .setItems(players.map { it.displayName }.toTypedArray()) { _, which ->
+                                val p = players[which]
+                                app.updateSettings(
+                                    settings.copy(
+                                        defaultPlayers = settings.defaultPlayers +
+                                            (selectedRom.platformId to p.id),
+                                    ),
+                                    notify = false,
+                                )
+                                launchSlotKey(
+                                    activity, state, roms, romKey, playerId = p.id)
+                            }
+                            .setNegativeButton("Cancel", null)
+                            .show()
+                    }
+                })
+                hero.addView(quick)
+            }
         } else if (selectedEntry != null) {
             val icon = ImageView(context)
             icon.tag = TAG_HERO_ICON
             CustomIcon.bind(
                 icon, AppIconLoader(context.packageManager),
                 (activity.application as GhostGalleonApp).artCache,
-                settings, selectedEntry.packageName, dp(240))
-            hero.addView(icon, LinearLayout.LayoutParams(dp(240), dp(240)))
+                settings, selectedEntry.packageName, artPx)
+            hero.addView(icon, LinearLayout.LayoutParams(artPx, artPx))
             hero.addView(TextView(context).apply {
                 tag = TAG_HERO_NAME
                 text = selectedEntry.label
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 32f)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, heroSpec.nameSp)
                 setTextColor(Color.WHITE)
                 gravity = Gravity.CENTER
-                maxLines = 2
+                maxLines = heroSpec.nameMaxLines
                 ellipsize = android.text.TextUtils.TruncateAt.END
-                setPadding(dp(24), dp(24), dp(24), 0)
+                setPadding(
+                    dp(heroSpec.nameSidePadDp),
+                    dp(heroSpec.nameTopPadDp),
+                    dp(heroSpec.nameSidePadDp),
+                    dp(4),
+                )
             }, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -1301,10 +1358,8 @@ object CompanionPanel {
                 } else {
                     setImageResource(R.drawable.ic_brand_ship)
                 }
-            }, LinearLayout.LayoutParams(dp(240), dp(240)).apply {
-                // Nudge the ship below panel center so its hull rides the
-                // horizon line (~32px below center at this density).
-                topMargin = dp(16)
+            }, LinearLayout.LayoutParams(artPx, artPx).apply {
+                topMargin = dp(8)
             })
             val tokens = com.visorcraft.ghostgalleon.settings.ThemePack.resolve(settings)
             if (tokens.heroRain) {

@@ -19,6 +19,7 @@ import com.visorcraft.ghostgalleon.library.OpenSession
 import com.visorcraft.ghostgalleon.library.PlayStats
 import com.visorcraft.ghostgalleon.library.RaFetcher
 import com.visorcraft.ghostgalleon.library.RaProgress
+import com.visorcraft.ghostgalleon.library.RaProgressGate
 import com.visorcraft.ghostgalleon.library.RetroAchievements
 import com.visorcraft.ghostgalleon.library.SessionMath
 import com.visorcraft.ghostgalleon.library.SessionTracker
@@ -202,9 +203,20 @@ class GhostGalleonApp : Application() {
         raProgressByRomId[romId]
 
     fun putRaProgress(romId: String, progress: RaProgress) {
-        raProgressByRomId = raProgressByRomId + (romId to progress)
-        persistRaCache()
-        Handler(Looper.getMainLooper()).post { deckState.notifyChanged() }
+        val id = romId.trim()
+        if (id.isEmpty()) return
+        val prev = raProgressByRomId[id]
+        // Pure gate: no SETTINGS full-rebuild notify (black-screen thrash).
+        when (RaProgressGate.notifyAfterStore(prev, progress)) {
+            RaProgressGate.NotifyKind.NONE -> return
+            RaProgressGate.NotifyKind.SELECTION_ONLY -> {
+                raProgressByRomId = raProgressByRomId + (id to progress)
+                persistRaCache()
+                Handler(Looper.getMainLooper()).post {
+                    deckState.notifySelectionRefresh()
+                }
+            }
+        }
     }
 
     /** Parse and store RA progress JSON for [romId]; empty/malformed clears. */
@@ -212,14 +224,17 @@ class GhostGalleonApp : Application() {
         val id = romId.trim()
         if (id.isEmpty()) return
         if (json.isNullOrBlank()) {
+            if (id !in raProgressByRomId) return
             raProgressByRomId = raProgressByRomId - id
         } else {
             val parsed = RetroAchievements.parseProgress(json)
-            raProgressByRomId = if (parsed.isEmpty) raProgressByRomId - id
+            val next = if (parsed.isEmpty) raProgressByRomId - id
             else raProgressByRomId + (id to parsed)
+            if (next == raProgressByRomId) return
+            raProgressByRomId = next
         }
         persistRaCache()
-        Handler(Looper.getMainLooper()).post { deckState.notifyChanged() }
+        Handler(Looper.getMainLooper()).post { deckState.notifySelectionRefresh() }
     }
 
     /** Load optional filesDir/ra_cache.json: `{ "romId": {…progress…}, … }`. */
@@ -282,12 +297,15 @@ class GhostGalleonApp : Application() {
     fun requestRaProgress(romId: String, titleHint: String?, platformId: String? = null) {
         val user = settings.raUsername?.trim().orEmpty()
         val key = settings.raApiKey?.trim().orEmpty()
-        if (user.isEmpty() || key.isEmpty()) return
+        if (!RaProgressGate.mayFetch(
+                romId, user, key, raFetchInFlight, raFetchAttempted,
+            )
+        ) {
+            return
+        }
         val id = romId.trim()
-        if (id.isEmpty()) return
-        // Skip only while a fetch for this ROM is already in flight.
-        if (id in raFetchInFlight) return
         raFetchInFlight = raFetchInFlight + id
+        raFetchAttempted = raFetchAttempted + id
         val cachedGameId = raProgressByRomId[id]?.gameId
         val platform = platformId
             ?: romEntries.firstOrNull { it.id == id }?.platformId
@@ -312,6 +330,8 @@ class GhostGalleonApp : Application() {
 
     @Volatile
     private var raFetchInFlight: Set<String> = emptySet()
+    @Volatile
+    private var raFetchAttempted: Set<String> = emptySet()
 
     // --- Remount / quiet resume rescan ------------------------------------
     @Volatile
@@ -393,8 +413,18 @@ class GhostGalleonApp : Application() {
     private fun reloadRomEntries() {
         ROM_IO.execute {
             val loaded = romLibrary.load()
+            val prev = romEntries
             romEntries = loaded
-            Handler(Looper.getMainLooper()).post { deckState.notifyChanged() }
+            // Only rebuild decks when the index actually changed. Boot used
+            // to always notifyChanged → second full setContentView on both
+            // panels during first paint (contributed to black surfaces).
+            if (prev.size != loaded.size || prev != loaded) {
+                Handler(Looper.getMainLooper()).post {
+                    contentEpoch++
+                    invalidateDrawerListCache()
+                    deckState.notifyChanged()
+                }
+            }
         }
     }
 

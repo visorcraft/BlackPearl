@@ -307,11 +307,14 @@ class GameDeck(
                 setOnClickListener { onClick() }
             }
         val q = state.libraryBrowse
-        fun setQuery(next: LibraryBrowse.BrowseQuery) {
-            state.setLibraryBrowse(next)
+        fun setQuery(next: LibraryBrowse.BrowseQuery, force: Boolean = false) {
+            state.setLibraryBrowse(next, force = force)
         }
-        row.addView(chip("All", q.mode == LibraryBrowse.Mode.ALL && q.platformId == null) {
-            setQuery(LibraryBrowse.BrowseQuery(mode = LibraryBrowse.Mode.ALL))
+        // All = full reset: clear platform, search text, collection, mode.
+        // force=true so a coalesced paint cannot leave a stale NDS filter.
+        row.addView(chip("All", q.mode == LibraryBrowse.Mode.ALL && q.platformId == null &&
+            q.text.isBlank() && q.collectionName == null) {
+            setQuery(LibraryBrowse.BrowseQuery(), force = true)
         })
         row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
         row.addView(chip("Recent", q.mode == LibraryBrowse.Mode.RECENT) {
@@ -320,19 +323,26 @@ class GameDeck(
         row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
         row.addView(chip("Continue", false) {
             // Jump to the most recently launched key still in the library
-            // without requiring a curated-grid pin.
-            val keys = entries.map { it.key }
-            val cont = LibraryBrowse.continueKey(keys, settings.lastLaunchedMs)
-                ?: LibraryBrowse.continueKey(
-                    roms.filter { it.visibleInUi }.map { SlotKey.rom(it.id) } +
-                        library.curated(settings).map { it.packageName },
-                    settings.lastLaunchedMs,
-                )
+            // (not limited to the current platform filter / carousel slice).
+            val available = buildList {
+                addAll(roms.filter { it.visibleInUi }.map { SlotKey.rom(it.id) })
+                addAll(library.curated(settings).map { it.packageName })
+                addAll(settings.gridSlots.filterNotNull())
+                addAll(settings.dockSlots.filterNotNull())
+                addAll(settings.lastLaunchedMs.keys)
+            }
+            val cont = LibraryBrowse.continueKey(available, settings.lastLaunchedMs)
             if (cont == null) {
                 Toast.makeText(activity, "Nothing to continue", Toast.LENGTH_SHORT).show()
             } else {
-                setQuery(LibraryBrowse.BrowseQuery(mode = LibraryBrowse.Mode.RECENT))
-                state.select(cont)
+                // RECENT rail puts cont at the front after rebuild. force on
+                // both sides so re-tapping Continue still scrolls/rebinds when
+                // the key is already selected or browse was already RECENT.
+                setQuery(
+                    LibraryBrowse.BrowseQuery(mode = LibraryBrowse.Mode.RECENT),
+                    force = true,
+                )
+                state.select(cont, force = true)
             }
         })
         row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))

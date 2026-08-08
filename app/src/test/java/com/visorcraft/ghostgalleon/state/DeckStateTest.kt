@@ -1,5 +1,6 @@
 package com.visorcraft.ghostgalleon.state
 
+import com.visorcraft.ghostgalleon.library.LibraryBrowse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -73,6 +74,69 @@ class DeckStateTest {
         s.select("com.example.app")
         s.swapDisplaysWith(1)
         assertEquals(DeckState.Change.DISPLAY, s.lastChange)
+    }
+
+    @Test
+    fun `notifySelectionRefresh is SELECTION not SETTINGS`() {
+        val s = DeckState()
+        s.setMode(UIMode.GAME)
+        s.notifySelectionRefresh()
+        assertEquals(DeckState.Change.SELECTION, s.lastChange)
+    }
+
+    @Test
+    fun `notifyChanged is SETTINGS full rebuild tag`() {
+        val s = DeckState()
+        s.select("com.example.app")
+        s.notifyChanged()
+        assertEquals(DeckState.Change.SETTINGS, s.lastChange)
+    }
+
+    @Test
+    fun `setLibraryBrowse clears platform when All query applied`() {
+        val s = DeckState()
+        s.setLibraryBrowse(
+            LibraryBrowse.BrowseQuery(
+                mode = LibraryBrowse.Mode.ALL,
+                platformId = "nds",
+            ),
+        )
+        assertEquals("nds", s.libraryBrowse.platformId)
+        s.setLibraryBrowse(LibraryBrowse.BrowseQuery())
+        assertEquals(LibraryBrowse.Mode.ALL, s.libraryBrowse.mode)
+        assertNull(s.libraryBrowse.platformId)
+        assertEquals("", s.libraryBrowse.text)
+        assertNull(s.libraryBrowse.collectionName)
+        assertEquals(DeckState.Change.SETTINGS, s.lastChange)
+    }
+
+    @Test
+    fun `setLibraryBrowse force re-notifies when query unchanged`() {
+        val s = DeckState()
+        var calls = 0
+        s.addListener(DeckState.DeckStateListener { calls++ })
+        val q = LibraryBrowse.BrowseQuery(platformId = "nds")
+        s.setLibraryBrowse(q)
+        assertEquals(1, calls)
+        s.setLibraryBrowse(q)
+        assertEquals(1, calls) // equality early-return
+        s.setLibraryBrowse(q, force = true)
+        assertEquals(2, calls)
+        assertEquals(DeckState.Change.SETTINGS, s.lastChange)
+    }
+
+    @Test
+    fun `select force re-notifies when key unchanged`() {
+        val s = DeckState()
+        var calls = 0
+        s.addListener(DeckState.DeckStateListener { calls++ })
+        s.select("rom:nds:a.nds")
+        assertEquals(1, calls)
+        s.select("rom:nds:a.nds")
+        assertEquals(1, calls)
+        s.select("rom:nds:a.nds", force = true)
+        assertEquals(2, calls)
+        assertEquals(DeckState.Change.SELECTION, s.lastChange)
     }
 
     @Test

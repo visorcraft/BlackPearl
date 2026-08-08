@@ -10,6 +10,8 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.util.Log
+import com.visorcraft.ghostgalleon.BuildConfig
 import android.text.InputType
 import android.view.HapticFeedbackConstants
 import android.view.InputDevice
@@ -56,10 +58,12 @@ import com.visorcraft.ghostgalleon.ui.settings.SetupCard
 private const val AXIS_ENGAGE_THRESHOLD = 0.7f
 private const val AXIS_RELEASE_THRESHOLD = 0.5f
 
-// One physical swipe often delivers HOME + SECONDARY_HOME within ~50ms.
-private const val DRAWER_REQUEST_DEBOUNCE_MS = 450L
-
 abstract class BaseDeckActivity : AppCompatActivity() {
+
+    companion object {
+        /** Logcat tag for full-paint diagnostics (`adb logcat -s GGPaint`). */
+        const val PAINT_TAG = "GGPaint"
+    }
 
     protected val app: GhostGalleonApp get() = application as GhostGalleonApp
     protected val deckState: DeckState get() = app.deckState
@@ -70,6 +74,10 @@ abstract class BaseDeckActivity : AppCompatActivity() {
     // Selection-only changes update the already-built views in place;
     // everything else (mode, display, settings) keeps the full rebuild.
     private fun onDeckStateChanged() {
+        // Never re-enter render while setContentView is running — that left
+        // both physical panels as pure-black surfaces (view tree present,
+        // GPU buffer never presented).
+        if (rendering) return
         if (deckState.lastChange == DeckState.Change.SELECTION && ::currentDeck.isInitialized) {
             val role = DisplayRole.roleFor(display?.displayId ?: 0, deckState)
             val content = findViewById<ViewGroup>(android.R.id.content)
@@ -78,24 +86,41 @@ abstract class BaseDeckActivity : AppCompatActivity() {
             // strip is present and failed to update — that leaves a stale TOP_STRIP.
             val stripPresent = content != null &&
                 content.findViewWithTag<View>(CompanionPanel.TAG_TOP_STRIP) != null
-            val stripUpdated = content != null && content.childCount > 0 &&
+            val panelUpdated = content != null && content.childCount > 0 &&
                 CompanionPanel.updateSelection(
                     content, this, deckState, appLibrary, app.romEntries, settings)
             val updated = when (role) {
                 DisplayRole.PRIMARY -> {
                     val deckOk = currentDeck.updateSelection()
-                    requestRaForSelection()
                     when {
-                        stripPresent && !stripUpdated -> false
-                        stripPresent -> deckOk && stripUpdated
+                        stripPresent && !panelUpdated -> false
+                        stripPresent -> deckOk && panelUpdated
                         else -> deckOk
                     }
                 }
-                DisplayRole.COMPANION -> stripUpdated
+                // Full dual-screen companion is NOT the TOP_STRIP; in-place
+                // hero update is enough — do not fall through to full rebuild
+                // when panelUpdated is true.
+                DisplayRole.COMPANION -> panelUpdated
             }
             if (updated) return
         }
-        renderFromState()
+        renderFromState("state ${deckState.lastChange}")
+    }
+
+    private var rendering: Boolean = false
+    private var lastFullRenderUptimeMs: Long = 0L
+    private var fullRenderCount: Int = 0
+    // When allowFullRender coalesces/blocks a SETTINGS rebuild, retry after
+    // the gap so browse chips (All / platform) never leave a stale carousel.
+    private var pendingFullRender: Boolean = false
+    private val paintHandler = Handler(Looper.getMainLooper())
+    private val deferredPaintRunnable = Runnable {
+        if (!pendingFullRender) return@Runnable
+        pendingFullRender = false
+        if (!isFinishing && !isDestroyed) {
+            renderFromState("deferred")
+        }
     }
 
     private val orientationController by lazy { OrientationController(this) { settings } }
@@ -123,6 +148,11 @@ abstract class BaseDeckActivity : AppCompatActivity() {
     // every SECONDARY_HOME flash from Quickstep.
     private var appliedContentEpoch: Int = -1
 
+    // Display we last painted for. Multi-display setLaunchDisplayId often
+    // leaves displayId wrong/null in onCreate; painting then produces a live
+    // view tree with a pure-black hardware buffer on the real panel.
+    private var paintedForDisplayId: Int? = null
+
     // Swipe-up / re-HOME drawer: launch any app or ROM without reloading
     // the deck. Separate from the per-slot "Add to grid/dock" pickers.
     private var appDrawer: AppPicker? = null
@@ -143,8 +173,29 @@ abstract class BaseDeckActivity : AppCompatActivity() {
         // Opaque window so a dual-display HOME transition cannot peek the
         // system/Quickstep wallpaper (robot-with-box) through Ghost Galleon.
         window.setBackgroundDrawable(ColorDrawable(0xFF000000.toInt()))
-        if (shouldRenderOnCreate()) {
-            renderFromState()
+        // Only paint in onCreate when this window already has a real display
+        // id (Main on default display usually does). Companion launched with
+        // setLaunchDisplayId often still reports display 0/null here — painting
+        // then blacks the secondary panel. onResume / onAttachedToWindow paint.
+        if (shouldRenderOnCreate() && display != null) {
+            renderFromState("onCreate d=${display?.displayId}")
+        }
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        val d = display?.displayId
+        if (shouldRenderOnCreate() &&
+            !isFinishing &&
+            DualPaintPolicy.needsPaintForDisplay(
+                hasPainted = ::currentDeck.isInitialized,
+                paintedDisplayId = paintedForDisplayId,
+                currentDisplayId = d,
+                appliedEpoch = appliedContentEpoch,
+                contentEpoch = app.contentEpoch,
+            )
+        ) {
+            renderFromState("attached display=$d")
         }
     }
 
@@ -157,32 +208,30 @@ abstract class BaseDeckActivity : AppCompatActivity() {
         super.onResume()
         hideStatusBar(window)
         deckState.addListener(stateListener)
-        // Rebuild only when nothing is painted yet, or settings/library
-        // changed while we were away. HOME / SECONDARY_HOME redelivery
-        // must not tear down the grid.
-        val epoch = app.contentEpoch
-        if (!::currentDeck.isInitialized || appliedContentEpoch != epoch) {
+        // Rebuild when: never painted, library/settings epoch changed, OR we
+        // are now on a different display than last paint (multi-display attach).
+        val d = display?.displayId
+        if (DualPaintPolicy.needsPaintForDisplay(
+                hasPainted = ::currentDeck.isInitialized,
+                paintedDisplayId = paintedForDisplayId,
+                currentDisplayId = d,
+                appliedEpoch = appliedContentEpoch,
+                contentEpoch = app.contentEpoch,
+            )
+        ) {
             closeAppDrawer()
             closeQuickPanel()
-            renderFromState()
+            renderFromState("resume d=$d epoch=${app.contentEpoch}")
         }
         stoppedSinceResume = false
         orientationController.start()
-        // Quiet remount rescan when policy says a tree may be back.
-        app.maybeQuietRescanOnResume(this)
-        // Live RA for current selection when credentials are set.
-        requestRaForSelection()
+        // Quiet rescan / RA network intentionally NOT on resume: both caused
+        // contentEpoch / selection notify storms that left physical panels
+        // pure black (view tree alive, buffer never presented).
         if (pendingAppDrawer) {
             pendingAppDrawer = false
             openAppDrawer()
         }
-    }
-
-    private fun requestRaForSelection() {
-        val key = deckState.selectedKey ?: return
-        val romId = SlotKey.romId(key) ?: return
-        val name = app.romEntries.firstOrNull { it.id == romId }?.name
-        app.requestRaProgress(romId, name)
     }
 
     override fun onPause() {
@@ -226,16 +275,16 @@ abstract class BaseDeckActivity : AppCompatActivity() {
      * Debounced: a single swipe often fires multiple intents; only the first
      * in a short window counts. A later deliberate request toggles closed.
      * Safe across activity instances (pending open until resumed).
+     *
+     * @param allowToggle when false (absorb / system storm), only open — never
+     * close. OEM SECONDARY_HOME storms were open/close glitching the modal.
      */
-    fun requestAppDrawer() {
-        // App-wide debounce: one swipe fires HOME + SECONDARY_HOME on both
-        // activities; per-instance timers would each open then toggle-close.
+    fun requestAppDrawer(allowToggle: Boolean = true) {
+        // Absorb path must never call this with intent to open (see DualPaintPolicy).
         val now = SystemClock.uptimeMillis()
-        if (now - app.lastDrawerRequestUptimeMs < DRAWER_REQUEST_DEBOUNCE_MS) {
-            return
-        }
-        app.lastDrawerRequestUptimeMs = now
-
+        val within = DualPaintPolicy.withinDebounce(
+            now, app.lastDrawerRequestUptimeMs, DualPaintPolicy.DRAWER_DEBOUNCE_MS,
+        )
         val primary = when (
             DisplayRole.roleFor(display?.displayId ?: 0, deckState)
         ) {
@@ -243,20 +292,36 @@ abstract class BaseDeckActivity : AppCompatActivity() {
             DisplayRole.COMPANION ->
                 app.primaryDeckActivity()?.takeIf { it !== this } ?: return
         }
-
-        // Second intentional swipe (after debounce) closes the drawer.
-        if (primary.isAppDrawerOpen()) {
-            primary.closeAppDrawer()
-            return
+        when (DualPaintPolicy.drawerAction(within, primary.isAppDrawerOpen(), allowToggle)) {
+            DualPaintPolicy.DrawerAction.NONE -> return
+            DualPaintPolicy.DrawerAction.CLOSE -> {
+                app.lastDrawerRequestUptimeMs = now
+                primary.closeAppDrawer()
+            }
+            DualPaintPolicy.DrawerAction.OPEN -> {
+                app.lastDrawerRequestUptimeMs = now
+                primary.pendingAppDrawer = true
+                if (primary.lifecycle.currentState.isAtLeast(
+                        androidx.lifecycle.Lifecycle.State.RESUMED,
+                    )
+                ) {
+                    primary.pendingAppDrawer = false
+                    primary.openAppDrawer()
+                }
+            }
         }
+    }
 
-        primary.pendingAppDrawer = true
-        if (primary.lifecycle.currentState.isAtLeast(
-                androidx.lifecycle.Lifecycle.State.RESUMED,
-            )
-        ) {
-            primary.pendingAppDrawer = false
-            primary.openAppDrawer()
+    /**
+     * Re-paint only when this window has no content children. Does not run
+     * during [rendering] and is not called on every resume (that thrashed
+     * Vulkan buffers into permanent pure black).
+     */
+    fun ensureDeckPainted() {
+        if (isFinishing || isDestroyed || rendering) return
+        val content = findViewById<ViewGroup>(android.R.id.content) ?: return
+        if (!::currentDeck.isInitialized || content.childCount == 0) {
+            renderFromState("ensure empty")
         }
     }
 
@@ -369,27 +434,90 @@ abstract class BaseDeckActivity : AppCompatActivity() {
             refreshSetupOverlay()
         }
 
-    protected open fun renderFromState() {
-        // Rebuilding the content view detaches any activity-level overlay.
-        appDrawer = null
-        quickPanel = null
-        // setContentView destroys the setup view; clear host + global flag so
-        // we never leave input blocked when setup is no longer shown.
-        setupOverlay = null
-        app.setupBlockingInput = false
+    protected open fun renderFromState(reason: String = "unspecified") {
+        if (isFinishing || isDestroyed) return
+        val now = SystemClock.uptimeMillis()
+        val hasPainted = ::currentDeck.isInitialized
+        val deferMs = DualPaintPolicy.deferredFullRenderDelayMs(
+            rendering = rendering,
+            hasPainted = hasPainted,
+            nowUptimeMs = now,
+            lastFullRenderUptimeMs = lastFullRenderUptimeMs,
+        )
+        if (deferMs != null) {
+            if (BuildConfig.DEBUG && rendering) {
+                Log.e(PAINT_TAG, "BLOCKED nested full render reason=$reason " +
+                    "count=$fullRenderCount ${javaClass.simpleName}")
+                // Debug-only hard signal: nested setContentView is how both
+                // panels went pure black. Never crash release.
+                check(!rendering) {
+                    "GGPaint nested renderFromState ($reason) — dual paint invariant"
+                }
+            }
+            // Do not drop SETTINGS / browse-chip rebuilds permanently.
+            scheduleDeferredFullRender(deferMs, reason)
+            return
+        }
+        pendingFullRender = false
+        paintHandler.removeCallbacks(deferredPaintRunnable)
+        rendering = true
+        lastFullRenderUptimeMs = now
+        fullRenderCount++
         val role = DisplayRole.roleFor(display?.displayId ?: 0, deckState)
-        currentDeck = deckForMode()
-        setContentView(
-            when (role) {
+        Log.i(
+            PAINT_TAG,
+            "FULL #$fullRenderCount reason=$reason role=$role " +
+                "d=${display?.displayId} epoch=${app.contentEpoch} " +
+                "act=${javaClass.simpleName}",
+        )
+        try {
+            // Rebuilding the content view detaches any activity-level overlay.
+            appDrawer = null
+            quickPanel = null
+            // setContentView destroys the setup view; clear host + global flag so
+            // we never leave input blocked when setup is no longer shown.
+            setupOverlay = null
+            app.setupBlockingInput = false
+            currentDeck = deckForMode()
+            val root = when (role) {
                 DisplayRole.PRIMARY -> primaryContentWithOptionalHeroStrip()
                 DisplayRole.COMPANION ->
                     CompanionPanel.build(
                         this, deckState, appLibrary, app.romEntries, settings)
             }
+            // Opaque root — never rely on transparent window format alone.
+            if (root.background == null) {
+                root.setBackgroundColor(0xFF000000.toInt())
+            }
+            setContentView(root)
+            // Force a present after attach; some Sugar paths left READY_TO_SHOW
+            // with an all-black buffer until the next frame was requested.
+            root.post {
+                root.invalidate()
+                root.requestLayout()
+            }
+            appliedContentEpoch = app.contentEpoch
+            paintedForDisplayId = display?.displayId
+            if (role == DisplayRole.PRIMARY) maybeShowSetup()
+        } finally {
+            rendering = false
+        }
+    }
+
+    private fun scheduleDeferredFullRender(delayMs: Long, reason: String) {
+        pendingFullRender = true
+        paintHandler.removeCallbacks(deferredPaintRunnable)
+        val wait = delayMs.coerceAtLeast(0L)
+        Log.i(
+            PAINT_TAG,
+            "DEFER ${wait}ms reason=$reason count=$fullRenderCount " +
+                "act=${javaClass.simpleName}",
         )
-        appliedContentEpoch = app.contentEpoch
-        if (role == DisplayRole.PRIMARY) maybeShowSetup()
-        requestRaForSelection()
+        if (wait == 0L) {
+            paintHandler.post(deferredPaintRunnable)
+        } else {
+            paintHandler.postDelayed(deferredPaintRunnable, wait)
+        }
     }
 
     /**

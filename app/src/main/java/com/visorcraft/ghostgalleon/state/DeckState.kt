@@ -93,8 +93,13 @@ class DeckState {
         setPrimaryDisplayId(next)
     }
 
-    fun select(key: String?) {
-        if (selectedKey == key && dockSlot == null) return
+    /**
+     * Focus [key] in the carousel/hero. When [force] is true, always notify
+     * (even if the key is already selected) so chips like Continue can re-scroll
+     * and rebind selection chrome.
+     */
+    fun select(key: String?, force: Boolean = false) {
+        if (!force && selectedKey == key && dockSlot == null) return
         selectedKey = key
         dockSlot = null
         lastChange = Change.SELECTION
@@ -130,8 +135,14 @@ class DeckState {
         listeners.remove(l)
     }
 
-    fun setLibraryBrowse(query: LibraryBrowse.BrowseQuery) {
-        if (libraryBrowse == query) return
+    /**
+     * Game Mode browse chips (All / Recent / platform / search). Tags
+     * [Change.SETTINGS] so both decks fully rebuild against the new filter.
+     * [force] re-notifies even when the query is unchanged — required when a
+     * prior paint was coalesced and the UI is still showing a stale filter.
+     */
+    fun setLibraryBrowse(query: LibraryBrowse.BrowseQuery, force: Boolean = false) {
+        if (!force && libraryBrowse == query) return
         libraryBrowse = query
         lastChange = Change.SETTINGS
         notifyListeners()
@@ -173,10 +184,28 @@ class DeckState {
         notifyListeners()
     }
 
-    // Explicit re-notification with no field mutation (settings changed);
-    // always a full rebuild.
+    /**
+     * Explicit re-notification with no field mutation. **Always a full
+     * SETTINGS rebuild** of both deck activities.
+     *
+     * Only call from real settings/library/user-data loads
+     * (`updateSettings`, `publishRomEntries`, boot index change). **Never**
+     * call from RA network, hero chrome, absorb, or resume thrash paths —
+     * that caused pure-black dual panels (see AGENTS dual paint invariants).
+     * Hero-only updates use [notifySelectionRefresh].
+     */
     fun notifyChanged() {
         lastChange = Change.SETTINGS
+        notifyListeners()
+    }
+
+    /**
+     * Soft refresh for selection-bound chrome (hero RA line, etc.) without
+     * tearing down the deck. Tags [Change.SELECTION] so listeners update
+     * in place. Must not be used for settings/library changes.
+     */
+    fun notifySelectionRefresh() {
+        lastChange = Change.SELECTION
         notifyListeners()
     }
 
