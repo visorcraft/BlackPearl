@@ -46,6 +46,12 @@ data class BrowseChrome(
      */
     val deckStatusPill: Boolean = false,
     /**
+     * Companion “Resume {title}” pill (launch last-played when different from
+     * selection). Off by default; swipe-dismiss still applies when shown
+     * ([Settings.hideResumeChip] until next launch).
+     */
+    val resumeChip: Boolean = false,
+    /**
      * Quick Panel browse shortcuts beyond Continue: Random, Top, Fav, Games,
      * Installed, Week, Month, A–Z, New (each rail still needs its own flag).
      * System tiles (Wi‑Fi / Settings / Theme) always stay.
@@ -131,6 +137,7 @@ data class BrowseChrome(
         .put("platformChips", platformChips)
         .put("collectionRails", collectionRails)
         .put("deckStatusPill", deckStatusPill)
+        .put("resumeChip", resumeChip)
         .put("quickPanelBrowse", quickPanelBrowse)
 
     companion object {
@@ -154,6 +161,7 @@ data class BrowseChrome(
             platformChips = true,
             collectionRails = true,
             deckStatusPill = true,
+            resumeChip = true,
             quickPanelBrowse = true,
         )
 
@@ -175,6 +183,7 @@ data class BrowseChrome(
                 platformChips = o.optBoolean("platformChips", true),
                 collectionRails = o.optBoolean("collectionRails", true),
                 deckStatusPill = o.optBoolean("deckStatusPill", false),
+                resumeChip = o.optBoolean("resumeChip", false),
                 quickPanelBrowse = o.optBoolean("quickPanelBrowse", false),
             )
         }

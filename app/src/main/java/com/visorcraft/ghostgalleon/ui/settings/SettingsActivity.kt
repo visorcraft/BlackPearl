@@ -1414,6 +1414,10 @@ class SettingsActivity : AppCompatActivity() {
             chrome.deckStatusPill,
         ) { c, v -> c.copy(deckStatusPill = v) }
         chromeFlag(
+            "Resume chip (last played on companion)",
+            chrome.resumeChip,
+        ) { c, v -> c.copy(resumeChip = v) }
+        chromeFlag(
             "Quick Panel browse (Fav/rails)",
             chrome.quickPanelBrowse,
         ) { c, v -> c.copy(quickPanelBrowse = v) }

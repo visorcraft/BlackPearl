@@ -25,6 +25,7 @@ class BrowseChromeTest {
         assertFalse(c.developerChips)
         assertFalse(c.yearChips)
         assertFalse(c.deckStatusPill)
+        assertFalse(c.resumeChip)
         assertFalse(c.quickPanelBrowse)
         assertTrue(c.platformChips)
         assertTrue(c.collectionRails)
@@ -38,7 +39,7 @@ class BrowseChromeTest {
         assertTrue(c.todayRail && c.weekRail && c.monthRail)
         assertTrue(c.unplayedRail && c.randomChip && c.genreChips)
         assertTrue(c.developerChips && c.yearChips)
-        assertTrue(c.deckStatusPill && c.quickPanelBrowse)
+        assertTrue(c.deckStatusPill && c.resumeChip && c.quickPanelBrowse)
         assertTrue(c.isFull())
     }
 

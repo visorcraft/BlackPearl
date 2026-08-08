@@ -1017,13 +1017,13 @@ object CompanionPanel {
             clipToPadding = false
             setPadding(0, dp(4), 0, dp(4))
         }
-        // Resume chip = jump to a *different* last-played title. Never show
-        // for the already-selected key, open session, or after user swipe-dismiss
-        // ([Settings.hideResumeChip] until the next real launch).
-        //
-        // Horizontal swipe (left or right) dismisses the chip entirely — does
-        // not thrash lastLaunched/recents. Tap still launches.
+        // Resume chip = jump to a *different* last-played title. Opt-in via
+        // Browse chrome [resumeChip]. Never show for the already-selected key,
+        // open session, or after user swipe-dismiss ([Settings.hideResumeChip]
+        // until the next real launch). Horizontal swipe dismisses the pill;
+        // tap still launches.
         run {
+            if (!settings.browseChrome.resumeChip) return@run
             if (app.openSession != null) return@run
             if (settings.hideResumeChip) return@run
             val available = buildList {
