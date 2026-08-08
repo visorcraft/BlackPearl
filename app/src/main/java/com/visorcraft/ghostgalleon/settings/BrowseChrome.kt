@@ -31,6 +31,8 @@ data class BrowseChrome(
     val genreChips: Boolean = false,
     /** Developer / publisher chips from gamelist meta. */
     val developerChips: Boolean = false,
+    /** Release-year decade chips (1990s, 2000s, …) from gamelist meta. */
+    val yearChips: Boolean = false,
     /** Platform filter chips (SNES, Switch, …). Default on — core for ROMs. */
     val platformChips: Boolean = true,
     /** Named user collection chips (not Favorites). Default on if user created any. */
@@ -78,7 +80,7 @@ data class BrowseChrome(
         }
     }
 
-    /** Drop disallowed mode/genre/developer into a safe query for the current chrome. */
+    /** Drop disallowed mode/genre/developer/year into a safe query for the current chrome. */
     fun sanitize(q: LibraryBrowse.BrowseQuery): LibraryBrowse.BrowseQuery {
         var next = q
         if (!allowsMode(next.mode)) {
@@ -89,6 +91,9 @@ data class BrowseChrome(
         }
         if (!developerChips && !next.developer.isNullOrBlank()) {
             next = next.copy(developer = null)
+        }
+        if (!yearChips && !next.yearDecade.isNullOrBlank()) {
+            next = next.copy(yearDecade = null)
         }
         if (!platformChips && next.platformId != null) {
             next = next.copy(platformId = null)
@@ -113,6 +118,7 @@ data class BrowseChrome(
         .put("randomChip", randomChip)
         .put("genreChips", genreChips)
         .put("developerChips", developerChips)
+        .put("yearChips", yearChips)
         .put("platformChips", platformChips)
         .put("collectionRails", collectionRails)
         .put("deckStatusPill", deckStatusPill)
@@ -134,6 +140,7 @@ data class BrowseChrome(
             randomChip = true,
             genreChips = true,
             developerChips = true,
+            yearChips = true,
             platformChips = true,
             collectionRails = true,
             deckStatusPill = true,
@@ -153,6 +160,7 @@ data class BrowseChrome(
                 randomChip = o.optBoolean("randomChip", false),
                 genreChips = o.optBoolean("genreChips", false),
                 developerChips = o.optBoolean("developerChips", false),
+                yearChips = o.optBoolean("yearChips", false),
                 platformChips = o.optBoolean("platformChips", true),
                 collectionRails = o.optBoolean("collectionRails", true),
                 deckStatusPill = o.optBoolean("deckStatusPill", false),

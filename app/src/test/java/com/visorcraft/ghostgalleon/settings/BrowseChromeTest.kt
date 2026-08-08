@@ -22,6 +22,7 @@ class BrowseChromeTest {
         assertFalse(c.randomChip)
         assertFalse(c.genreChips)
         assertFalse(c.developerChips)
+        assertFalse(c.yearChips)
         assertFalse(c.deckStatusPill)
         assertFalse(c.quickPanelBrowse)
         assertTrue(c.platformChips)
@@ -35,7 +36,7 @@ class BrowseChromeTest {
         assertTrue(c.installedRail && c.gamesRail && c.topRail && c.alphaRail)
         assertTrue(c.weekRail && c.monthRail)
         assertTrue(c.unplayedRail && c.randomChip && c.genreChips)
-        assertTrue(c.developerChips)
+        assertTrue(c.developerChips && c.yearChips)
         assertTrue(c.deckStatusPill && c.quickPanelBrowse)
         assertTrue(c.isFull())
     }
@@ -74,6 +75,15 @@ class BrowseChromeTest {
         assertEquals(null, c.sanitize(q).developer)
         val on = BrowseChrome.MINIMAL.copy(developerChips = true)
         assertEquals("Nintendo", on.sanitize(q).developer)
+    }
+
+    @Test
+    fun `sanitize clears year decade when year chips off`() {
+        val c = BrowseChrome.MINIMAL
+        val q = LibraryBrowse.BrowseQuery(yearDecade = "1990s")
+        assertEquals(null, c.sanitize(q).yearDecade)
+        val on = BrowseChrome.MINIMAL.copy(yearChips = true)
+        assertEquals("1990s", on.sanitize(q).yearDecade)
     }
 
     @Test

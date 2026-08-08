@@ -1405,6 +1405,7 @@ class SettingsActivity : AppCompatActivity() {
         chromeFlag("Random chip", chrome.randomChip) { c, v -> c.copy(randomChip = v) }
         chromeFlag("Genre chips", chrome.genreChips) { c, v -> c.copy(genreChips = v) }
         chromeFlag("Developer chips", chrome.developerChips) { c, v -> c.copy(developerChips = v) }
+        chromeFlag("Year decade chips", chrome.yearChips) { c, v -> c.copy(yearChips = v) }
         chromeFlag("Platform chips", chrome.platformChips) { c, v -> c.copy(platformChips = v) }
         chromeFlag("Collection rails", chrome.collectionRails) { c, v -> c.copy(collectionRails = v) }
         chromeFlag("Deck clock / battery", chrome.deckStatusPill) { c, v -> c.copy(deckStatusPill = v) }

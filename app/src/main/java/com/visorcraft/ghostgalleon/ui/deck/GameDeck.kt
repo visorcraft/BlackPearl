@@ -72,7 +72,8 @@ class GameDeck(
         }
         val appsOk = q.platformId == null &&
             q.genre.isNullOrBlank() &&
-            q.developer.isNullOrBlank()
+            q.developer.isNullOrBlank() &&
+            q.yearDecade.isNullOrBlank()
         val browsed = LibraryBrowse.browseRoms(
             roms, q,
             lastLaunchedMs = settings.lastLaunchedMs,
@@ -106,12 +107,16 @@ class GameDeck(
                         if (!LibraryBrowse.matchesDeveloper(rom, q.developer)) {
                             return@mapNotNull null
                         }
+                        if (!LibraryBrowse.matchesYearDecade(rom, q.yearDecade)) {
+                            return@mapNotNull null
+                        }
                         CarouselEntry(SlotKey.rom(rom.id), rom.name, null, rom)
                     } ?: byPkg[k]?.let {
-                        // Platform/genre/developer chips are ROM-only — drop apps when set.
+                        // Platform/genre/developer/year chips are ROM-only — drop apps when set.
                         if (q.platformId != null ||
                             !q.genre.isNullOrBlank() ||
-                            !q.developer.isNullOrBlank()
+                            !q.developer.isNullOrBlank() ||
+                            !q.yearDecade.isNullOrBlank()
                         ) {
                             return@mapNotNull null
                         }
@@ -394,6 +399,18 @@ class GameDeck(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
             ))
         }
+        state.libraryBrowse.yearDecade?.trim()?.takeIf { it.isNotEmpty() }?.let { decade ->
+            content.addView(TextView(context).apply {
+                text = "Year · $decade"
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                setTextColor(settings.accentColor)
+                gravity = Gravity.CENTER
+                setPadding(0, dp(4), 0, 0)
+            }, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ))
+        }
         content.addView(
             buildBrowseBar(context, ::dp),
             LinearLayout.LayoutParams(
@@ -642,6 +659,7 @@ class GameDeck(
         row.addView(chip("All", q.mode == LibraryBrowse.Mode.ALL && q.platformId == null &&
             q.genre.isNullOrBlank() &&
             q.developer.isNullOrBlank() &&
+            q.yearDecade.isNullOrBlank() &&
             q.text.isBlank() && q.collectionName == null) {
             val live = app().settings
             val firstKey = library.curated(live).firstOrNull()?.packageName
@@ -673,6 +691,7 @@ class GameDeck(
                     platformId = null,
                     genre = null,
                     developer = null,
+                    yearDecade = null,
                     collectionName = null,
                 ))
             },
@@ -696,6 +715,7 @@ class GameDeck(
                         platformId = null,
                         genre = null,
                         developer = null,
+                        yearDecade = null,
                         collectionName = null,
                     ))
                 },
@@ -719,6 +739,7 @@ class GameDeck(
                         platformId = null,
                         genre = null,
                         developer = null,
+                        yearDecade = null,
                         collectionName = null,
                     ))
                 },
@@ -726,27 +747,47 @@ class GameDeck(
         }
         if (chrome.installedRail) {
             addGap()
-            row.addView(chip("Installed", q.mode == LibraryBrowse.Mode.RECENTLY_INSTALLED) {
-                setBrowse(q.copy(
-                    mode = LibraryBrowse.Mode.RECENTLY_INSTALLED,
-                    platformId = null,
-                    genre = null,
-                    developer = null,
-                    collectionName = null,
-                ))
-            })
+            row.addView(
+                chip(
+                    LibraryBrowse.labeledChip(
+                        "Installed",
+                        library.visible(settings).size,
+                    ),
+                    q.mode == LibraryBrowse.Mode.RECENTLY_INSTALLED,
+                ) {
+                    setBrowse(q.copy(
+                        mode = LibraryBrowse.Mode.RECENTLY_INSTALLED,
+                        platformId = null,
+                        genre = null,
+                        developer = null,
+                        yearDecade = null,
+                        collectionName = null,
+                    ))
+                },
+            )
         }
         if (chrome.gamesRail) {
             addGap()
-            row.addView(chip("Games", q.mode == LibraryBrowse.Mode.GAMES) {
-                setBrowse(q.copy(
-                    mode = LibraryBrowse.Mode.GAMES,
-                    platformId = null,
-                    genre = null,
-                    developer = null,
-                    collectionName = null,
-                ))
-            })
+            val gameApps = LibraryBrowse.filterGameApps(library.visible(settings)) { it.isGame }.size
+            val romN = LibraryBrowse.listedRomCount(roms, settings.hiddenRomIds)
+            row.addView(
+                chip(
+                    LibraryBrowse.labeledChip(
+                        "Games",
+                        LibraryBrowse.gamesCatalogCount(gameApps, romN),
+                    ),
+                    q.mode == LibraryBrowse.Mode.GAMES,
+                ) {
+                    setBrowse(q.copy(
+                        mode = LibraryBrowse.Mode.GAMES,
+                        platformId = null,
+                        genre = null,
+                        developer = null,
+                        yearDecade = null,
+                        collectionName = null,
+                    ))
+                },
+            )
         }
         if (chrome.topRail) {
             addGap()
@@ -763,6 +804,7 @@ class GameDeck(
                         platformId = null,
                         genre = null,
                         developer = null,
+                        yearDecade = null,
                         collectionName = null,
                     ))
                 },
@@ -815,21 +857,32 @@ class GameDeck(
                     platformId = null,
                     genre = null,
                     developer = null,
+                    yearDecade = null,
                     collectionName = null,
                 ))
             },
         )
         if (chrome.alphaRail) {
             addGap()
-            row.addView(chip("A–Z", q.mode == LibraryBrowse.Mode.ALPHA) {
-                setBrowse(q.copy(
-                    mode = LibraryBrowse.Mode.ALPHA,
-                    platformId = null,
-                    genre = null,
-                    developer = null,
-                    collectionName = null,
-                ))
-            })
+            val alphaN = LibraryBrowse.alphaCatalogCount(
+                library.curated(settings).size,
+                LibraryBrowse.listedRomCount(roms, settings.hiddenRomIds),
+            )
+            row.addView(
+                chip(
+                    LibraryBrowse.labeledChip("A–Z", alphaN),
+                    q.mode == LibraryBrowse.Mode.ALPHA,
+                ) {
+                    setBrowse(q.copy(
+                        mode = LibraryBrowse.Mode.ALPHA,
+                        platformId = null,
+                        genre = null,
+                        developer = null,
+                        yearDecade = null,
+                        collectionName = null,
+                    ))
+                },
+            )
         }
         if (chrome.unplayedRail) {
             addGap()
@@ -850,6 +903,7 @@ class GameDeck(
                         platformId = null,
                         genre = null,
                         developer = null,
+                        yearDecade = null,
                         collectionName = null,
                     ))
                 },
@@ -922,6 +976,24 @@ class GameDeck(
                             q.copy(
                                 mode = LibraryBrowse.Mode.ALL,
                                 developer = if (selected) null else dev,
+                                collectionName = null,
+                            ),
+                        )
+                    },
+                )
+            }
+        }
+        // Year decade chips (opt-in): gamelist meta, ROM-only filter + counts.
+        if (chrome.yearChips) {
+            LibraryBrowse.presentYearDecadeCounts(roms, settings.hiddenRomIds).forEach { (decade, count) ->
+                addGap()
+                val selected = q.yearDecade?.equals(decade, ignoreCase = true) == true
+                row.addView(
+                    chip(LibraryBrowse.labeledChip(decade, count), selected) {
+                        setBrowse(
+                            q.copy(
+                                mode = LibraryBrowse.Mode.ALL,
+                                yearDecade = if (selected) null else decade,
                                 collectionName = null,
                             ),
                         )
@@ -1447,7 +1519,8 @@ class GameDeck(
         )
         val appsOk = q.platformId == null &&
             q.genre.isNullOrBlank() &&
-            q.developer.isNullOrBlank()
+            q.developer.isNullOrBlank() &&
+            q.yearDecade.isNullOrBlank()
         if (q.mode == LibraryBrowse.Mode.RECENTLY_INSTALLED) {
             val apps = library.visible(live)
             if (q.text.isBlank()) return apps.size

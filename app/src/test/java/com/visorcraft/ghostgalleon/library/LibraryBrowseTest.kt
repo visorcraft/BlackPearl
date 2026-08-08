@@ -568,6 +568,27 @@ class LibraryBrowseTest {
     }
 
     @Test
+    fun `year decade parse filter and counts`() {
+        assertEquals(1991, LibraryBrowse.parseYear("1991"))
+        assertEquals(2017, LibraryBrowse.parseYear("© 2017 Nintendo"))
+        assertEquals(null, LibraryBrowse.parseYear("nope"))
+        assertEquals("1990s", LibraryBrowse.yearDecadeOf("1991"))
+        assertEquals("2010s", LibraryBrowse.yearDecadeOf("2013"))
+        val decades = LibraryBrowse.presentYearDecadeCounts(library).toMap()
+        // Zelda 1991, Mario 1990 → 1990s; Pokemon 2013 → 2010s; BotW 2017 → 2010s
+        assertEquals(2, decades["1990s"])
+        assertEquals(2, decades["2010s"])
+        val nineties = LibraryBrowse.browseRoms(
+            library,
+            LibraryBrowse.BrowseQuery(yearDecade = "1990s"),
+        )
+        assertEquals(listOf("Zelda", "Mario"), nineties.map { it.name })
+        assertEquals(4, LibraryBrowse.listedRomCount(library))
+        assertEquals(7, LibraryBrowse.gamesCatalogCount(3, 4))
+        assertEquals(6, LibraryBrowse.alphaCatalogCount(2, 4))
+    }
+
+    @Test
     fun `randomPool prefers filtered when non empty`() {
         assertEquals(
             listOf("a", "b"),

@@ -21,6 +21,9 @@ object BrowseFeedback {
         if (!query.developer.isNullOrBlank()) {
             return "No titles by ${query.developer.trim()}"
         }
+        if (!query.yearDecade.isNullOrBlank()) {
+            return "No titles from ${query.yearDecade.trim()}"
+        }
         if (query.platformId != null) {
             return "No titles on ${query.platformId}"
         }

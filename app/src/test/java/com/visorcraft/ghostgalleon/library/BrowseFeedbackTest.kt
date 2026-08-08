@@ -27,6 +27,10 @@ class BrowseFeedbackTest {
             BrowseFeedback.emptyHint(LibraryBrowse.BrowseQuery(developer = "Nintendo")),
         )
         assertEquals(
+            "No titles from 1990s",
+            BrowseFeedback.emptyHint(LibraryBrowse.BrowseQuery(yearDecade = "1990s")),
+        )
+        assertEquals(
             "No titles on snes",
             BrowseFeedback.emptyHint(LibraryBrowse.BrowseQuery(platformId = "snes")),
         )

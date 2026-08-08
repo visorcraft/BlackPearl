@@ -59,6 +59,11 @@ object LibraryBrowse {
          * case-insensitive exact match on trimmed [RomEntry.developer].
          */
         val developer: String? = null,
+        /**
+         * Optional release-year decade filter (e.g. `"1990s"`). ROM-only;
+         * derived from [RomEntry.year] via [yearDecadeOf].
+         */
+        val yearDecade: String? = null,
     )
 
     /** Listed ROMs only (scanner-visible, not user-hidden), optional platform. */
@@ -106,6 +111,60 @@ object LibraryBrowse {
     fun filterByDeveloper(roms: List<RomEntry>, developer: String?): List<RomEntry> {
         if (developer.isNullOrBlank()) return roms
         return roms.filter { matchesDeveloper(it, developer) }
+    }
+
+    /**
+     * Parse a 4-digit release year from gamelist-style strings
+     * (`"1991"`, `"1991-03"`, `"© 2017"`). Out-of-range → null.
+     */
+    fun parseYear(raw: String?): Int? {
+        if (raw.isNullOrBlank()) return null
+        val m = Regex("""(\d{4})""").find(raw.trim()) ?: return null
+        val y = m.groupValues[1].toIntOrNull() ?: return null
+        return if (y in 1970..2099) y else null
+    }
+
+    /** Decade label for a calendar year: `1991` → `"1990s"`. */
+    fun yearDecadeLabel(year: Int): String {
+        val start = (year / 10) * 10
+        return "${start}s"
+    }
+
+    /** Decade label for a raw year string, or null when unparseable. */
+    fun yearDecadeOf(raw: String?): String? =
+        parseYear(raw)?.let { yearDecadeLabel(it) }
+
+    /** True when [rom] falls in optional [decade] (e.g. `"1990s"`). */
+    fun matchesYearDecade(rom: RomEntry, decade: String?): Boolean {
+        val d = decade?.trim().orEmpty()
+        if (d.isEmpty()) return true
+        return yearDecadeOf(rom.year)?.equals(d, ignoreCase = true) == true
+    }
+
+    fun filterByYearDecade(roms: List<RomEntry>, decade: String?): List<RomEntry> {
+        if (decade.isNullOrBlank()) return roms
+        return roms.filter { matchesYearDecade(it, decade) }
+    }
+
+    /**
+     * Distinct release decades present in the listed library with ROM counts,
+     * sorted by decade ascending (oldest first). [limit] caps chip bar length
+     * (default 8). Used for labeled chips like `"1990s · 12"`.
+     */
+    fun presentYearDecadeCounts(
+        roms: List<RomEntry>,
+        hiddenRomIds: Set<String> = emptySet(),
+        limit: Int = 8,
+    ): List<Pair<String, Int>> {
+        val counts = linkedMapOf<String, Int>()
+        HiddenRoms.listed(roms, hiddenRomIds).forEach { rom ->
+            val d = yearDecadeOf(rom.year) ?: return@forEach
+            counts[d] = (counts[d] ?: 0) + 1
+        }
+        return counts.entries
+            .sortedBy { it.key }
+            .take(limit.coerceAtLeast(0))
+            .map { it.key to it.value }
     }
 
     /**
@@ -305,9 +364,9 @@ object LibraryBrowse {
         if (filteredKeys.isNotEmpty()) filteredKeys else fullKeys
 
     /**
-     * Full browse pipeline: mode → platform → genre → developer → text.
-     * Recents / week / month / most-played / favorites / A–Z / unplayed are
-     * applied by restricting first, then filter/search.
+     * Full browse pipeline: mode → platform → genre → developer → year decade
+     * → text. Recents / week / month / most-played / favorites / A–Z /
+     * unplayed are applied by restricting first, then filter/search.
      *
      * [nowMs] is used by [Mode.PLAYED_THIS_WEEK] and [Mode.PLAYED_THIS_MONTH]
      * (default 0 → empty window).
@@ -390,7 +449,8 @@ object LibraryBrowse {
         val platformed = filterByPlatform(base, query.platformId, emptySet())
         val genred = filterByGenre(platformed, query.genre)
         val developed = filterByDeveloper(genred, query.developer)
-        return searchRoms(developed, query.text, emptySet())
+        val yeared = filterByYearDecade(developed, query.yearDecade)
+        return searchRoms(yeared, query.text, emptySet())
     }
 
     /** Distinct platform ids present in the listed library, sorted. */
@@ -465,6 +525,26 @@ object LibraryBrowse {
         HiddenRoms.listed(roms, hiddenRomIds).count {
             isUnplayed(SlotKey.rom(it.id), lastLaunchedMs)
         }
+
+    /** Listed (non-hidden) ROM count — A–Z / Games catalog size proxy half. */
+    fun listedRomCount(
+        roms: List<RomEntry>,
+        hiddenRomIds: Set<String> = emptySet(),
+    ): Int = HiddenRoms.listed(roms, hiddenRomIds).size
+
+    /**
+     * Games rail size proxy: game apps + listed ROMs.
+     * Non-positive parts clamp to 0.
+     */
+    fun gamesCatalogCount(gameAppCount: Int, listedRomCount: Int): Int =
+        gameAppCount.coerceAtLeast(0) + listedRomCount.coerceAtLeast(0)
+
+    /**
+     * A–Z rail size proxy: curated apps + listed ROMs.
+     * Non-positive parts clamp to 0.
+     */
+    fun alphaCatalogCount(appCount: Int, listedRomCount: Int): Int =
+        appCount.coerceAtLeast(0) + listedRomCount.coerceAtLeast(0)
 
     /**
      * Continue chip label: `"Continue · Eden"` when a target name is known,
