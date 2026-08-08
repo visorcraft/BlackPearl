@@ -56,4 +56,23 @@ class PlayStatsTest {
         assertEquals("Never played", SessionMath.cardMetaLine(null, 0L, now))
         assertEquals("5m", SessionMath.cardMetaLine(null, 5 * 60_000L, now))
     }
+
+    @Test
+    fun `cardMetaLine appends favorite and dock tags`() {
+        val now = 10_000L + 2 * 60_000L
+        assertEquals(
+            "2m ago · ★ · Dock",
+            SessionMath.cardMetaLine(
+                10_000L, 0L, now, favorite = true, inDock = true,
+            ),
+        )
+        assertEquals(
+            "Never played · ★",
+            SessionMath.cardMetaLine(null, 0L, now, favorite = true),
+        )
+        assertEquals(
+            "Never played · Dock",
+            SessionMath.cardMetaLine(null, 0L, now, inDock = true),
+        )
+    }
 }

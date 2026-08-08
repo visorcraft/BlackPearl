@@ -1800,11 +1800,13 @@ class GameDeck(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT,
             ))
-            // Playtime / last-played subtitle (GameDeck-style card meta).
+            // Playtime / last-played + Fav/Dock status (no extra chrome chips).
             val meta = SessionMath.cardMetaLine(
                 settings.lastLaunchedMs[entry.key],
                 settings.playtimeMs[entry.key] ?: 0L,
                 System.currentTimeMillis(),
+                favorite = entry.key in settings.favorites,
+                inDock = DockSlots.containsKey(settings.dockSlots, entry.key),
             )
             card.addView(TextView(context).apply {
                 text = meta

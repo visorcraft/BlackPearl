@@ -64,18 +64,29 @@ object SessionMath {
      * Compact card/hero subtitle: "2h ago · 1h 5m" or "Never played".
      * [playtimeMs] is total accrued; omitted from the line when ≤ 0.
      * [playtimePrefix] is prepended to the duration (e.g. `"Played "` on hero).
+     * [favorite] / [inDock] append compact status tags (★ / Dock) without
+     * adding always-on chrome elsewhere.
      */
     fun cardMetaLine(
         lastMs: Long?,
         playtimeMs: Long,
         nowMs: Long,
         playtimePrefix: String = "",
+        favorite: Boolean = false,
+        inDock: Boolean = false,
     ): String {
         val parts = mutableListOf<String>()
         formatLastPlayed(lastMs, nowMs)?.let { parts.add(it) }
         if (playtimeMs > 0L) {
             parts.add(playtimePrefix + formatPlaytime(playtimeMs))
         }
-        return parts.joinToString(" · ").ifEmpty { "Never played" }
+        if (parts.isEmpty()) {
+            // Keep "Never played" when we only have status tags, or alone.
+            if (!favorite && !inDock) return "Never played"
+            parts.add("Never played")
+        }
+        if (favorite) parts.add("★")
+        if (inDock) parts.add("Dock")
+        return parts.joinToString(" · ")
     }
 }
