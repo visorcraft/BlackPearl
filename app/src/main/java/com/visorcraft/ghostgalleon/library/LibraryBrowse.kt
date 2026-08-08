@@ -51,6 +51,21 @@ object LibraryBrowse {
         UNPLAYED,
     }
 
+    /**
+     * Optional carousel sort for catalog-style rails ([Mode.ALL], Games,
+     * Favorites, A–Z, New). Time-ordered rails (Recent / Today / Week /
+     * Month / Top / Installed) keep their inherent order. Default is mode
+     * order (apps then ROMs for All, name for Games/A–Z/New, …).
+     * Long-press the All chip to pick; not always-on chrome.
+     */
+    enum class Sort {
+        DEFAULT,
+        NAME,
+        LAST_PLAYED,
+        MOST_PLAYED,
+        PLATFORM,
+    }
+
     data class BrowseQuery(
         val mode: Mode = Mode.ALL,
         val platformId: String? = null,
@@ -72,6 +87,11 @@ object LibraryBrowse {
          * derived from [RomEntry.year] via [yearDecadeOf].
          */
         val yearDecade: String? = null,
+        /**
+         * Optional sort for catalog rails. Ignored when [allowsCustomSort]
+         * is false for [mode]. Cleared when the user taps All (full reset).
+         */
+        val sort: Sort = Sort.DEFAULT,
     )
 
     /**
@@ -100,8 +120,9 @@ object LibraryBrowse {
     }
 
     /**
-     * Drop platform / genre / developer / year / text filters; keep mode and
-     * collectionName so the user stays on the current rail.
+     * Drop platform / genre / developer / year / text filters; keep mode,
+     * collectionName, and [BrowseQuery.sort] so the user stays on the
+     * current rail with the same presentation order.
      */
     fun clearMetaFilters(q: BrowseQuery): BrowseQuery =
         q.copy(
@@ -111,6 +132,119 @@ object LibraryBrowse {
             yearDecade = null,
             text = "",
         )
+
+    /**
+     * Catalog-style rails accept a custom [Sort]. Time / install rails and
+     * ordered collections keep inherent order (sort field ignored).
+     */
+    fun allowsCustomSort(mode: Mode): Boolean = when (mode) {
+        Mode.ALL,
+        Mode.GAMES,
+        Mode.FAVORITES,
+        Mode.UNPLAYED,
+        Mode.ALPHA,
+        -> true
+        Mode.RECENT,
+        Mode.PLAYED_TODAY,
+        Mode.PLAYED_THIS_WEEK,
+        Mode.PLAYED_THIS_MONTH,
+        Mode.MOST_PLAYED,
+        Mode.RECENTLY_INSTALLED,
+        Mode.COLLECTION,
+        -> false
+    }
+
+    /** Short suffix for the All chip when a custom sort is active, or null. */
+    fun sortChipSuffix(sort: Sort): String? = when (sort) {
+        Sort.DEFAULT -> null
+        Sort.NAME -> "A–Z"
+        Sort.LAST_PLAYED -> "Last"
+        Sort.MOST_PLAYED -> "Top"
+        Sort.PLATFORM -> "Plat"
+    }
+
+    /** All-chip label: `"All"` or `"All · A–Z"` when sorted. */
+    fun allChipLabel(sort: Sort): String {
+        val suffix = sortChipSuffix(sort) ?: return "All"
+        return "All · $suffix"
+    }
+
+    /** Human label for sort picker rows / toasts. */
+    fun sortDisplayName(sort: Sort): String = when (sort) {
+        Sort.DEFAULT -> "Default order"
+        Sort.NAME -> "Name A–Z"
+        Sort.LAST_PLAYED -> "Last played"
+        Sort.MOST_PLAYED -> "Most played"
+        Sort.PLATFORM -> "Platform"
+    }
+
+    /**
+     * Reorder [items] by [sort]. [Sort.DEFAULT] or size ≤ 1 → unchanged.
+     * Missing last-played / playtime stamps sort last (stable). Platform
+     * sort is platform id then name (apps with null platform group first).
+     * Pure; host-tested.
+     */
+    fun <T> applySort(
+        items: List<T>,
+        sort: Sort,
+        keyOf: (T) -> String,
+        labelOf: (T) -> String,
+        platformOf: (T) -> String?,
+        lastLaunchedMs: Map<String, Long> = emptyMap(),
+        playtimeMs: Map<String, Long> = emptyMap(),
+    ): List<T> {
+        if (sort == Sort.DEFAULT || items.size <= 1) return items
+        return when (sort) {
+            Sort.DEFAULT -> items
+            Sort.NAME -> orderByName(items, labelOf)
+            Sort.LAST_PLAYED -> items.withIndex().sortedWith(
+                compareByDescending<IndexedValue<T>> {
+                    lastLaunchedMs[keyOf(it.value)] ?: Long.MIN_VALUE
+                }.thenBy { it.index },
+            ).map { it.value }
+            Sort.MOST_PLAYED -> items.withIndex().sortedWith(
+                compareByDescending<IndexedValue<T>> {
+                    playtimeMs[keyOf(it.value)] ?: Long.MIN_VALUE
+                }.thenBy { it.index },
+            ).map { it.value }
+            Sort.PLATFORM -> items.withIndex().sortedWith(
+                compareBy<IndexedValue<T>> {
+                    platformOf(it.value)?.trim()?.lowercase().orEmpty()
+                }.thenBy {
+                    labelOf(it.value).lowercase()
+                }.thenBy { it.index },
+            ).map { it.value }
+        }
+    }
+
+    /**
+     * Apply [BrowseQuery.sort] when the mode allows it; otherwise return
+     * [items] unchanged. Convenience for Game Mode merge + browseRoms.
+     */
+    fun <T> applyQuerySort(
+        items: List<T>,
+        query: BrowseQuery,
+        keyOf: (T) -> String,
+        labelOf: (T) -> String,
+        platformOf: (T) -> String?,
+        lastLaunchedMs: Map<String, Long> = emptyMap(),
+        playtimeMs: Map<String, Long> = emptyMap(),
+    ): List<T> {
+        if (!allowsCustomSort(query.mode) || query.sort == Sort.DEFAULT) return items
+        return applySort(
+            items, query.sort, keyOf, labelOf, platformOf,
+            lastLaunchedMs, playtimeMs,
+        )
+    }
+
+    /**
+     * When the user picks a sort from a time-ordered rail, switch to [Mode.ALL]
+     * so the sort is visible; catalog rails keep their mode. Pure.
+     */
+    fun queryWithSort(q: BrowseQuery, sort: Sort): BrowseQuery {
+        if (allowsCustomSort(q.mode)) return q.copy(sort = sort)
+        return q.copy(mode = Mode.ALL, sort = sort, collectionName = null)
+    }
 
     /** Listed ROMs only (scanner-visible, not user-hidden), optional platform. */
     fun filterByPlatform(
@@ -541,7 +675,16 @@ object LibraryBrowse {
         val developed = filterByDeveloper(genred, query.developer)
         val yeared = filterByYearDecade(developed, query.yearDecade)
         val launchable = filterByLaunchablePlatforms(yeared, launchablePlatformIds)
-        return searchRoms(launchable, query.text, emptySet())
+        val searched = searchRoms(launchable, query.text, emptySet())
+        return applyQuerySort(
+            searched,
+            query,
+            keyOf = { SlotKey.rom(it.id) },
+            labelOf = { it.name },
+            platformOf = { it.platformId },
+            lastLaunchedMs = lastLaunchedMs,
+            playtimeMs = playtimeMs,
+        )
     }
 
     /** Distinct platform ids present in the listed library, sorted. */

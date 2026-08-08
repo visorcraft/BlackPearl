@@ -87,7 +87,7 @@ class GameDeck(
         ).map {
             CarouselEntry(SlotKey.rom(it.id), it.name, null, it)
         }
-        when {
+        val built = when {
             q.mode == LibraryBrowse.Mode.COLLECTION -> {
                 // Walk member keys in user order (apps + ROMs interleaved).
                 val name = q.collectionName.orEmpty()
@@ -341,6 +341,16 @@ class GameDeck(
             }
             else -> browsed
         }
+        // Custom sort (long-press All) reorders catalog rails after app/ROM merge.
+        LibraryBrowse.applyQuerySort(
+            built,
+            q,
+            keyOf = { it.key },
+            labelOf = { it.label },
+            platformOf = { it.rom?.platformId },
+            lastLaunchedMs = settings.lastLaunchedMs,
+            playtimeMs = settings.playtimeMs,
+        )
     }
     private val nav get() = CarouselNavigation(entries.size)
     private val dockNav get() = DockNavigation(
@@ -685,22 +695,29 @@ class GameDeck(
         fun setQuery(next: LibraryBrowse.BrowseQuery, force: Boolean = false) {
             state.setLibraryBrowse(next, force = force)
         }
-        // All = full reset: clear platform/genre/search/collection AND jump the
-        // carousel to the first unrestricted entry. Keeping the prior NDS
-        // selection centered made "All" look like a no-op (same cards still
-        // on screen even though the filter was cleared).
-        row.addView(chip("All", q.mode == LibraryBrowse.Mode.ALL && q.platformId == null &&
-            q.genre.isNullOrBlank() &&
-            q.developer.isNullOrBlank() &&
-            q.yearDecade.isNullOrBlank() &&
-            q.text.isBlank() && q.collectionName == null) {
-            val live = app().settings
-            val firstKey = library.curated(live).firstOrNull()?.packageName
-                ?: HiddenRoms.listed(roms, settings.hiddenRomIds)
-                    .firstOrNull()?.let { SlotKey.rom(it.id) }
-            setQuery(LibraryBrowse.BrowseQuery(), force = true)
-            if (firstKey != null) state.select(firstKey, force = true)
-        })
+        // All = full reset: clear platform/genre/search/collection/sort AND
+        // jump the carousel to the first unrestricted entry. Keeping the prior
+        // NDS selection centered made "All" look like a no-op (same cards still
+        // on screen even though the filter was cleared). Long-press → sort order
+        // (Name / Last / Top / Platform) for catalog rails — not always-on chrome.
+        row.addView(
+            chip(
+                LibraryBrowse.allChipLabel(q.sort),
+                q.mode == LibraryBrowse.Mode.ALL && q.platformId == null &&
+                    q.genre.isNullOrBlank() &&
+                    q.developer.isNullOrBlank() &&
+                    q.yearDecade.isNullOrBlank() &&
+                    q.text.isBlank() && q.collectionName == null,
+                onLongClick = { showSortOrderDialog() },
+            ) {
+                val live = app().settings
+                val firstKey = library.curated(live).firstOrNull()?.packageName
+                    ?: HiddenRoms.listed(roms, settings.hiddenRomIds)
+                        .firstOrNull()?.let { SlotKey.rom(it.id) }
+                setQuery(LibraryBrowse.BrowseQuery(), force = true)
+                if (firstKey != null) state.select(firstKey, force = true)
+            },
+        )
         row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
         val chrome = settings.browseChrome
         fun addGap() {
@@ -2021,6 +2038,42 @@ class GameDeck(
             else -> "Reordered"
         }
         Toast.makeText(activity, toast, Toast.LENGTH_SHORT).show()
+    }
+
+    /**
+     * Long-press All chip: pick catalog sort (Default / Name / Last played /
+     * Most played / Platform). Applies to All / Games / Fav / A–Z / New;
+     * time rails switch to All so the sort is visible. Not always-on chrome.
+     */
+    private fun showSortOrderDialog() {
+        val options = listOf(
+            LibraryBrowse.Sort.DEFAULT,
+            LibraryBrowse.Sort.NAME,
+            LibraryBrowse.Sort.LAST_PLAYED,
+            LibraryBrowse.Sort.MOST_PLAYED,
+            LibraryBrowse.Sort.PLATFORM,
+        )
+        val current = state.libraryBrowse.sort
+        val labels = options.map { sort ->
+            val name = LibraryBrowse.sortDisplayName(sort)
+            if (sort == current) "✓ $name" else name
+        }.toTypedArray()
+        android.app.AlertDialog.Builder(activity)
+            .setTitle("Sort order")
+            .setItems(labels) { _, which ->
+                if (which !in options.indices) return@setItems
+                val picked = options[which]
+                val next = LibraryBrowse.queryWithSort(state.libraryBrowse, picked)
+                state.setLibraryBrowse(next, force = true)
+                val toast = if (picked == LibraryBrowse.Sort.DEFAULT) {
+                    "Default order"
+                } else {
+                    "Sorted by ${LibraryBrowse.sortDisplayName(picked)}"
+                }
+                Toast.makeText(activity, toast, Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun showDetails(entry: CarouselEntry) {

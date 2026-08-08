@@ -603,6 +603,7 @@ class LibraryBrowseTest {
             yearDecade = "1990s",
             text = "zelda",
             collectionName = "x",
+            sort = LibraryBrowse.Sort.NAME,
         )
         assertTrue(LibraryBrowse.hasActiveMetaFilters(base))
         assertEquals(5, LibraryBrowse.activeMetaFilterCount(base))
@@ -610,12 +611,115 @@ class LibraryBrowseTest {
         val cleared = LibraryBrowse.clearMetaFilters(base)
         assertEquals(LibraryBrowse.Mode.FAVORITES, cleared.mode)
         assertEquals("x", cleared.collectionName)
+        assertEquals(LibraryBrowse.Sort.NAME, cleared.sort)
         assertNull(cleared.platformId)
         assertNull(cleared.genre)
         assertNull(cleared.developer)
         assertNull(cleared.yearDecade)
         assertEquals("", cleared.text)
         assertFalse(LibraryBrowse.hasActiveMetaFilters(cleared))
+    }
+
+    @Test
+    fun `applySort name last played top and platform`() {
+        data class Item(val key: String, val label: String, val platform: String?)
+        val items = listOf(
+            Item("rom:snes:z", "Zelda", "snes"),
+            Item("rom:3ds:p", "Pokemon", "3ds"),
+            Item("rom:snes:m", "Mario", "snes"),
+            Item("com.app", "App", null),
+        )
+        val last = mapOf(
+            "rom:snes:m" to 300L,
+            "rom:snes:z" to 100L,
+            "com.app" to 200L,
+        )
+        val play = mapOf(
+            "rom:snes:z" to 90L,
+            "rom:3ds:p" to 50L,
+            "com.app" to 10L,
+        )
+        assertEquals(
+            listOf("App", "Mario", "Pokemon", "Zelda"),
+            LibraryBrowse.applySort(
+                items, LibraryBrowse.Sort.NAME,
+                keyOf = { it.key }, labelOf = { it.label }, platformOf = { it.platform },
+            ).map { it.label },
+        )
+        assertEquals(
+            listOf("Mario", "App", "Zelda", "Pokemon"),
+            LibraryBrowse.applySort(
+                items, LibraryBrowse.Sort.LAST_PLAYED,
+                keyOf = { it.key }, labelOf = { it.label }, platformOf = { it.platform },
+                lastLaunchedMs = last,
+            ).map { it.label },
+        )
+        assertEquals(
+            listOf("Zelda", "Pokemon", "App", "Mario"),
+            LibraryBrowse.applySort(
+                items, LibraryBrowse.Sort.MOST_PLAYED,
+                keyOf = { it.key }, labelOf = { it.label }, platformOf = { it.platform },
+                playtimeMs = play,
+            ).map { it.label },
+        )
+        // null platform first, then 3ds, then snes (Mario before Zelda by name)
+        assertEquals(
+            listOf("App", "Pokemon", "Mario", "Zelda"),
+            LibraryBrowse.applySort(
+                items, LibraryBrowse.Sort.PLATFORM,
+                keyOf = { it.key }, labelOf = { it.label }, platformOf = { it.platform },
+            ).map { it.label },
+        )
+        assertEquals(
+            items,
+            LibraryBrowse.applySort(
+                items, LibraryBrowse.Sort.DEFAULT,
+                keyOf = { it.key }, labelOf = { it.label }, platformOf = { it.platform },
+            ),
+        )
+    }
+
+    @Test
+    fun `allChipLabel queryWithSort and browseRoms custom sort`() {
+        assertEquals("All", LibraryBrowse.allChipLabel(LibraryBrowse.Sort.DEFAULT))
+        assertEquals("All · A–Z", LibraryBrowse.allChipLabel(LibraryBrowse.Sort.NAME))
+        assertEquals("All · Last", LibraryBrowse.allChipLabel(LibraryBrowse.Sort.LAST_PLAYED))
+        assertEquals("All · Top", LibraryBrowse.allChipLabel(LibraryBrowse.Sort.MOST_PLAYED))
+        assertEquals("All · Plat", LibraryBrowse.allChipLabel(LibraryBrowse.Sort.PLATFORM))
+        assertTrue(LibraryBrowse.allowsCustomSort(LibraryBrowse.Mode.ALL))
+        assertTrue(LibraryBrowse.allowsCustomSort(LibraryBrowse.Mode.FAVORITES))
+        assertFalse(LibraryBrowse.allowsCustomSort(LibraryBrowse.Mode.RECENT))
+        assertFalse(LibraryBrowse.allowsCustomSort(LibraryBrowse.Mode.COLLECTION))
+        val onRecent = LibraryBrowse.BrowseQuery(mode = LibraryBrowse.Mode.RECENT)
+        val flipped = LibraryBrowse.queryWithSort(onRecent, LibraryBrowse.Sort.NAME)
+        assertEquals(LibraryBrowse.Mode.ALL, flipped.mode)
+        assertEquals(LibraryBrowse.Sort.NAME, flipped.sort)
+        val onFav = LibraryBrowse.BrowseQuery(mode = LibraryBrowse.Mode.FAVORITES)
+        assertEquals(
+            LibraryBrowse.Mode.FAVORITES,
+            LibraryBrowse.queryWithSort(onFav, LibraryBrowse.Sort.PLATFORM).mode,
+        )
+        val last = mapOf(
+            SlotKey.rom("snes:Mario.rom") to 50L,
+            SlotKey.rom("snes:Zelda.rom") to 10L,
+        )
+        val sorted = LibraryBrowse.browseRoms(
+            library,
+            LibraryBrowse.BrowseQuery(
+                platformId = "snes",
+                sort = LibraryBrowse.Sort.LAST_PLAYED,
+            ),
+            lastLaunchedMs = last,
+        )
+        assertEquals(listOf("Mario", "Zelda"), sorted.map { it.name })
+        val byName = LibraryBrowse.browseRoms(
+            library,
+            LibraryBrowse.BrowseQuery(sort = LibraryBrowse.Sort.NAME),
+        )
+        assertEquals(
+            listOf("BotW", "Mario", "Pokemon", "Zelda"),
+            byName.map { it.name },
+        )
     }
 
     @Test
