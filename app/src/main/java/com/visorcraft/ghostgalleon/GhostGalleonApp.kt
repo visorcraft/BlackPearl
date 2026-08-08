@@ -460,13 +460,17 @@ class GhostGalleonApp : Application() {
             romCount = romEntries.size,
             hiddenPackages = settings.hiddenPackages,
             appPackageNames = apps.map { it.packageName },
+            hiddenRomIds = settings.hiddenRomIds,
         )
         val cachedKey = drawerListKey
         val cachedItems = drawerListItems
         if (DrawerListCache.matches(cachedKey, current) && cachedItems != null) {
             return cachedItems
         }
-        val built = PickerItems.build(apps, romEntries, "")
+        val built = PickerItems.build(
+            apps, romEntries, "",
+            hiddenRomIds = settings.hiddenRomIds,
+        )
         drawerListKey = current
         drawerListItems = built
         return built

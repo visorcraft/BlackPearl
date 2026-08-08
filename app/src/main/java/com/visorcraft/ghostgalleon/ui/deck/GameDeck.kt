@@ -21,6 +21,7 @@ import com.visorcraft.ghostgalleon.GhostGalleonApp
 import com.visorcraft.ghostgalleon.art.ArtTile
 import com.visorcraft.ghostgalleon.library.AppLibrary
 import com.visorcraft.ghostgalleon.library.CollectionsOps
+import com.visorcraft.ghostgalleon.library.HiddenRoms
 import com.visorcraft.ghostgalleon.library.LibraryBrowse
 import com.visorcraft.ghostgalleon.library.SessionMath
 import com.visorcraft.ghostgalleon.rom.Platforms
@@ -66,6 +67,7 @@ class GameDeck(
             favorites = settings.favorites,
             collections = settings.collections,
             playtimeMs = settings.playtimeMs,
+            hiddenRomIds = settings.hiddenRomIds,
         ).map {
             CarouselEntry(SlotKey.rom(it.id), it.name, null, it)
         }
@@ -498,7 +500,8 @@ class GameDeck(
             q.text.isBlank() && q.collectionName == null) {
             val live = app().settings
             val firstKey = library.curated(live).firstOrNull()?.packageName
-                ?: roms.firstOrNull { it.visibleInUi }?.let { SlotKey.rom(it.id) }
+                ?: HiddenRoms.listed(roms, settings.hiddenRomIds)
+                    .firstOrNull()?.let { SlotKey.rom(it.id) }
             setQuery(LibraryBrowse.BrowseQuery(), force = true)
             if (firstKey != null) state.select(firstKey, force = true)
         })
@@ -533,7 +536,10 @@ class GameDeck(
             // the next SETTINGS rebuild — Continue would silently toast-null.
             val live = app().settings
             val available = buildList {
-                addAll(roms.filter { it.visibleInUi }.map { SlotKey.rom(it.id) })
+                addAll(
+                    HiddenRoms.listed(roms, live.hiddenRomIds)
+                        .map { SlotKey.rom(it.id) },
+                )
                 addAll(library.curated(live).map { it.packageName })
                 addAll(live.gridSlots.filterNotNull())
                 addAll(live.dockSlots.filterNotNull())
@@ -593,7 +599,7 @@ class GameDeck(
                 )
             })
         }
-        LibraryBrowse.presentPlatforms(roms).forEach { pid ->
+        LibraryBrowse.presentPlatforms(roms, settings.hiddenRomIds).forEach { pid ->
             row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
             val label = Platforms.byId(pid)?.shortName ?: pid
             row.addView(chip(label, q.platformId == pid) {
@@ -713,7 +719,10 @@ class GameDeck(
         val live = app().settings
         val pool = buildList {
             addAll(library.curated(live).map { it.packageName })
-            addAll(roms.filter { it.visibleInUi }.map { SlotKey.rom(it.id) })
+            addAll(
+                HiddenRoms.listed(roms, live.hiddenRomIds)
+                    .map { SlotKey.rom(it.id) },
+            )
         }
         val key = LibraryBrowse.pickRandom(pool) { size ->
             java.util.concurrent.ThreadLocalRandom.current().nextInt(size)
@@ -859,6 +868,12 @@ class GameDeck(
         Toast.makeText(activity, "Added to grid", Toast.LENGTH_SHORT).show()
     }
 
+    private fun hideRom(rom: RomEntry) {
+        val next = HiddenRoms.hide(settings.hiddenRomIds, rom.id)
+        app().updateSettings(settings.copy(hiddenRomIds = next))
+        Toast.makeText(activity, "Hidden: ${rom.name}", Toast.LENGTH_SHORT).show()
+    }
+
     private fun openEntryMenu(entry: CarouselEntry) {
         val key = entry.key
         val fav = key in settings.favorites
@@ -869,6 +884,7 @@ class GameDeck(
                 add(SlotMenu.Choice.PLAYER)
                 add(SlotMenu.Choice.SET_ART)
                 add(SlotMenu.Choice.ADD_TO_GRID)
+                add(SlotMenu.Choice.HIDE)
             }
             add(SlotMenu.Choice.CANCEL)
         }
@@ -880,6 +896,7 @@ class GameDeck(
                 SlotMenu.Choice.PLAYER -> entry.rom?.let { showPlayerProfileMenu(it) }
                 SlotMenu.Choice.SET_ART -> entry.rom?.let { setArtOverride(it) }
                 SlotMenu.Choice.ADD_TO_GRID -> addToGrid(key)
+                SlotMenu.Choice.HIDE -> entry.rom?.let { hideRom(it) }
                 else -> {}
             }
         }

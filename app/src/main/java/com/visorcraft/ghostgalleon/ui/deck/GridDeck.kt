@@ -1062,6 +1062,7 @@ class GridDeck(
                         add(SlotMenu.Choice.OPEN_WITH)
                         add(SlotMenu.Choice.PLAYER)
                         add(SlotMenu.Choice.SET_ART)
+                        add(SlotMenu.Choice.HIDE)
                     }
                     if (isApp) {
                         add(SlotMenu.Choice.RENAME)
@@ -1105,6 +1106,14 @@ class GridDeck(
                         app.updateSettings(app.settings.copy(
                             artOverrides = app.settings.artOverrides + (id to uri.toString())))
                     }
+                }
+                SlotMenu.Choice.HIDE -> key?.let { k ->
+                    val id = SlotKey.romId(k) ?: return@let
+                    val app = activity.application as GhostGalleonApp
+                    val next = com.visorcraft.ghostgalleon.library.HiddenRoms
+                        .hide(app.settings.hiddenRomIds, id)
+                    app.updateSettings(app.settings.copy(hiddenRomIds = next))
+                    Toast.makeText(activity, "Hidden from library", Toast.LENGTH_SHORT).show()
                 }
                 SlotMenu.Choice.NEW_FOLDER -> createFolderAt(slot)
                 SlotMenu.Choice.ADD_MEMBER -> key?.let { k ->

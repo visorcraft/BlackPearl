@@ -13,6 +13,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.visorcraft.ghostgalleon.GhostGalleonApp
+import com.visorcraft.ghostgalleon.library.HiddenRoms
 import com.visorcraft.ghostgalleon.library.LibraryBrowse
 import com.visorcraft.ghostgalleon.rom.RomEntry
 import com.visorcraft.ghostgalleon.settings.Action
@@ -211,7 +212,10 @@ class QuickPanel(
         val keys = buildList {
             addAll(app.settings.gridSlots.filterNotNull())
             addAll(app.settings.dockSlots.filterNotNull())
-            addAll(roms.filter { it.visibleInUi }.map { SlotKey.rom(it.id) })
+            addAll(
+                HiddenRoms.listed(roms, app.settings.hiddenRomIds)
+                    .map { SlotKey.rom(it.id) },
+            )
             addAll(app.settings.lastLaunchedMs.keys)
         }
         val cont = LibraryBrowse.continueKey(keys, app.settings.lastLaunchedMs)
@@ -229,7 +233,10 @@ class QuickPanel(
         val pool = buildList {
             addAll(app.settings.gridSlots.filterNotNull())
             addAll(app.settings.dockSlots.filterNotNull())
-            addAll(roms.filter { it.visibleInUi }.map { SlotKey.rom(it.id) })
+            addAll(
+                HiddenRoms.listed(roms, app.settings.hiddenRomIds)
+                    .map { SlotKey.rom(it.id) },
+            )
         }.distinct()
         val key = LibraryBrowse.pickRandom(pool) { size ->
             java.util.concurrent.ThreadLocalRandom.current().nextInt(size)

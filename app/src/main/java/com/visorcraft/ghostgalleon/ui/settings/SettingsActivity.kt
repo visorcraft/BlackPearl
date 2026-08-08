@@ -91,6 +91,7 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private var hiddenValue: TextView? = null
+    private var hiddenRomsValue: TextView? = null
     private var dockValue: TextView? = null
 
     private fun appLabel(packageName: String): String =
@@ -240,6 +241,7 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun refreshAppsRows() {
         hiddenValue?.text = app.settings.hiddenPackages.size.toString()
+        hiddenRomsValue?.text = app.settings.hiddenRomIds.size.toString()
         val dock = app.settings.dockSlots.filterNotNull()
         dockValue?.text =
             if (dock.isEmpty()) "Empty"
@@ -306,6 +308,45 @@ class SettingsActivity : AppCompatActivity() {
         rebuild()
         AlertDialog.Builder(this)
             .setTitle("Hidden apps")
+            .setView(ScrollView(this).apply { addView(list) })
+            .setNegativeButton("Close", null)
+            .show()
+    }
+
+    // User-hidden ROMs: unhide restores carousel/picker visibility; grid
+    // slots that still hold the key remain launchable either way.
+    private fun showHiddenRomsDialog() {
+        val list = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            val pad = dp(20)
+            setPadding(pad, dp(8), pad, dp(8))
+        }
+        fun romLabel(id: String): String {
+            val rom = app.romEntries.firstOrNull { it.id == id }
+            return rom?.name ?: id.substringAfterLast(':').ifBlank { id }
+        }
+        fun rebuild() {
+            list.removeAllViews()
+            val hidden = app.settings.hiddenRomIds
+                .sortedBy { romLabel(it).lowercase() }
+            if (hidden.isEmpty()) {
+                list.addView(modalEmpty("No hidden ROMs"))
+            } else {
+                hidden.forEach { id ->
+                    list.addView(modalRow(romLabel(id), "Unhide") {
+                        val next = com.visorcraft.ghostgalleon.library.HiddenRoms
+                            .unhide(app.settings.hiddenRomIds, id)
+                        app.updateSettings(app.settings.copy(hiddenRomIds = next))
+                        refreshAppsRows()
+                        rebuild()
+                    }, LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, dp(56)))
+                }
+            }
+        }
+        rebuild()
+        AlertDialog.Builder(this)
+            .setTitle("Hidden ROMs")
             .setView(ScrollView(this).apply { addView(list) })
             .setNegativeButton("Close", null)
             .show()
@@ -1561,6 +1602,22 @@ class SettingsActivity : AppCompatActivity() {
             background = pillDrawable(0xFF1C1C22.toInt(), 14, 0x26FFFFFF)
         }, LinearLayout.LayoutParams(dp(40), dp(40)))
         libraryCard.addView(addRow, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))
+        val hiddenRomsRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            isFocusable = true
+            setOnClickListener { showHiddenRomsDialog() }
+        }
+        hiddenRomsRow.addView(rowLabel("Hidden ROMs"), LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        hiddenRomsValue = TextView(this).apply {
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setTextColor(accent)
+            text = app.settings.hiddenRomIds.size.toString()
+        }
+        hiddenRomsRow.addView(hiddenRomsValue)
+        libraryCard.addView(hiddenRomsRow, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))
         // Rescan library: guarded against re-entry — a second tap while the
         // ~50 s SAF walk runs would queue a duplicate scan on RomLibrary's

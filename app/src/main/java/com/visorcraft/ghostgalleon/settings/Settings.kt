@@ -39,6 +39,10 @@ data class Settings(
     // exactly these slots, never the full installed-app list.
     val gridSlots: List<String?> = GridSlots.blank(),
     val hiddenPackages: Set<String> = emptySet(),
+    // User-hidden ROM entry ids (not Switch dedupe). Hidden from carousel /
+    // picker / platform chips; grid/dock slots still resolve and launch.
+    // Within schema v8 (optional field; no bump).
+    val hiddenRomIds: Set<String> = emptySet(),
     // Per-app display overrides, keyed by package name. customNames replaces
     // the label everywhere labels resolve (grid/picker/carousel/hero);
     // customIcons holds a SAF-persisted image URI rendered instead of the

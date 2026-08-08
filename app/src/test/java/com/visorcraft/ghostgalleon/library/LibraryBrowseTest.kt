@@ -256,4 +256,29 @@ class LibraryBrowseTest {
         )
         assertEquals(emptyList<String>(), out.map { it.name })
     }
+
+    @Test
+    fun `browseRoms excludes user-hidden ROM ids`() {
+        val out = LibraryBrowse.browseRoms(
+            library,
+            LibraryBrowse.BrowseQuery(mode = LibraryBrowse.Mode.ALL),
+            hiddenRomIds = setOf("snes:Zelda.rom", "switch:BotW.rom"),
+        )
+        assertEquals(listOf("Mario", "Pokemon"), out.map { it.name })
+    }
+
+    @Test
+    fun `presentPlatforms respects hiddenRomIds`() {
+        assertEquals(
+            listOf("3ds"),
+            LibraryBrowse.presentPlatforms(
+                library,
+                hiddenRomIds = setOf(
+                    "snes:Zelda.rom",
+                    "snes:Mario.rom",
+                    "switch:BotW.rom",
+                ),
+            ),
+        )
+    }
 }

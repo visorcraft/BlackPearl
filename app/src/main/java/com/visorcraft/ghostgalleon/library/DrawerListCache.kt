@@ -10,24 +10,28 @@ data class DrawerListKey(
     val romCount: Int,
     val hiddenFingerprint: Int,
     val appsFingerprint: Int,
+    val hiddenRomsFingerprint: Int = 0,
 )
 
 object DrawerListCache {
 
     /**
      * Build a cache key from the inputs that affect the drawer list.
-     * [hiddenPackages] and [appPackageNames] are hashed order-independently.
+     * [hiddenPackages], [hiddenRomIds], and [appPackageNames] are hashed
+     * order-independently.
      */
     fun key(
         contentEpoch: Int,
         romCount: Int,
         hiddenPackages: Collection<String>,
         appPackageNames: Collection<String>,
+        hiddenRomIds: Collection<String> = emptyList(),
     ): DrawerListKey = DrawerListKey(
         contentEpoch = contentEpoch,
         romCount = romCount,
         hiddenFingerprint = stableHash(hiddenPackages),
         appsFingerprint = stableHash(appPackageNames),
+        hiddenRomsFingerprint = stableHash(hiddenRomIds),
     )
 
     fun matches(cached: DrawerListKey?, current: DrawerListKey): Boolean =

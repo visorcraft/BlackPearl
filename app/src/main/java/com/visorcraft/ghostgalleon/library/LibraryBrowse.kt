@@ -30,19 +30,28 @@ object LibraryBrowse {
         val collectionName: String? = null,
     )
 
-    /** Visible ROMs only, filtered by optional platform id. */
-    fun filterByPlatform(roms: List<RomEntry>, platformId: String?): List<RomEntry> {
-        val visible = roms.filter { it.visibleInUi }
+    /** Listed ROMs only (scanner-visible, not user-hidden), optional platform. */
+    fun filterByPlatform(
+        roms: List<RomEntry>,
+        platformId: String?,
+        hiddenRomIds: Set<String> = emptySet(),
+    ): List<RomEntry> {
+        val visible = HiddenRoms.listed(roms, hiddenRomIds)
         if (platformId == null) return visible
         return visible.filter { it.platformId == platformId }
     }
 
     /** Case-insensitive substring match on ROM name (and id as fallback). */
-    fun searchRoms(roms: List<RomEntry>, query: String): List<RomEntry> {
+    fun searchRoms(
+        roms: List<RomEntry>,
+        query: String,
+        hiddenRomIds: Set<String> = emptySet(),
+    ): List<RomEntry> {
+        val listed = HiddenRoms.listed(roms, hiddenRomIds)
         val q = query.trim()
-        if (q.isEmpty()) return roms.filter { it.visibleInUi }
+        if (q.isEmpty()) return listed
         val needle = q.lowercase()
-        return roms.filter { it.visibleInUi }.filter {
+        return listed.filter {
             it.name.lowercase().contains(needle) ||
                 it.id.lowercase().contains(needle) ||
                 it.platformId.lowercase().contains(needle)
@@ -109,25 +118,25 @@ object LibraryBrowse {
         favorites: Set<String> = emptySet(),
         collections: Map<String, List<String>> = emptyMap(),
         playtimeMs: Map<String, Long> = emptyMap(),
+        hiddenRomIds: Set<String> = emptySet(),
     ): List<RomEntry> {
+        val listed = HiddenRoms.listed(roms, hiddenRomIds)
         val base = when (query.mode) {
-            Mode.ALL -> roms.filter { it.visibleInUi }
-            Mode.ALPHA -> orderByName(roms.filter { it.visibleInUi }) { it.name }
+            Mode.ALL -> listed
+            Mode.ALPHA -> orderByName(listed) { it.name }
             Mode.UNPLAYED -> {
-                val unplayed = roms.filter { it.visibleInUi }.filter {
+                val unplayed = listed.filter {
                     isUnplayed(SlotKey.rom(it.id), lastLaunchedMs)
                 }
                 orderByName(unplayed) { it.name }
             }
             Mode.RECENT -> {
-                val byKey = roms.filter { it.visibleInUi }
-                    .associateBy { SlotKey.rom(it.id) }
+                val byKey = listed.associateBy { SlotKey.rom(it.id) }
                 val recentKeys = lastLaunchedMs.keys.filter { it in byKey }
                 orderByRecent(recentKeys, lastLaunchedMs).mapNotNull { byKey[it] }
             }
             Mode.MOST_PLAYED -> {
-                val byKey = roms.filter { it.visibleInUi }
-                    .associateBy { SlotKey.rom(it.id) }
+                val byKey = listed.associateBy { SlotKey.rom(it.id) }
                 // Only keys with positive playtime — empty Top rail when none.
                 val topKeys = playtimeMs
                     .filter { (k, v) -> v > 0L && k in byKey }
@@ -141,23 +150,28 @@ object LibraryBrowse {
                 val favIds = favorites.mapNotNull { key ->
                     if (SlotKey.isRom(key)) SlotKey.romId(key) else null
                 }.toSet()
-                roms.filter { it.visibleInUi && it.id in favIds }
+                listed.filter { it.id in favIds }
             }
             Mode.COLLECTION -> {
                 val name = query.collectionName?.trim().orEmpty()
                 val ids = collections[name].orEmpty().mapNotNull { key ->
                     if (SlotKey.isRom(key)) SlotKey.romId(key) else null
                 }.toSet()
-                roms.filter { it.visibleInUi && it.id in ids }
+                listed.filter { it.id in ids }
             }
         }
-        val platformed = filterByPlatform(base, query.platformId)
-        return searchRoms(platformed, query.text)
+        // base already listed; pass empty hidden set so platform/search do not
+        // re-filter away members that were intentionally kept (none).
+        val platformed = filterByPlatform(base, query.platformId, emptySet())
+        return searchRoms(platformed, query.text, emptySet())
     }
 
-    /** Distinct platform ids present in the visible library, sorted. */
-    fun presentPlatforms(roms: List<RomEntry>): List<String> =
-        roms.filter { it.visibleInUi }.map { it.platformId }.distinct().sorted()
+    /** Distinct platform ids present in the listed library, sorted. */
+    fun presentPlatforms(
+        roms: List<RomEntry>,
+        hiddenRomIds: Set<String> = emptySet(),
+    ): List<String> =
+        HiddenRoms.listed(roms, hiddenRomIds).map { it.platformId }.distinct().sorted()
 
     /** Named collection titles suitable for Game Mode rails (stable sort). */
     fun presentCollectionRails(collections: Map<String, List<String>>): List<String> =

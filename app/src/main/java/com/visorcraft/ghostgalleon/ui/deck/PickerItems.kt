@@ -1,6 +1,7 @@
 package com.visorcraft.ghostgalleon.ui.deck
 
 import com.visorcraft.ghostgalleon.library.AppEntry
+import com.visorcraft.ghostgalleon.library.HiddenRoms
 import com.visorcraft.ghostgalleon.rom.Platforms
 import com.visorcraft.ghostgalleon.rom.RomEntry
 
@@ -21,10 +22,13 @@ object PickerItems {
 
     /** ROM display order everywhere (picker, carousel): platform display
      *  name, then ROM name, both case-insensitive. Entries flagged
-     *  `visibleInUi = false` (deduped Switch updates/DLC) are excluded —
-     *  they stay in the library but never appear in UI lists. */
-    fun sortedRoms(roms: List<RomEntry>): List<RomEntry> = roms
-        .filter { it.visibleInUi }
+     *  `visibleInUi = false` (deduped Switch updates/DLC) or user-hidden
+     *  via [hiddenRomIds] are excluded — they stay in the library but
+     *  never appear in UI lists. */
+    fun sortedRoms(
+        roms: List<RomEntry>,
+        hiddenRomIds: Set<String> = emptySet(),
+    ): List<RomEntry> = HiddenRoms.listed(roms, hiddenRomIds)
         .sortedWith(
             compareBy(
                 { Platforms.byId(it.platformId)?.displayName ?: it.platformId },
@@ -36,6 +40,7 @@ object PickerItems {
         apps: List<AppEntry>,
         roms: List<RomEntry>,
         query: String,
+        hiddenRomIds: Set<String> = emptySet(),
     ): List<PickerItem> {
         val q = query.trim()
         val matchedApps = if (q.isEmpty()) {
@@ -47,9 +52,9 @@ object PickerItems {
             }
         }
         val matchedRoms = if (q.isEmpty()) {
-            sortedRoms(roms)
+            sortedRoms(roms, hiddenRomIds)
         } else {
-            sortedRoms(roms).filter {
+            sortedRoms(roms, hiddenRomIds).filter {
                 it.name.contains(q, ignoreCase = true) ||
                     (Platforms.byId(it.platformId)?.displayName
                         ?.contains(q, ignoreCase = true) == true)

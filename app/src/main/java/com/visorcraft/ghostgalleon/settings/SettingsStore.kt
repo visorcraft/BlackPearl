@@ -98,6 +98,8 @@ class SettingsStore(private val file: File) {
                 GridSlots.blank()
             },
             hiddenPackages = o.optJSONArray("hiddenPackages").toStringList().toSet(),
+            // Within schema v8: absent = no user-hidden ROMs.
+            hiddenRomIds = o.optJSONArray("hiddenRomIds").toStringList().toSet(),
             // Added within schema v3: absent = no per-app overrides.
             customNames = o.optJSONObject("customNames").toStringMap(),
             customIcons = o.optJSONObject("customIcons").toStringMap(),
@@ -201,6 +203,7 @@ class SettingsStore(private val file: File) {
                 s.gridSlots.forEach { put(it ?: JSONObject.NULL) }
             })
             .put("hiddenPackages", JSONArray(s.hiddenPackages.toList()))
+            .put("hiddenRomIds", JSONArray(s.hiddenRomIds.toList()))
             .put("customNames", JSONObject().apply {
                 s.customNames.forEach { (pkg, name) -> put(pkg, name) }
             })

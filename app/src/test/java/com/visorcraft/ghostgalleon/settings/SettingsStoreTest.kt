@@ -53,6 +53,7 @@ class SettingsStoreTest {
             sgdbApiKey = "sgdb-test-key-123",
             dockSlots = DockSlots.compact(listOf("a.b", "c.d", "rom:snes:x.sfc")),
             hiddenPackages = setOf("x.y"),
+            hiddenRomIds = setOf("snes:x.sfc", "nds:y.nds"),
             keyMap = mapOf(23 to Action.CONFIRM, 4 to Action.BACK),
             lastLaunchedMs = mapOf("rom:snes:x.sfc" to 1_700_000_000_000L),
             playtimeMs = mapOf("rom:snes:x.sfc" to 120_000L),

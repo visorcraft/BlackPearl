@@ -54,10 +54,13 @@ class AppPicker(
     private val onHide: (String) -> Unit,
     private val onClose: () -> Unit,
 ) {
-    private var emptyQueryItems: List<PickerItem> =
-        prebuiltItems ?: PickerItems.build(allEntries, roms, "")
-    private var items: List<PickerItem> = emptyQueryItems
     private val app get() = activity.application as GhostGalleonApp
+    private val hiddenRomIds get() = app.settings.hiddenRomIds
+    private var emptyQueryItems: List<PickerItem> =
+        prebuiltItems ?: PickerItems.build(
+            allEntries, roms, "", hiddenRomIds = app.settings.hiddenRomIds,
+        )
+    private var items: List<PickerItem> = emptyQueryItems
     // The highlight only ever rests on data rows, never section headers.
     private var highlight: Int =
         items.indexOfFirst { it !is PickerItem.Header }.coerceAtLeast(0)
@@ -112,7 +115,10 @@ class AppPicker(
                     items = if (query.isBlank()) {
                         emptyQueryItems
                     } else {
-                        PickerItems.build(allEntries, roms, query)
+                        PickerItems.build(
+                            allEntries, roms, query,
+                            hiddenRomIds = hiddenRomIds,
+                        )
                     }
                     highlight =
                         items.indexOfFirst { it !is PickerItem.Header }.coerceAtLeast(0)
