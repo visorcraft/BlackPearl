@@ -1190,6 +1190,10 @@ class GridDeck(
                 SlotMenu.Choice.CANCEL,
                 SlotMenu.Choice.ADD_TO_GRID,
                 SlotMenu.Choice.REMOVE_FROM_COLLECTION,
+                SlotMenu.Choice.MOVE_TO_TOP,
+                SlotMenu.Choice.MOVE_UP,
+                SlotMenu.Choice.MOVE_DOWN,
+                SlotMenu.Choice.MOVE_TO_END,
                 -> {}
             }
         }

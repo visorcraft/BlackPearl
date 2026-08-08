@@ -171,4 +171,69 @@ object CollectionsOps {
         }
         return next to true
     }
+
+    /**
+     * Move [key] within named collection to [toIndex] (clamped after removal).
+     * No-op when name/key missing or blank.
+     */
+    fun moveMember(
+        collections: Map<String, List<String>>,
+        name: String,
+        key: String,
+        toIndex: Int,
+    ): Map<String, List<String>> {
+        val n = name.trim()
+        val k = key.trim()
+        if (n.isEmpty() || k.isEmpty()) return collections
+        val list = collections[n]?.toMutableList() ?: return collections
+        val from = list.indexOf(k)
+        if (from < 0) return collections
+        list.removeAt(from)
+        val dest = toIndex.coerceIn(0, list.size)
+        if (dest == from) {
+            // Re-insert at same spot for identity (list was mutated).
+            list.add(dest, k)
+            return collections + (n to list.toList())
+        }
+        list.add(dest, k)
+        return collections + (n to list.toList())
+    }
+
+    /** Move [key] by [delta] slots (−1 = up / earlier, +1 = down / later). */
+    fun moveMemberBy(
+        collections: Map<String, List<String>>,
+        name: String,
+        key: String,
+        delta: Int,
+    ): Map<String, List<String>> {
+        if (delta == 0) return collections
+        val n = name.trim()
+        val k = key.trim()
+        val from = collections[n]?.indexOf(k) ?: return collections
+        if (from < 0) return collections
+        return moveMember(collections, n, k, from + delta)
+    }
+
+    /** Pin [key] to the front or end of the named collection. */
+    fun moveMemberToEdge(
+        collections: Map<String, List<String>>,
+        name: String,
+        key: String,
+        toFront: Boolean,
+    ): Map<String, List<String>> {
+        val n = name.trim()
+        val k = key.trim()
+        val list = collections[n] ?: return collections
+        if (k !in list) return collections
+        return moveMember(collections, n, k, if (toFront) 0 else Int.MAX_VALUE)
+    }
+
+    /**
+     * True when the browse mode exposes an ordered named collection list that
+     * can be reordered (COLLECTION only; FAVORITES set is unordered).
+     */
+    fun canReorderCollection(modeName: String, collectionName: String?): Boolean {
+        if (modeName.trim().uppercase() != "COLLECTION") return false
+        return !collectionName.isNullOrBlank()
+    }
 }

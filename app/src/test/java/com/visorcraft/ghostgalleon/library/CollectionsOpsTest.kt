@@ -112,4 +112,45 @@ class CollectionsOpsTest {
         assertEquals(null, CollectionsOps.activeCollectionName("ALL", "RPGs"))
         assertEquals(null, CollectionsOps.activeCollectionName("MOST_PLAYED", null))
     }
+
+    @Test
+    fun `moveMember reorders within collection`() {
+        val c0 = mapOf("Shelf" to listOf("a", "b", "c", "d"))
+        val c1 = CollectionsOps.moveMember(c0, "Shelf", "c", 0)
+        assertEquals(listOf("c", "a", "b", "d"), c1["Shelf"])
+        val c2 = CollectionsOps.moveMember(c1, "Shelf", "a", 99)
+        assertEquals(listOf("c", "b", "d", "a"), c2["Shelf"])
+    }
+
+    @Test
+    fun `moveMemberBy and moveMemberToEdge`() {
+        val c0 = mapOf("Shelf" to listOf("a", "b", "c"))
+        assertEquals(
+            listOf("b", "a", "c"),
+            CollectionsOps.moveMemberBy(c0, "Shelf", "b", -1)["Shelf"],
+        )
+        assertEquals(
+            listOf("a", "c", "b"),
+            CollectionsOps.moveMemberBy(c0, "Shelf", "b", 1)["Shelf"],
+        )
+        assertEquals(
+            listOf("c", "a", "b"),
+            CollectionsOps.moveMemberToEdge(c0, "Shelf", "c", toFront = true)["Shelf"],
+        )
+        assertEquals(
+            listOf("b", "c", "a"),
+            CollectionsOps.moveMemberToEdge(c0, "Shelf", "a", toFront = false)["Shelf"],
+        )
+        // Unknown key / blank = identity
+        assertEquals(c0, CollectionsOps.moveMemberBy(c0, "Shelf", "z", -1))
+        assertEquals(c0, CollectionsOps.moveMemberToEdge(c0, "Shelf", "z", true))
+    }
+
+    @Test
+    fun `canReorderCollection only for COLLECTION with name`() {
+        assertTrue(CollectionsOps.canReorderCollection("COLLECTION", "RPGs"))
+        assertFalse(CollectionsOps.canReorderCollection("COLLECTION", "  "))
+        assertFalse(CollectionsOps.canReorderCollection("FAVORITES", "Favorites"))
+        assertFalse(CollectionsOps.canReorderCollection("ALL", "RPGs"))
+    }
 }

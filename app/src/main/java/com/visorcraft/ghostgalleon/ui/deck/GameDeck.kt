@@ -75,17 +75,38 @@ class GameDeck(
         }
         when {
             q.mode == LibraryBrowse.Mode.COLLECTION -> {
-                // Collection members may include apps (package keys).
+                // Walk member keys in user order (apps + ROMs interleaved).
                 val name = q.collectionName.orEmpty()
                 val keys = settings.collections[name].orEmpty()
                 val byPkg = library.curated(settings).associateBy { it.packageName }
-                val apps = keys.mapNotNull { k ->
-                    if (SlotKey.isRom(k)) null
-                    else byPkg[k]?.let {
+                val byRomId = roms.associateBy { it.id }
+                val hidden = settings.hiddenRomIds
+                val needle = q.text.trim()
+                keys.mapNotNull { k ->
+                    val entry = SlotKey.romId(k)?.let { id ->
+                        if (id in hidden) return@mapNotNull null
+                        val rom = byRomId[id] ?: return@mapNotNull null
+                        if (q.platformId != null && rom.platformId != q.platformId) {
+                            return@mapNotNull null
+                        }
+                        if (!LibraryBrowse.matchesGenre(rom, q.genre)) {
+                            return@mapNotNull null
+                        }
+                        CarouselEntry(SlotKey.rom(rom.id), rom.name, null, rom)
+                    } ?: byPkg[k]?.let {
+                        // Platform/genre chips are ROM-only — drop apps when set.
+                        if (q.platformId != null || !q.genre.isNullOrBlank()) {
+                            return@mapNotNull null
+                        }
                         CarouselEntry(it.packageName, it.label, it.packageName, null)
                     }
+                    if (needle.isNotEmpty() && entry != null) {
+                        val hit = entry.label.contains(needle, ignoreCase = true) ||
+                            entry.key.contains(needle, ignoreCase = true)
+                        if (!hit) return@mapNotNull null
+                    }
+                    entry
                 }
-                apps + browsed
             }
             q.mode == LibraryBrowse.Mode.RECENT &&
                 appsOk && q.text.isBlank() -> {
@@ -1116,15 +1137,55 @@ class GameDeck(
         Toast.makeText(activity, label, Toast.LENGTH_SHORT).show()
     }
 
+    /** Named COLLECTION rail only (ordered list); not the unordered Fav set. */
+    private fun reorderCollectionName(): String? {
+        val q = state.libraryBrowse
+        return if (CollectionsOps.canReorderCollection(q.mode.name, q.collectionName)) {
+            q.collectionName!!.trim()
+        } else {
+            null
+        }
+    }
+
+    private fun reorderInCollection(name: String, key: String, choice: SlotMenu.Choice) {
+        val next = when (choice) {
+            SlotMenu.Choice.MOVE_TO_TOP ->
+                CollectionsOps.moveMemberToEdge(settings.collections, name, key, toFront = true)
+            SlotMenu.Choice.MOVE_TO_END ->
+                CollectionsOps.moveMemberToEdge(settings.collections, name, key, toFront = false)
+            SlotMenu.Choice.MOVE_UP ->
+                CollectionsOps.moveMemberBy(settings.collections, name, key, delta = -1)
+            SlotMenu.Choice.MOVE_DOWN ->
+                CollectionsOps.moveMemberBy(settings.collections, name, key, delta = 1)
+            else -> settings.collections
+        }
+        app().updateSettings(settings.copy(collections = next))
+        val toast = when (choice) {
+            SlotMenu.Choice.MOVE_TO_TOP -> "Moved to top"
+            SlotMenu.Choice.MOVE_TO_END -> "Moved to end"
+            SlotMenu.Choice.MOVE_UP -> "Moved up"
+            SlotMenu.Choice.MOVE_DOWN -> "Moved down"
+            else -> "Reordered"
+        }
+        Toast.makeText(activity, toast, Toast.LENGTH_SHORT).show()
+    }
+
     private fun openEntryMenu(entry: CarouselEntry) {
         val key = entry.key
         val fav = key in settings.favorites
         val activeCol = activeCollectionName()
+        val reorderCol = reorderCollectionName()
         val choices = buildList {
             add(if (fav) SlotMenu.Choice.UNFAVORITE else SlotMenu.Choice.FAVORITE)
             add(SlotMenu.Choice.ADD_TO_COLLECTION)
             if (activeCol != null) {
                 add(SlotMenu.Choice.REMOVE_FROM_COLLECTION)
+            }
+            if (reorderCol != null) {
+                add(SlotMenu.Choice.MOVE_TO_TOP)
+                add(SlotMenu.Choice.MOVE_UP)
+                add(SlotMenu.Choice.MOVE_DOWN)
+                add(SlotMenu.Choice.MOVE_TO_END)
             }
             if (entry.rom != null) {
                 add(SlotMenu.Choice.OPEN_WITH)
@@ -1142,6 +1203,11 @@ class GameDeck(
                 SlotMenu.Choice.ADD_TO_COLLECTION -> promptAddToCollection(listOf(key))
                 SlotMenu.Choice.REMOVE_FROM_COLLECTION ->
                     activeCol?.let { removeFromCollection(it, listOf(key)) }
+                SlotMenu.Choice.MOVE_TO_TOP,
+                SlotMenu.Choice.MOVE_UP,
+                SlotMenu.Choice.MOVE_DOWN,
+                SlotMenu.Choice.MOVE_TO_END,
+                -> reorderCol?.let { reorderInCollection(it, key, choice) }
                 SlotMenu.Choice.OPEN_WITH -> openWithMenu(entry)
                 SlotMenu.Choice.PLAYER -> entry.rom?.let { showPlayerProfileMenu(it) }
                 SlotMenu.Choice.SET_ART -> entry.rom?.let { setArtOverride(it) }

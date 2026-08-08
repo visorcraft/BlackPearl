@@ -223,11 +223,12 @@ object LibraryBrowse {
                 listed.filter { it.id in favIds }
             }
             Mode.COLLECTION -> {
+                // Preserve user member order (apps skipped here; GameDeck merges).
                 val name = query.collectionName?.trim().orEmpty()
-                val ids = collections[name].orEmpty().mapNotNull { key ->
-                    if (SlotKey.isRom(key)) SlotKey.romId(key) else null
-                }.toSet()
-                listed.filter { it.id in ids }
+                val byId = listed.associateBy { it.id }
+                collections[name].orEmpty().mapNotNull { key ->
+                    SlotKey.romId(key)?.let { byId[it] }
+                }
             }
         }
         // base already listed; pass empty hidden set so platform/search do not
