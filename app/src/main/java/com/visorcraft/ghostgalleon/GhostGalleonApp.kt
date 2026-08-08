@@ -567,6 +567,42 @@ class GhostGalleonApp : Application() {
     // requestExitAll cascade runs, so reentrant finish() calls are no-ops.
     private val liveDeckActivities = mutableSetOf<BaseDeckActivity>()
 
+    /**
+     * Sole CompanionActivity allowed to paint / redirect. Claimed in
+     * [CompanionActivity.onCreate] *before* lifecycle callbacks register the
+     * instance — without this, SECONDARY_HOME MULTIPLE_TASK storms each miss
+     * liveCompanions() and thrash the main thread (ANR + pure-black panels).
+     */
+    private val companionSeatLock = Any()
+    @Volatile
+    private var companionSeat: CompanionActivity? = null
+
+    /**
+     * @return true if [claimant] now holds the sole companion seat.
+     * False → caller must absorb (finish without paint).
+     */
+    fun tryClaimCompanionSeat(claimant: CompanionActivity): Boolean {
+        synchronized(companionSeatLock) {
+            val cur = companionSeat
+            if (cur === claimant) return true
+            if (cur != null && !cur.isFinishing && !cur.isDestroyed) return false
+            companionSeat = claimant
+            return true
+        }
+    }
+
+    fun releaseCompanionSeat(claimant: CompanionActivity) {
+        synchronized(companionSeatLock) {
+            if (companionSeat === claimant) companionSeat = null
+        }
+    }
+
+    /** Non-finishing seat holder, if any (may not yet be STARTED). */
+    fun companionSeatHolder(): CompanionActivity? {
+        val cur = companionSeat
+        return if (cur != null && !cur.isFinishing && !cur.isDestroyed) cur else null
+    }
+
     override fun onCreate() {
         super.onCreate()
         // Package-rename bridge: BlackPearl update with EXPORT_MIGRATE_ON_BOOT

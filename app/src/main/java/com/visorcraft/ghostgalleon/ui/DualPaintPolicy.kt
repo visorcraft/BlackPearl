@@ -90,6 +90,16 @@ object DualPaintPolicy {
     ): Boolean = hasPeerOnTarget
 
     /**
+     * Process-wide companion seat: SECONDARY_HOME storms spawn many instances
+     * before [ActivityLifecycleCallbacks.onActivityCreated] registers them.
+     * Only the seat holder may paint / redirect; all others absorb silently.
+     *
+     * @param seatHeldByOther true when another non-finishing instance holds
+     *   the seat (or claimed it earlier in this process).
+     */
+    fun shouldAbsorbSeat(seatHeldByOther: Boolean): Boolean = seatHeldByOther
+
+    /**
      * Absorb path must never open All-apps. Only Main deliberate HOME
      * redelivery may open/toggle the drawer.
      */

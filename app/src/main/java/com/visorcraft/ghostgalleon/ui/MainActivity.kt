@@ -56,11 +56,29 @@ class MainActivity : BaseDeckActivity() {
             ?: topo.allIds.firstOrNull { it != (display?.displayId ?: -1) }
             ?: return
         val live = app.liveCompanions().filter { !it.isFinishing }
-        val anyOnTarget = live.any {
+        val seat = app.companionSeatHolder()
+        // Only a STARTED peer on the secondary target counts as healthy.
+        // Seat claim alone is not enough — a stuck READY_TO_SHOW window
+        // (surface never presented) left the secondary panel pure black while
+        // heal thought a companion was already live.
+        val healthyOnTarget = live.any { it.isHealthyCompanion(target) } ||
+            seat?.isHealthyCompanion(target) == true
+        val anyPeerClaiming = live.any {
             it.display?.displayId == target || it.isHealthyCompanion(target)
+        } || seat != null
+        if (anyPeerClaiming && !healthyOnTarget) {
+            // Peer exists but never reached STARTED on target — recreate.
+            // (Inline: restartCompanionPanel would re-check heal debounce we
+            // just consumed.)
+            Log.i(PAINT_TAG, "restartCompanion reason=heal-unhealthy")
+            live.forEach { it.closeQuietly() }
+            seat?.takeIf { !it.isFinishing }?.closeQuietly()
+            mainHandler.postDelayed({
+                if (!isFinishing && !isDestroyed) launchCompanionIfPresent()
+            }, 180L)
+            return
         }
-        // Pure policy: do not kill peers; only launch when target is empty.
-        if (!DualPaintPolicy.shouldLaunchCompanion(anyPeerOnTarget = anyOnTarget)) {
+        if (!DualPaintPolicy.shouldLaunchCompanion(anyPeerOnTarget = anyPeerClaiming)) {
             return
         }
         launchCompanionIfPresent()

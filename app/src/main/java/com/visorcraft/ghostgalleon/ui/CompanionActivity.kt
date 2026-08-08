@@ -3,6 +3,7 @@ package com.visorcraft.ghostgalleon.ui
 import android.app.ActivityOptions
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import androidx.lifecycle.Lifecycle
 import com.visorcraft.ghostgalleon.display.AndroidDisplayProbe
 import com.visorcraft.ghostgalleon.display.SurfaceMode
@@ -21,6 +22,8 @@ class CompanionActivity : BaseDeckActivity() {
     private var absorbDuplicate = false
     /** At most one display redirect per instance (prevents redirect loops). */
     private var didRedirect = false
+    /** True after a successful [app.tryClaimCompanionSeat]. */
+    private var holdsCompanionSeat = false
 
     override fun skipExitCascade(): Boolean = true
 
@@ -28,6 +31,7 @@ class CompanionActivity : BaseDeckActivity() {
 
     fun closeQuietly() {
         selfClosing = true
+        releaseSeat()
         finish()
     }
 
@@ -39,9 +43,30 @@ class CompanionActivity : BaseDeckActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        val topo = app.refreshDisplayConfig()
+        // Process-wide seat claim BEFORE any peer lookup: lifecycle callbacks
+        // only register this instance after onCreate returns, so liveCompanions()
+        // cannot see in-flight SECONDARY_HOME twins. Seat claim is the only
+        // reliable single-winner gate under MULTIPLE_TASK storms (ANR + black
+        // top panel when hundreds of Companions finish-churn on the main thread).
+        if (DualPaintPolicy.shouldAbsorbSeat(seatHeldByOther = !app.tryClaimCompanionSeat(this))) {
+            absorbDuplicate = true
+            selfClosing = true
+            super.onCreate(savedInstanceState)
+            finish()
+            return
+        }
+        holdsCompanionSeat = true
+
+        // Prefer cached topology on the hot absorb/redirect path; full probe
+        // only when still uninitialized (avoids DisplayManager spam in storms).
+        val topo = if (app.displayConfig.reason == "uninitialized") {
+            app.refreshDisplayConfig()
+        } else {
+            app.displayConfig
+        }
         if (topo.mode != SurfaceMode.DUAL) {
             selfClosing = true
+            releaseSeat()
             super.onCreate(savedInstanceState)
             finish()
             return
@@ -50,6 +75,7 @@ class CompanionActivity : BaseDeckActivity() {
             ?: topo.allIds.firstOrNull { it != (display?.displayId ?: -1) }
             ?: run {
                 selfClosing = true
+                releaseSeat()
                 super.onCreate(savedInstanceState)
                 finish()
                 return
@@ -64,6 +90,7 @@ class CompanionActivity : BaseDeckActivity() {
         if (DualPaintPolicy.shouldAbsorbDuplicate(hasPeerOnTarget = keepOnTarget != null)) {
             absorbDuplicate = true
             selfClosing = true
+            releaseSeat()
             super.onCreate(savedInstanceState)
             // Absorb is silent (DualPaintPolicy.absorbMayOpenDrawer() == false):
             // no All-apps, no peer massacre, no re-paint storm on survivor.
@@ -97,8 +124,23 @@ class CompanionActivity : BaseDeckActivity() {
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
         val options = ActivityOptions.makeBasic().setLaunchDisplayId(target)
         selfClosing = true
+        // Free the seat so the display-correct instance can claim; storm
+        // twins still lose tryClaimCompanionSeat once the new one holds it.
+        releaseSeat()
+        Log.i(PAINT_TAG, "Companion redirect → display $target")
         runCatching { startActivity(intent, options.toBundle()) }
         finish()
+    }
+
+    private fun releaseSeat() {
+        if (!holdsCompanionSeat) return
+        holdsCompanionSeat = false
+        app.releaseCompanionSeat(this)
+    }
+
+    override fun onDestroy() {
+        releaseSeat()
+        super.onDestroy()
     }
 
     override fun onNewIntent(intent: Intent?) {

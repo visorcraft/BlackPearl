@@ -137,6 +137,12 @@ class DualPaintPolicyTest {
     }
 
     @Test
+    fun `seat claim absorbs when another holder exists`() {
+        assertTrue(DualPaintPolicy.shouldAbsorbSeat(seatHeldByOther = true))
+        assertFalse(DualPaintPolicy.shouldAbsorbSeat(seatHeldByOther = false))
+    }
+
+    @Test
     fun `drawer open-only never closes during storm`() {
         assertEquals(
             DualPaintPolicy.DrawerAction.NONE,
