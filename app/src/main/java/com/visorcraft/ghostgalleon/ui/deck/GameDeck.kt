@@ -21,6 +21,7 @@ import com.visorcraft.ghostgalleon.GhostGalleonApp
 import com.visorcraft.ghostgalleon.art.ArtTile
 import com.visorcraft.ghostgalleon.library.AppLibrary
 import com.visorcraft.ghostgalleon.library.CollectionsOps
+import com.visorcraft.ghostgalleon.library.GameDetails
 import com.visorcraft.ghostgalleon.library.HiddenRoms
 import com.visorcraft.ghostgalleon.library.LibraryBrowse
 import com.visorcraft.ghostgalleon.library.SessionMath
@@ -1170,12 +1171,55 @@ class GameDeck(
         Toast.makeText(activity, toast, Toast.LENGTH_SHORT).show()
     }
 
+    private fun showDetails(entry: CarouselEntry) {
+        val key = entry.key
+        val rom = entry.rom
+        val body = GameDetails.body(
+            GameDetails.Input(
+                title = entry.label,
+                key = key,
+                kind = if (rom != null) "ROM" else "App",
+                platformId = rom?.platformId,
+                genre = rom?.genre,
+                lastLaunchedMs = settings.lastLaunchedMs[key],
+                playtimeMs = settings.playtimeMs[key] ?: 0L,
+                favorite = key in settings.favorites,
+                collections = GameDetails.collectionsContaining(settings.collections, key),
+                nowMs = System.currentTimeMillis(),
+            ),
+        )
+        val builder = android.app.AlertDialog.Builder(activity)
+            .setTitle("Details")
+            .setMessage(body)
+            .setPositiveButton("OK", null)
+        // Apps: optional jump to system package details.
+        if (rom == null && !SlotKey.isRom(key)) {
+            builder.setNeutralButton("App info") { _, _ -> openAppInfo(key) }
+        }
+        builder.show()
+    }
+
+    private fun openAppInfo(packageName: String) {
+        val intent = android.content.Intent(
+            android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+        ).apply {
+            data = android.net.Uri.fromParts("package", packageName, null)
+            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        runCatching { activity.startActivity(intent) }
+            .onFailure {
+                Toast.makeText(activity, "Cannot open app info", Toast.LENGTH_SHORT).show()
+            }
+    }
+
     private fun openEntryMenu(entry: CarouselEntry) {
         val key = entry.key
         val fav = key in settings.favorites
         val activeCol = activeCollectionName()
         val reorderCol = reorderCollectionName()
+        val isApp = entry.rom == null && !SlotKey.isRom(key)
         val choices = buildList {
+            add(SlotMenu.Choice.DETAILS)
             add(if (fav) SlotMenu.Choice.UNFAVORITE else SlotMenu.Choice.FAVORITE)
             add(SlotMenu.Choice.ADD_TO_COLLECTION)
             if (activeCol != null) {
@@ -1186,6 +1230,9 @@ class GameDeck(
                 add(SlotMenu.Choice.MOVE_UP)
                 add(SlotMenu.Choice.MOVE_DOWN)
                 add(SlotMenu.Choice.MOVE_TO_END)
+            }
+            if (isApp) {
+                add(SlotMenu.Choice.APP_INFO)
             }
             if (entry.rom != null) {
                 add(SlotMenu.Choice.OPEN_WITH)
@@ -1199,6 +1246,8 @@ class GameDeck(
         val menu = SlotMenu(activity, settings.accentColor, choices) { choice ->
             closeSlotMenu()
             when (choice) {
+                SlotMenu.Choice.DETAILS -> showDetails(entry)
+                SlotMenu.Choice.APP_INFO -> openAppInfo(key)
                 SlotMenu.Choice.FAVORITE, SlotMenu.Choice.UNFAVORITE -> toggleFavorite(key)
                 SlotMenu.Choice.ADD_TO_COLLECTION -> promptAddToCollection(listOf(key))
                 SlotMenu.Choice.REMOVE_FROM_COLLECTION ->

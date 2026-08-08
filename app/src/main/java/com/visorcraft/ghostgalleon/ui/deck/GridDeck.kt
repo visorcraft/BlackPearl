@@ -1093,6 +1093,7 @@ class GridDeck(
                     add(SlotMenu.Choice.CANCEL)
                 }
                 else -> {
+                    add(SlotMenu.Choice.DETAILS)
                     add(SlotMenu.Choice.MOVE)
                     add(SlotMenu.Choice.PIN_TO_DOCK)
                     add(if (fav) SlotMenu.Choice.UNFAVORITE else SlotMenu.Choice.FAVORITE)
@@ -1104,6 +1105,7 @@ class GridDeck(
                         add(SlotMenu.Choice.HIDE)
                     }
                     if (isApp) {
+                        add(SlotMenu.Choice.APP_INFO)
                         add(SlotMenu.Choice.RENAME)
                         if (key in settings.customNames) add(SlotMenu.Choice.RESET_NAME)
                         add(SlotMenu.Choice.CUSTOM_ICON)
@@ -1117,6 +1119,10 @@ class GridDeck(
         val menu = SlotMenu(activity, settings.accentColor, choices) { choice ->
             closeSlotMenu()
             when (choice) {
+                SlotMenu.Choice.DETAILS -> key?.let { k -> showGridDetails(k) }
+                SlotMenu.Choice.APP_INFO -> key?.let { k ->
+                    if (!SlotKey.isRom(k) && !SlotKey.isFolder(k)) openAppInfo(k)
+                }
                 SlotMenu.Choice.MOVE -> startMove(slot)
                 SlotMenu.Choice.PIN_TO_DOCK ->
                     settings.gridSlots.getOrNull(slot)?.let(::pinToDock)
@@ -1200,6 +1206,52 @@ class GridDeck(
         slotMenu = menu
         rootView?.addView(menu.view, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+    }
+
+    private fun showGridDetails(key: String) {
+        val rom = SlotKey.romId(key)?.let { id -> roms.firstOrNull { it.id == id } }
+        val title = when {
+            rom != null -> rom.name
+            else -> settings.customNames[key]
+                ?: visibleByPkg[key]?.label
+                ?: key
+        }
+        val body = com.visorcraft.ghostgalleon.library.GameDetails.body(
+            com.visorcraft.ghostgalleon.library.GameDetails.Input(
+                title = title,
+                key = key,
+                kind = if (rom != null) "ROM" else "App",
+                platformId = rom?.platformId,
+                genre = rom?.genre,
+                lastLaunchedMs = settings.lastLaunchedMs[key],
+                playtimeMs = settings.playtimeMs[key] ?: 0L,
+                favorite = key in settings.favorites,
+                collections = com.visorcraft.ghostgalleon.library.GameDetails
+                    .collectionsContaining(settings.collections, key),
+                nowMs = System.currentTimeMillis(),
+            ),
+        )
+        val builder = android.app.AlertDialog.Builder(activity)
+            .setTitle("Details")
+            .setMessage(body)
+            .setPositiveButton("OK", null)
+        if (rom == null && !SlotKey.isRom(key) && !SlotKey.isFolder(key)) {
+            builder.setNeutralButton("App info") { _, _ -> openAppInfo(key) }
+        }
+        builder.show()
+    }
+
+    private fun openAppInfo(packageName: String) {
+        val intent = android.content.Intent(
+            android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+        ).apply {
+            data = android.net.Uri.fromParts("package", packageName, null)
+            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        runCatching { activity.startActivity(intent) }
+            .onFailure {
+                Toast.makeText(activity, "Cannot open app info", Toast.LENGTH_SHORT).show()
+            }
     }
 
     // Rename dialog: dark modal with an EditText prefilled with the current

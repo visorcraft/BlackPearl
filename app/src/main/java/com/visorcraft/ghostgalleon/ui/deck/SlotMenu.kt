@@ -40,6 +40,8 @@ class SlotMenu(
         MOVE_UP("Move up"),
         MOVE_DOWN("Move down"),
         MOVE_TO_END("Move to end"),
+        DETAILS("Details…"),
+        APP_INFO("App info"),
         HIDE("Hide from library"),
         NEW_FOLDER("New folder"),
         ADD_MEMBER("Add member"),
