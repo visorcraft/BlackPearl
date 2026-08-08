@@ -85,4 +85,64 @@ object CompanionHeroMetrics {
         if (spec.bannerHeightFraction <= 0f) return 0
         return (panelHeightPx * spec.bannerHeightFraction).toInt().coerceAtLeast(0)
     }
+
+    // --- Empty-selection brand scene (clouds / sea / ship) -----------------
+    // Full-panel 3:2 sky/water stack. Ship size scales with panel height
+    // (any dual / single device) and is placed so the hull rests on the
+    // waterline. Must NOT reuse [forPanel] game-hero art sizes — those are
+    // for selected ROM/app tiles under chrome, not the brand scene.
+
+    /**
+     * Horizon as fraction of panel height for clouds:sea weight 3:2
+     * (sky 60%, water 40%).
+     */
+    const val BRAND_WATERLINE_FRACTION = 0.60f
+
+    /**
+     * Where the hull sits in the ship bitmap (0 = top, 1 = bottom). Masts
+     * above, hull on the waterline.
+     */
+    const val BRAND_SHIP_HULL_FRACTION = 0.55f
+
+    /** Ship edge as a fraction of panel height (before min/max clamps). */
+    const val BRAND_SHIP_HEIGHT_FRACTION = 0.44f
+
+    /** Min / max ship edge in dp so tiny and huge panels stay sane. */
+    const val BRAND_SHIP_MIN_DP = 120
+    const val BRAND_SHIP_MAX_DP = 280
+
+    data class BrandShipLayout(
+        val sizePx: Int,
+        /** Top margin so hull Y ≈ waterline. */
+        val topMarginPx: Int,
+    )
+
+    /**
+     * Size + top margin for the brand galleon on a panel of [panelHeightPx].
+     * [density] is display density (px = dp * density) for min/max clamps.
+     */
+    fun brandShipLayout(panelHeightPx: Int, density: Float): BrandShipLayout {
+        if (panelHeightPx <= 0 || density <= 0f) {
+            return BrandShipLayout(sizePx = 0, topMarginPx = 0)
+        }
+        val minPx = (BRAND_SHIP_MIN_DP * density).toInt().coerceAtLeast(1)
+        val maxPx = (BRAND_SHIP_MAX_DP * density).toInt().coerceAtLeast(minPx)
+        val size = (panelHeightPx * BRAND_SHIP_HEIGHT_FRACTION)
+            .toInt()
+            .coerceIn(minPx, maxPx)
+        val waterline = panelHeightPx * BRAND_WATERLINE_FRACTION
+        val top = (waterline - size * BRAND_SHIP_HULL_FRACTION)
+            .toInt()
+            .coerceAtLeast(0)
+        return BrandShipLayout(sizePx = size, topMarginPx = top)
+    }
+
+    /** Top margin only (tests / callers that already know size). */
+    fun brandShipTopMarginPx(panelHeightPx: Int, shipSizePx: Int): Int {
+        if (panelHeightPx <= 0 || shipSizePx <= 0) return 0
+        val waterline = panelHeightPx * BRAND_WATERLINE_FRACTION
+        return (waterline - shipSizePx * BRAND_SHIP_HULL_FRACTION)
+            .toInt()
+            .coerceAtLeast(0)
+    }
 }

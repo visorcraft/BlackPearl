@@ -60,6 +60,46 @@ class LibraryDiscoveryTest {
     }
 
     @Test
+    fun `coldStartKey prefers first grid slot over last launched`() {
+        // Regression: AppVerifier BG as last-launched stole the hero from Eden
+        // in grid slot 0.
+        val grid = listOf("com.eden.emu", "com.other.app", null)
+        val last = mapOf(
+            "com.appverifier.bg" to 9_999_999L,
+            "com.eden.emu" to 1L,
+        )
+        assertEquals(
+            "com.eden.emu",
+            LibraryBrowse.coldStartKey(gridSlots = grid, lastLaunchedMs = last),
+        )
+    }
+
+    @Test
+    fun `coldStartKey falls back to continue when grid empty`() {
+        val last = mapOf("com.recent.app" to 100L, "com.older.app" to 50L)
+        assertEquals(
+            "com.recent.app",
+            LibraryBrowse.coldStartKey(
+                gridSlots = listOf(null, null),
+                dockSlots = emptyList(),
+                lastLaunchedMs = last,
+            ),
+        )
+    }
+
+    @Test
+    fun `coldStartKey uses dock when grid empty`() {
+        assertEquals(
+            "com.dock.app",
+            LibraryBrowse.coldStartKey(
+                gridSlots = listOf(null),
+                dockSlots = listOf(null, "com.dock.app"),
+                lastLaunchedMs = mapOf("com.other" to 99L),
+            ),
+        )
+    }
+
+    @Test
     fun `pickRandom over browsed roms is deterministic with seed`() {
         val library = listOf(rom("snes", "Zelda"), rom("snes", "Mario"), rom("3ds", "Pokemon"))
         val browsed = LibraryBrowse.browseRoms(

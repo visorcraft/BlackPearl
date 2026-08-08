@@ -354,6 +354,9 @@ object LibraryBrowse {
     /**
      * Continue target: the most recently launched key that still exists in
      * [availableKeys], or null when none.
+     *
+     * For **cold-start hero seed**, use [coldStartKey] instead — last-launched
+     * is an explicit Continue/Recent action, not the home landing selection.
      */
     fun continueKey(
         availableKeys: List<String>,
@@ -365,6 +368,28 @@ object LibraryBrowse {
             lastLaunchedMs.keys.filter { it in present },
             lastLaunchedMs,
         ).firstOrNull()
+    }
+
+    /**
+     * Cold-start / first-paint selection for the hero panel.
+     *
+     * Prefer the first filled grid slot (user-curated home order — e.g. Eden
+     * in slot 0). Only fall back to [continueKey] when the grid has no filled
+     * slots. Never pick a random last-launched utility app over the grid.
+     */
+    fun coldStartKey(
+        gridSlots: List<String?>,
+        dockSlots: List<String?> = emptyList(),
+        lastLaunchedMs: Map<String, Long> = emptyMap(),
+    ): String? {
+        gridSlots.firstOrNull { !it.isNullOrBlank() }?.let { return it }
+        dockSlots.firstOrNull { !it.isNullOrBlank() }?.let { return it }
+        val available = buildList {
+            addAll(gridSlots.filterNotNull())
+            addAll(dockSlots.filterNotNull())
+            addAll(lastLaunchedMs.keys)
+        }
+        return continueKey(available, lastLaunchedMs)
     }
 
     /**

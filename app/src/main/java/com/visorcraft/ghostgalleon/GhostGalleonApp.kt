@@ -700,25 +700,19 @@ class GhostGalleonApp : Application() {
     }
 
     /**
-     * Prefer Continue (most recent launch still known) for the first hero
-     * selection; fall back to grid slot 0. Never launches.
+     * Cold-start hero selection: first filled grid slot (curated home order),
+     * not last-launched. Continue stays an explicit user action (chip / Quick
+     * Panel). Never launches.
      */
     private fun seedColdStartSelection() {
-        val available = buildList {
-            addAll(settings.gridSlots.filterNotNull())
-            addAll(settings.dockSlots.filterNotNull())
-            addAll(settings.lastLaunchedMs.keys)
-        }
-        val cont = com.visorcraft.ghostgalleon.library.LibraryBrowse.continueKey(
-            available, settings.lastLaunchedMs,
-        )
-        if (cont != null) {
-            val idx = settings.gridSlots.indexOf(cont)
-            if (idx >= 0) deckState.selectSlot(idx, cont)
-            else deckState.select(cont)
-            return
-        }
-        settings.gridSlots.getOrNull(0)?.let { deckState.selectSlot(0, it) }
+        val key = com.visorcraft.ghostgalleon.library.LibraryBrowse.coldStartKey(
+            gridSlots = settings.gridSlots,
+            dockSlots = settings.dockSlots,
+            lastLaunchedMs = settings.lastLaunchedMs,
+        ) ?: return
+        val idx = settings.gridSlots.indexOf(key)
+        if (idx >= 0) deckState.selectSlot(idx, key)
+        else deckState.select(key)
     }
 
     /** The currently live CompanionActivity, if any. */

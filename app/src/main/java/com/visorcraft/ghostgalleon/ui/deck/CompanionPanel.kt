@@ -1295,18 +1295,19 @@ object CompanionPanel {
             ))
         } else {
             // Layered brand fallback, full-panel: clouds + sea behind the
-            // content column (which goes transparent so the scene shows
-            // edge to edge), ship at a fixed 240dp inside the hero area,
-            // rain IN FRONT of everything (added after `content` at the
-            // end of build). Clouds/sea are exact vertical slices of one
-            // 1280×720 scene (432px sky, 288px water), stacked in a 3:2
-            // weighted column so the horizon keeps its authored 60/40
-            // split at any panel size (CENTER_CROP trims width overflow).
-            // Every layer is independently optional: no sky/sea = normal
-            // glow panel, no ship anim (or pre-API-28) = static
-            // ic_brand_ship, no rain = none. hero_ocean_anim is the legacy
-            // single-file background, used only when the slice pair is
-            // incomplete.
+            // content column (transparent so the scene shows edge to edge).
+            // Ship is a root FrameLayout overlay (not inside the hero column)
+            // so role chips / status pill never pull it off the waterline.
+            // Size scales with panel height; hull sits on the clouds:sea 3:2
+            // horizon (CompanionHeroMetrics.brandShipLayout) — works on any
+            // dual/single panel, not only Sugar. Rain is added LAST so it
+            // falls in front of ship + UI.
+            // Clouds/sea are exact vertical slices of one 1280×720 scene
+            // (432px sky, 288px water), stacked 3:2 so the horizon keeps its
+            // authored 60/40 split (CENTER_CROP trims width overflow). Every
+            // layer is optional: no sky/sea = glow panel, no ship anim (or
+            // pre-API-28) = ic_brand_ship, no rain = none. hero_ocean_anim is
+            // the legacy single-file background when the slice pair is incomplete.
             val clouds = loadAnimated(context, "hero_clouds_anim")
             val sea = loadAnimated(context, "hero_sea_anim")
             val ocean = if (clouds == null || sea == null) {
@@ -1343,17 +1344,28 @@ object CompanionPanel {
                 }
                 if (singles.isNotEmpty()) content.background = null
             }
-            hero.addView(ImageView(context).apply {
-                val ship = loadAnimated(context, "hero_ship_anim")
-                if (ship != null) {
-                    setImageDrawable(ship)
-                    ship.start()
-                } else {
-                    setImageResource(R.drawable.ic_brand_ship)
-                }
-            }, LinearLayout.LayoutParams(artPx, artPx).apply {
-                topMargin = dp(8)
-            })
+            // z-order: bg (already added) → content (later) → ship → rain.
+            // Transparent content regions show the ship on the waterline.
+            val shipLayout = CompanionHeroMetrics.brandShipLayout(
+                panelHeightPx = dm.heightPixels,
+                density = density,
+            )
+            if (shipLayout.sizePx > 0) {
+                root.addView(ImageView(context).apply {
+                    tag = TAG_HERO_ICON
+                    contentDescription = "Ghost Galleon"
+                    val ship = loadAnimated(context, "hero_ship_anim")
+                    if (ship != null) {
+                        setImageDrawable(ship)
+                        ship.start()
+                    } else {
+                        setImageResource(R.drawable.ic_brand_ship)
+                    }
+                }, FrameLayout.LayoutParams(shipLayout.sizePx, shipLayout.sizePx).apply {
+                    gravity = Gravity.CENTER_HORIZONTAL or Gravity.TOP
+                    topMargin = shipLayout.topMarginPx
+                })
+            }
             val tokens = com.visorcraft.ghostgalleon.settings.ThemePack.resolve(settings)
             if (tokens.heroRain) {
                 frontRain = loadAnimated(context, "hero_rain_anim")
