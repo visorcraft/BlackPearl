@@ -88,6 +88,20 @@ class PlayStatsTest {
     }
 
     @Test
+    fun `bulkStampLastPlayed only stamps unplayed keys`() {
+        val stats = PlayStats(lastLaunchedMs = mapOf("a" to 50L))
+        assertEquals(2, SessionMath.unplayedCountInSelection(stats.lastLaunchedMs, listOf("a", "b", "c")))
+        val (next, n) = SessionMath.bulkStampLastPlayed(stats, listOf("a", "b", "c"), 100L)
+        assertEquals(2, n)
+        assertEquals(50L, next.lastLaunchedMs["a"])
+        assertEquals(100L, next.lastLaunchedMs["b"])
+        assertEquals(100L, next.lastLaunchedMs["c"])
+        val (noop, n0) = SessionMath.bulkStampLastPlayed(next, listOf("a", "b"), 200L)
+        assertEquals(0, n0)
+        assertEquals(next, noop)
+    }
+
+    @Test
     fun `hasStats and clearStats drop launch and playtime only`() {
         val stats = PlayStats(
             lastLaunchedMs = mapOf("a" to 10L, "b" to 20L),

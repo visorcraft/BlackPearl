@@ -4,6 +4,7 @@ import com.visorcraft.ghostgalleon.rom.RomEntry
 import com.visorcraft.ghostgalleon.settings.SlotKey
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -590,6 +591,31 @@ class LibraryBrowseTest {
         assertEquals(listOf("Zelda", "Mario"), filtered.map { it.name })
         assertTrue(LibraryBrowse.matchesDeveloper(library[0], "nintendo"))
         assertFalse(LibraryBrowse.matchesDeveloper(library[0], "Sony"))
+    }
+
+    @Test
+    fun `hasActiveMetaFilters and clearMetaFilters keep rail`() {
+        val base = LibraryBrowse.BrowseQuery(
+            mode = LibraryBrowse.Mode.FAVORITES,
+            platformId = "snes",
+            genre = "RPG",
+            developer = "Nintendo",
+            yearDecade = "1990s",
+            text = "zelda",
+            collectionName = "x",
+        )
+        assertTrue(LibraryBrowse.hasActiveMetaFilters(base))
+        assertEquals(5, LibraryBrowse.activeMetaFilterCount(base))
+        assertFalse(LibraryBrowse.hasActiveMetaFilters(LibraryBrowse.BrowseQuery()))
+        val cleared = LibraryBrowse.clearMetaFilters(base)
+        assertEquals(LibraryBrowse.Mode.FAVORITES, cleared.mode)
+        assertEquals("x", cleared.collectionName)
+        assertNull(cleared.platformId)
+        assertNull(cleared.genre)
+        assertNull(cleared.developer)
+        assertNull(cleared.yearDecade)
+        assertEquals("", cleared.text)
+        assertFalse(LibraryBrowse.hasActiveMetaFilters(cleared))
     }
 
     @Test
