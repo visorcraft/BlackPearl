@@ -87,6 +87,10 @@ object CollectionsOps {
         name: String,
     ): Map<String, List<String>> = collections - name.trim()
 
+    /** True when a rail name is user-manageable (not the Favorites mirror). */
+    fun isUserCollection(name: String): Boolean =
+        name.trim().isNotEmpty() && !name.equals("Favorites", ignoreCase = true)
+
     fun createCollection(
         collections: Map<String, List<String>>,
         name: String,

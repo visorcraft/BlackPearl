@@ -77,4 +77,12 @@ class CollectionsOpsTest {
         assertFalse(ok3)
         assertEquals(c1, c3)
     }
+
+    @Test
+    fun `isUserCollection excludes Favorites mirror`() {
+        assertTrue(CollectionsOps.isUserCollection("SmokeShelf"))
+        assertFalse(CollectionsOps.isUserCollection("Favorites"))
+        assertFalse(CollectionsOps.isUserCollection("favorites"))
+        assertFalse(CollectionsOps.isUserCollection("  "))
+    }
 }

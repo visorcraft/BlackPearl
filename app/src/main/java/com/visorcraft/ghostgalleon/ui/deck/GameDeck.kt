@@ -512,7 +512,12 @@ class GameDeck(
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(12), dp(8), dp(12), dp(4))
         }
-        fun chip(label: String, selected: Boolean, onClick: () -> Unit): TextView =
+        fun chip(
+            label: String,
+            selected: Boolean,
+            onLongClick: (() -> Unit)? = null,
+            onClick: () -> Unit,
+        ): TextView =
             TextView(context).apply {
                 text = label
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
@@ -522,6 +527,12 @@ class GameDeck(
                     else TileBackgrounds.chipIdleColor(context))
                 setPadding(dp(12), dp(6), dp(12), dp(6))
                 setOnClickListener { onClick() }
+                if (onLongClick != null) {
+                    setOnLongClickListener {
+                        onLongClick()
+                        true
+                    }
+                }
             }
         val q = state.libraryBrowse
         fun setQuery(next: LibraryBrowse.BrowseQuery, force: Boolean = false) {
@@ -645,14 +656,20 @@ class GameDeck(
             row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
             val selected = q.mode == LibraryBrowse.Mode.COLLECTION &&
                 q.collectionName == name
-            row.addView(chip(name, selected) {
-                setQuery(
-                    LibraryBrowse.BrowseQuery(
-                        mode = LibraryBrowse.Mode.COLLECTION,
-                        collectionName = name,
-                    ),
-                )
-            })
+            row.addView(
+                chip(
+                    name,
+                    selected,
+                    onLongClick = { showCollectionManageDialog(name) },
+                ) {
+                    setQuery(
+                        LibraryBrowse.BrowseQuery(
+                            mode = LibraryBrowse.Mode.COLLECTION,
+                            collectionName = name,
+                        ),
+                    )
+                },
+            )
         }
         LibraryBrowse.presentPlatforms(roms, settings.hiddenRomIds).forEach { pid ->
             row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
@@ -760,6 +777,74 @@ class GameDeck(
                 }
             }
             .setNegativeButton("Close", null)
+            .show()
+    }
+
+    /**
+     * Long-press a collection rail chip: rename, delete, or open the rail.
+     */
+    private fun showCollectionManageDialog(name: String) {
+        val count = settings.collections[name]?.size ?: 0
+        val labels = arrayOf(
+            "Open ($count)",
+            "Rename…",
+            "Delete collection",
+            "Cancel",
+        )
+        android.app.AlertDialog.Builder(activity)
+            .setTitle(name)
+            .setItems(labels) { _, which ->
+                when (which) {
+                    0 -> state.setLibraryBrowse(
+                        LibraryBrowse.BrowseQuery(
+                            mode = LibraryBrowse.Mode.COLLECTION,
+                            collectionName = name,
+                        ),
+                        force = true,
+                    )
+                    1 -> promptRenameCollection(name)
+                    2 -> {
+                        val next = CollectionsOps.deleteCollection(settings.collections, name)
+                        app().updateSettings(settings.copy(collections = next))
+                        // Leave collection filter if it pointed at the deleted rail.
+                        if (state.libraryBrowse.collectionName == name) {
+                            state.setLibraryBrowse(LibraryBrowse.BrowseQuery(), force = true)
+                        }
+                        Toast.makeText(activity, "Deleted $name", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+            .show()
+    }
+
+    private fun promptRenameCollection(from: String) {
+        val input = android.widget.EditText(activity).apply {
+            setText(from)
+            setSelection(from.length)
+            hint = "Name"
+        }
+        android.app.AlertDialog.Builder(activity)
+            .setTitle("Rename collection")
+            .setView(input)
+            .setPositiveButton("Save") { _, _ ->
+                val to = input.text?.toString().orEmpty()
+                val next = CollectionsOps.renameCollection(settings.collections, from, to)
+                app().updateSettings(settings.copy(collections = next))
+                val dest = to.trim()
+                if (dest.isNotEmpty() &&
+                    state.libraryBrowse.collectionName == from
+                ) {
+                    state.setLibraryBrowse(
+                        LibraryBrowse.BrowseQuery(
+                            mode = LibraryBrowse.Mode.COLLECTION,
+                            collectionName = dest,
+                        ),
+                        force = true,
+                    )
+                }
+                Toast.makeText(activity, "Renamed", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("Cancel", null)
             .show()
     }
 
