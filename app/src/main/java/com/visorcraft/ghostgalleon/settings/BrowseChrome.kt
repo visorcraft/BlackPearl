@@ -37,7 +37,8 @@ data class BrowseChrome(
     val deckStatusPill: Boolean = false,
     /**
      * Quick Panel browse shortcuts beyond Continue: Random, Top, Fav, Games,
-     * Installed. System tiles (Wi‑Fi / Settings / Theme) always stay.
+     * Installed, Week, Month, A–Z, New (each rail still needs its own flag).
+     * System tiles (Wi‑Fi / Settings / Theme) always stay.
      */
     val quickPanelBrowse: Boolean = false,
 ) {
@@ -54,6 +55,24 @@ data class BrowseChrome(
         LibraryBrowse.Mode.GAMES -> gamesRail
         LibraryBrowse.Mode.ALPHA -> alphaRail
         LibraryBrowse.Mode.UNPLAYED -> unplayedRail
+    }
+
+    /**
+     * Game Mode rails offered as Quick Panel cells when [quickPanelBrowse] is
+     * on. Top/Random stay special (selection jump / immediate launch). Order
+     * is stable for layout. Pure; host-tested.
+     */
+    fun quickPanelRailShortcuts(): List<Pair<String, LibraryBrowse.Mode>> {
+        if (!quickPanelBrowse) return emptyList()
+        return buildList {
+            add("Fav" to LibraryBrowse.Mode.FAVORITES)
+            if (gamesRail) add("Games" to LibraryBrowse.Mode.GAMES)
+            if (installedRail) add("Installed" to LibraryBrowse.Mode.RECENTLY_INSTALLED)
+            if (weekRail) add("Week" to LibraryBrowse.Mode.PLAYED_THIS_WEEK)
+            if (monthRail) add("Month" to LibraryBrowse.Mode.PLAYED_THIS_MONTH)
+            if (alphaRail) add("A–Z" to LibraryBrowse.Mode.ALPHA)
+            if (unplayedRail) add("New" to LibraryBrowse.Mode.UNPLAYED)
+        }
     }
 
     /** Drop disallowed mode/genre into a safe query for the current chrome. */

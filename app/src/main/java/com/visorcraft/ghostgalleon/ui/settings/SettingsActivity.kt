@@ -1407,9 +1407,10 @@ class SettingsActivity : AppCompatActivity() {
         chromeFlag("Platform chips", chrome.platformChips) { c, v -> c.copy(platformChips = v) }
         chromeFlag("Collection rails", chrome.collectionRails) { c, v -> c.copy(collectionRails = v) }
         chromeFlag("Deck clock / battery", chrome.deckStatusPill) { c, v -> c.copy(deckStatusPill = v) }
-        chromeFlag("Quick Panel browse shortcuts", chrome.quickPanelBrowse) { c, v ->
-            c.copy(quickPanelBrowse = v)
-        }
+        chromeFlag(
+            "Quick Panel browse (Fav/rails)",
+            chrome.quickPanelBrowse,
+        ) { c, v -> c.copy(quickPanelBrowse = v) }
         addSection(
             SettingsPage.DISPLAY_GRID,
             "Browse chrome (minimal default)",

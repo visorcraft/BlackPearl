@@ -89,4 +89,29 @@ class BrowseChromeTest {
                 .allowsMode(LibraryBrowse.Mode.PLAYED_THIS_MONTH),
         )
     }
+
+    @Test
+    fun `quickPanelRailShortcuts empty when browse shortcuts off`() {
+        assertTrue(BrowseChrome.FULL.copy(quickPanelBrowse = false).quickPanelRailShortcuts().isEmpty())
+        assertTrue(BrowseChrome.MINIMAL.quickPanelRailShortcuts().isEmpty())
+    }
+
+    @Test
+    fun `quickPanelRailShortcuts includes Fav and gated rails only`() {
+        val onlyWeek = BrowseChrome.MINIMAL.copy(
+            quickPanelBrowse = true,
+            weekRail = true,
+        )
+        assertEquals(
+            listOf(
+                "Fav" to LibraryBrowse.Mode.FAVORITES,
+                "Week" to LibraryBrowse.Mode.PLAYED_THIS_WEEK,
+            ),
+            onlyWeek.quickPanelRailShortcuts(),
+        )
+        val full = BrowseChrome.FULL.quickPanelRailShortcuts().map { it.first }
+        assertTrue(full.containsAll(listOf("Fav", "Games", "Installed", "Week", "Month", "A–Z", "New")))
+        assertFalse(full.contains("Top")) // Top stays a special cell
+        assertFalse(full.contains("Random"))
+    }
 }

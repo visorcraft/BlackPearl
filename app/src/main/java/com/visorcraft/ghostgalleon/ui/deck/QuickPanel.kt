@@ -25,8 +25,9 @@ import com.visorcraft.ghostgalleon.ui.settings.SettingsActivity
 
 /**
  * Full-screen dim (~80%) overlay with a chip grid (Wi‑Fi, Bluetooth,
- * Display, Settings, Continue, Random, Top, Fav, Games, Installed, Theme,
- * Controller lab, Close). Layout is 4 columns; incomplete last row is fine.
+ * Display, Settings, Continue, optional browse rails, Theme, Controller lab,
+ * Close). Browse shortcuts (Random/Top/Fav/Games/Installed/Week/Month/A–Z/New)
+ * opt in via BrowseChrome. Layout is 4 columns; incomplete last row is fine.
  * D-pad + A navigate / activate; B / Close dismisses.
  */
 class QuickPanel(
@@ -113,19 +114,11 @@ class QuickPanel(
                     onClose()
                 })
             }
-            core.add(Cell("Fav") {
-                openGameRail(LibraryBrowse.Mode.FAVORITES, "Favorites")
-                onClose()
-            })
-            if (chrome.gamesRail) {
-                core.add(Cell("Games") {
-                    openGameRail(LibraryBrowse.Mode.GAMES, "Games")
-                    onClose()
-                })
-            }
-            if (chrome.installedRail) {
-                core.add(Cell("Installed") {
-                    openGameRail(LibraryBrowse.Mode.RECENTLY_INSTALLED, "Installed")
+            // Fav / Games / Installed / Week / Month / A–Z / New — each rail
+            // still gated by its own BrowseChrome flag via quickPanelRailShortcuts.
+            chrome.quickPanelRailShortcuts().forEach { (label, mode) ->
+                core.add(Cell(label) {
+                    openGameRail(mode, label)
                     onClose()
                 })
             }
@@ -278,7 +271,7 @@ class QuickPanel(
 
     /**
      * Jump into Game Mode on a named browse rail so Fav / Games / Installed /
-     * Top are reachable from Grid Mode via Select → Quick Panel.
+     * Top / Week / Month / A–Z / New are reachable from Grid Mode via Select.
      */
     private fun openGameRail(
         mode: LibraryBrowse.Mode,

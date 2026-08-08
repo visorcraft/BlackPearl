@@ -69,7 +69,7 @@ On dual-screen hardware one panel hosts the interactive deck (grid or carousel) 
 - **Companion roles** — Hero, Now Playing, Perf HUD, or pinned app on the non-interactive panel (large status pill).
 - **Global input** — gamepad, d-pad, stick, and touch route to the interactive deck regardless of which window has focus; held directions auto-repeat.
 - **Swipe-up / re-HOME drawer** — all-apps + ROMs without reloading the deck.
-- **Quick Panel** — Select opens Wi‑Fi / Continue / Theme / Settings by default; Random/Top/Fav/Games/Installed shortcuts enable with **Quick Panel browse shortcuts**.
+- **Quick Panel** — Select opens Wi‑Fi / Continue / Theme / Settings by default; Random/Top/Fav/Games/Installed/Week/Month/A–Z/New shortcuts enable with **Quick Panel browse shortcuts** (each rail still needs its own toggle).
 - **ROM library** — SAF tree grants only (no broad storage permission); offline-first art; hide ROMs from library (Settings unhide); optional SteamGridDB scrape and RetroAchievements credentials.
 - **Honest playtime** — sessions pause while the launcher is focused or the device sleeps.
 - **Themes** — Ghost, 3DS Teal, OLED Black, Neon; optional custom theme JSON.
