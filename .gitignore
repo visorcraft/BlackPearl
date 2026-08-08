@@ -5,7 +5,19 @@ local.properties
 .idea/
 app/build/
 release-signing.properties
+
+# Local agent / AI tooling (not product)
 .superpowers/
 AGENTS.md
 CLAUDE.md
 GEMINI.md
+
+# Ad-hoc device QA screencaps dropped in repo root
+/gg_*.png
+/bot*.png
+/top.png
+/d1.png
+/ui.xml
+/_review*
+/_*.txt
+/*.apk
