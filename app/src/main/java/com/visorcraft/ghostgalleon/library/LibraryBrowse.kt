@@ -155,6 +155,35 @@ object LibraryBrowse {
     }
 
     /**
+     * Keep ROMs whose [RomEntry.platformId] is in [launchablePlatformIds].
+     * [launchablePlatformIds] null → no filter (pass-through).
+     * Empty set → empty result (no emulator packages installed).
+     * Does not re-apply hide filtering — callers pass already-listed ROMs
+     * or use with [HiddenRoms.listed] first. Pure; host-tested.
+     */
+    fun filterByLaunchablePlatforms(
+        roms: List<RomEntry>,
+        launchablePlatformIds: Set<String>?,
+    ): List<RomEntry> {
+        if (launchablePlatformIds == null) return roms
+        return roms.filter { it.platformId in launchablePlatformIds }
+    }
+
+    /**
+     * Platform ids that have at least one installed player package.
+     * [playersByPlatform] maps platformId → package names that can run it.
+     * [installedPackages] is the set of installed package names on device.
+     * Pure; host-tested.
+     */
+    fun launchablePlatformIds(
+        playersByPlatform: Map<String, List<String>>,
+        installedPackages: Set<String>,
+    ): Set<String> =
+        playersByPlatform.mapNotNull { (platformId, packages) ->
+            if (packages.any { it in installedPackages }) platformId else null
+        }.toSet()
+
+    /**
      * Distinct release decades present in the listed library with ROM counts,
      * sorted by decade ascending (oldest first). [limit] caps chip bar length
      * (default 8). Used for labeled chips like `"1990s · 12"`.
@@ -388,6 +417,11 @@ object LibraryBrowse {
         playtimeMs: Map<String, Long> = emptyMap(),
         hiddenRomIds: Set<String> = emptySet(),
         nowMs: Long = 0L,
+        /**
+         * When non-null, only ROMs on these platforms are kept (launchable
+         * filter). Null → no launchability gate.
+         */
+        launchablePlatformIds: Set<String>? = null,
     ): List<RomEntry> {
         val listed = HiddenRoms.listed(roms, hiddenRomIds)
         val base = when (query.mode) {
@@ -468,7 +502,8 @@ object LibraryBrowse {
         val genred = filterByGenre(platformed, query.genre)
         val developed = filterByDeveloper(genred, query.developer)
         val yeared = filterByYearDecade(developed, query.yearDecade)
-        return searchRoms(yeared, query.text, emptySet())
+        val launchable = filterByLaunchablePlatforms(yeared, launchablePlatformIds)
+        return searchRoms(launchable, query.text, emptySet())
     }
 
     /** Distinct platform ids present in the listed library, sorted. */

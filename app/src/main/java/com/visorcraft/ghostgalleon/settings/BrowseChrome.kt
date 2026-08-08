@@ -35,6 +35,11 @@ data class BrowseChrome(
     val developerChips: Boolean = false,
     /** Release-year decade chips (1990s, 2000s, …) from gamelist meta. */
     val yearChips: Boolean = false,
+    /**
+     * Hide ROMs whose platform has no installed player package.
+     * Apps are unaffected. Default off — full library stays visible.
+     */
+    val launchableOnly: Boolean = false,
     /** Platform filter chips (SNES, Switch, …). Default on — core for ROMs. */
     val platformChips: Boolean = true,
     /** Named user collection chips (not Favorites). Default on if user created any. */
@@ -134,6 +139,7 @@ data class BrowseChrome(
         .put("genreChips", genreChips)
         .put("developerChips", developerChips)
         .put("yearChips", yearChips)
+        .put("launchableOnly", launchableOnly)
         .put("platformChips", platformChips)
         .put("collectionRails", collectionRails)
         .put("deckStatusPill", deckStatusPill)
@@ -158,6 +164,7 @@ data class BrowseChrome(
             genreChips = true,
             developerChips = true,
             yearChips = true,
+            launchableOnly = true,
             platformChips = true,
             collectionRails = true,
             deckStatusPill = true,
@@ -180,6 +187,7 @@ data class BrowseChrome(
                 genreChips = o.optBoolean("genreChips", false),
                 developerChips = o.optBoolean("developerChips", false),
                 yearChips = o.optBoolean("yearChips", false),
+                launchableOnly = o.optBoolean("launchableOnly", false),
                 platformChips = o.optBoolean("platformChips", true),
                 collectionRails = o.optBoolean("collectionRails", true),
                 deckStatusPill = o.optBoolean("deckStatusPill", false),

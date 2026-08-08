@@ -49,6 +49,16 @@ object SessionMath {
     }
 
     /**
+     * Stamp [key] as last-played at [nowMs] without accruing playtime.
+     * Blank key or non-positive [nowMs] → unchanged. Used by "Mark as played".
+     */
+    fun stampLastPlayed(stats: PlayStats, key: String, nowMs: Long): PlayStats {
+        val k = key.trim()
+        if (k.isEmpty() || nowMs <= 0L) return stats
+        return stats.copy(lastLaunchedMs = stats.lastLaunchedMs + (k to nowMs))
+    }
+
+    /**
      * Drop last-launch + playtime for [key]. Missing key is a no-op.
      * Does not touch favorites, collections, or dock/grid pins.
      */

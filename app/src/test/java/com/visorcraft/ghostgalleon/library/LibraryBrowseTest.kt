@@ -593,6 +593,37 @@ class LibraryBrowseTest {
     }
 
     @Test
+    fun `filterByLaunchablePlatforms and launchablePlatformIds`() {
+        val ids = LibraryBrowse.launchablePlatformIds(
+            mapOf(
+                "snes" to listOf("com.retroarch", "com.other"),
+                "nds" to listOf("com.melon"),
+                "psp" to listOf("com.ppsspp"),
+            ),
+            installedPackages = setOf("com.retroarch", "com.ppsspp"),
+        )
+        assertEquals(setOf("snes", "psp"), ids)
+        val filtered = LibraryBrowse.filterByLaunchablePlatforms(
+            library,
+            setOf("snes"),
+        )
+        assertEquals(listOf("Zelda", "Mario"), filtered.map { it.name })
+        assertEquals(
+            library,
+            LibraryBrowse.filterByLaunchablePlatforms(library, null),
+        )
+        assertTrue(
+            LibraryBrowse.filterByLaunchablePlatforms(library, emptySet()).isEmpty(),
+        )
+        val gated = LibraryBrowse.browseRoms(
+            library,
+            LibraryBrowse.BrowseQuery(),
+            launchablePlatformIds = setOf("3ds"),
+        )
+        assertEquals(listOf("Pokemon"), gated.map { it.name })
+    }
+
+    @Test
     fun `year decade parse filter and counts`() {
         assertEquals(1991, LibraryBrowse.parseYear("1991"))
         assertEquals(2017, LibraryBrowse.parseYear("© 2017 Nintendo"))

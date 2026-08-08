@@ -79,6 +79,15 @@ class PlayStatsTest {
     }
 
     @Test
+    fun `stampLastPlayed records last launch without playtime`() {
+        val stamped = SessionMath.stampLastPlayed(PlayStats.EMPTY, "rom:x", 1_000L)
+        assertEquals(1_000L, stamped.lastLaunchedMs["rom:x"])
+        assertTrue(stamped.totalPlaytimeMs.isEmpty())
+        assertEquals(PlayStats.EMPTY, SessionMath.stampLastPlayed(PlayStats.EMPTY, "  ", 1L))
+        assertEquals(PlayStats.EMPTY, SessionMath.stampLastPlayed(PlayStats.EMPTY, "k", 0L))
+    }
+
+    @Test
     fun `hasStats and clearStats drop launch and playtime only`() {
         val stats = PlayStats(
             lastLaunchedMs = mapOf("a" to 10L, "b" to 20L),

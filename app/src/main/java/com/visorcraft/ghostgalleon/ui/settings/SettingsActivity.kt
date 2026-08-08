@@ -1407,6 +1407,10 @@ class SettingsActivity : AppCompatActivity() {
         chromeFlag("Genre chips", chrome.genreChips) { c, v -> c.copy(genreChips = v) }
         chromeFlag("Developer chips", chrome.developerChips) { c, v -> c.copy(developerChips = v) }
         chromeFlag("Year decade chips", chrome.yearChips) { c, v -> c.copy(yearChips = v) }
+        chromeFlag(
+            "Only launchable ROMs (player installed)",
+            chrome.launchableOnly,
+        ) { c, v -> c.copy(launchableOnly = v) }
         chromeFlag("Platform chips", chrome.platformChips) { c, v -> c.copy(platformChips = v) }
         chromeFlag("Collection rails", chrome.collectionRails) { c, v -> c.copy(collectionRails = v) }
         chromeFlag(
