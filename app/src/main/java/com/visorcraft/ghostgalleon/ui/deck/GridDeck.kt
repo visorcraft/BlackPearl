@@ -1187,7 +1187,10 @@ class GridDeck(
                     isFolder && key != null -> removeFolderSlot(slot, key)
                     else -> updateGridSlots(GridSlots.remove(settings.gridSlots, slot), slot)
                 }
-                SlotMenu.Choice.CANCEL, SlotMenu.Choice.ADD_TO_GRID -> {}
+                SlotMenu.Choice.CANCEL,
+                SlotMenu.Choice.ADD_TO_GRID,
+                SlotMenu.Choice.REMOVE_FROM_COLLECTION,
+                -> {}
             }
         }
         slotMenu = menu

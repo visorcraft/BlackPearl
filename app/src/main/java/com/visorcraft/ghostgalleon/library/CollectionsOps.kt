@@ -121,6 +121,34 @@ object CollectionsOps {
         return c
     }
 
+    /** Remove every key from a named collection (drops the rail when emptied). */
+    fun bulkRemoveFromCollection(
+        collections: Map<String, List<String>>,
+        name: String,
+        keys: List<String>,
+    ): Map<String, List<String>> {
+        val n = name.trim()
+        if (n.isEmpty() || keys.isEmpty()) return collections
+        var c = collections
+        keys.filter { it.isNotBlank() }.forEach { k ->
+            c = removeFromCollection(c, n, k)
+        }
+        return c
+    }
+
+    /**
+     * Active collection rail name for remove actions: named COLLECTION mode,
+     * or the Favorites mirror when browsing Favorites.
+     */
+    fun activeCollectionName(modeName: String, collectionName: String?): String? {
+        val mode = modeName.trim().uppercase()
+        return when (mode) {
+            "COLLECTION" -> collectionName?.trim()?.takeIf { it.isNotEmpty() }
+            "FAVORITES" -> "Favorites"
+            else -> null
+        }
+    }
+
     /**
      * Add [key] to [name], creating the collection when missing. Returns the
      * updated map and whether the key was newly inserted (false if blank,

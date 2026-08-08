@@ -85,4 +85,31 @@ class CollectionsOpsTest {
         assertFalse(CollectionsOps.isUserCollection("favorites"))
         assertFalse(CollectionsOps.isUserCollection("  "))
     }
+
+    @Test
+    fun `bulkRemoveFromCollection removes members and drops empty`() {
+        val c0 = mapOf("RPGs" to listOf("a", "b", "c"), "Keep" to listOf("x"))
+        val c1 = CollectionsOps.bulkRemoveFromCollection(c0, "RPGs", listOf("b", "a"))
+        assertEquals(listOf("c"), c1["RPGs"])
+        assertEquals(listOf("x"), c1["Keep"])
+        val c2 = CollectionsOps.bulkRemoveFromCollection(c1, "RPGs", listOf("c", "missing"))
+        assertFalse(c2.containsKey("RPGs"))
+        assertEquals(listOf("x"), c2["Keep"])
+    }
+
+    @Test
+    fun `bulkRemoveFromCollection blank name or keys is identity`() {
+        val c = mapOf("X" to listOf("a"))
+        assertEquals(c, CollectionsOps.bulkRemoveFromCollection(c, "  ", listOf("a")))
+        assertEquals(c, CollectionsOps.bulkRemoveFromCollection(c, "X", emptyList()))
+    }
+
+    @Test
+    fun `activeCollectionName maps COLLECTION and FAVORITES`() {
+        assertEquals("RPGs", CollectionsOps.activeCollectionName("COLLECTION", "RPGs"))
+        assertEquals(null, CollectionsOps.activeCollectionName("COLLECTION", "  "))
+        assertEquals("Favorites", CollectionsOps.activeCollectionName("FAVORITES", null))
+        assertEquals(null, CollectionsOps.activeCollectionName("ALL", "RPGs"))
+        assertEquals(null, CollectionsOps.activeCollectionName("MOST_PLAYED", null))
+    }
 }

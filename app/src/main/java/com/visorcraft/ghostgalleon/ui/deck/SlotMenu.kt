@@ -35,6 +35,7 @@ class SlotMenu(
         SET_ART("Set artwork"),
         ADD_TO_GRID("Add to grid"),
         ADD_TO_COLLECTION("Add to collection…"),
+        REMOVE_FROM_COLLECTION("Remove from collection"),
         HIDE("Hide from library"),
         NEW_FOLDER("New folder"),
         ADD_MEMBER("Add member"),

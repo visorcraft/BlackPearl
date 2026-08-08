@@ -725,33 +725,39 @@ class GameDeck(
         val romCount = state.multiSelectKeys.count {
             com.visorcraft.ghostgalleon.settings.SlotKey.isRom(it)
         }
-        val labels = arrayOf(
+        val activeCol = activeCollectionName()
+        val labels = mutableListOf(
             "Favorite selected ($n)",
             "Pin selected to grid ($n)",
             "Add to collection…",
             "Hide selected ROMs ($romCount)",
-            "Clear selection",
-            "Cancel select mode",
         )
+        if (activeCol != null) {
+            labels.add("Remove from $activeCol ($n)")
+        }
+        labels.add("Clear selection")
+        labels.add("Cancel select mode")
         android.app.AlertDialog.Builder(activity)
             .setTitle("Bulk actions")
-            .setItems(labels) { _, which ->
-                when (which) {
-                    0 -> {
+            .setItems(labels.toTypedArray()) { _, which ->
+                val label = labels[which]
+                when {
+                    label.startsWith("Favorite selected") -> {
                         val fav = com.visorcraft.ghostgalleon.library.MultiSelectOps.bulkFavorite(
                             settings.favorites, state.multiSelectKeys, add = true)
                         app().updateSettings(settings.copy(favorites = fav))
                         state.clearMultiSelect()
                     }
-                    1 -> {
+                    label.startsWith("Pin selected") -> {
                         val slots = com.visorcraft.ghostgalleon.library.MultiSelectOps.bulkPinToGrid(
                             settings.gridSlots, state.multiSelectKeys)
                         app().updateSettings(settings.copy(gridSlots = slots))
                         state.clearMultiSelect()
                         Toast.makeText(activity, "Pinned to grid", Toast.LENGTH_SHORT).show()
                     }
-                    2 -> promptAddToCollection(state.multiSelectKeys.toList(), clearMulti = true)
-                    3 -> {
+                    label.startsWith("Add to collection") ->
+                        promptAddToCollection(state.multiSelectKeys.toList(), clearMulti = true)
+                    label.startsWith("Hide selected") -> {
                         val (hidden, added) =
                             com.visorcraft.ghostgalleon.library.MultiSelectOps.bulkHideRoms(
                                 settings.hiddenRomIds, state.multiSelectKeys,
@@ -772,8 +778,15 @@ class GameDeck(
                             ).show()
                         }
                     }
-                    4 -> state.setMultiSelectKeys(emptySet())
-                    5 -> state.clearMultiSelect()
+                    label.startsWith("Remove from") && activeCol != null -> {
+                        removeFromCollection(
+                            activeCol,
+                            state.multiSelectKeys.toList(),
+                            clearMulti = true,
+                        )
+                    }
+                    label == "Clear selection" -> state.setMultiSelectKeys(emptySet())
+                    label == "Cancel select mode" -> state.clearMultiSelect()
                 }
             }
             .setNegativeButton("Close", null)
@@ -1062,12 +1075,57 @@ class GameDeck(
         Toast.makeText(activity, "Hidden: ${rom.name}", Toast.LENGTH_SHORT).show()
     }
 
+    /** Named collection rail under browse, or Favorites when Fav is selected. */
+    private fun activeCollectionName(): String? =
+        CollectionsOps.activeCollectionName(
+            state.libraryBrowse.mode.name,
+            state.libraryBrowse.collectionName,
+        )
+
+    /**
+     * Drop [keys] from [name]. Favorites also clears the favorites set.
+     * Leaves the collection filter when the rail is deleted (emptied).
+     */
+    private fun removeFromCollection(
+        name: String,
+        keys: List<String>,
+        clearMulti: Boolean = false,
+    ) {
+        if (keys.isEmpty()) {
+            Toast.makeText(activity, "Nothing selected", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val n = name.trim()
+        val cols = CollectionsOps.bulkRemoveFromCollection(settings.collections, n, keys)
+        val favs = if (n.equals("Favorites", ignoreCase = true)) {
+            CollectionsOps.bulkRemoveFavorites(settings.favorites, keys)
+        } else {
+            settings.favorites
+        }
+        app().updateSettings(settings.copy(favorites = favs, collections = cols))
+        if (clearMulti) state.clearMultiSelect()
+        // Emptied user collection is dropped by bulkRemove — leave the filter.
+        val stillThere = n.equals("Favorites", ignoreCase = true) || n in cols
+        if (!stillThere &&
+            state.libraryBrowse.mode == LibraryBrowse.Mode.COLLECTION &&
+            state.libraryBrowse.collectionName == n
+        ) {
+            state.setLibraryBrowse(LibraryBrowse.BrowseQuery(), force = true)
+        }
+        val label = if (keys.size == 1) "Removed from $n" else "Removed ${keys.size} from $n"
+        Toast.makeText(activity, label, Toast.LENGTH_SHORT).show()
+    }
+
     private fun openEntryMenu(entry: CarouselEntry) {
         val key = entry.key
         val fav = key in settings.favorites
+        val activeCol = activeCollectionName()
         val choices = buildList {
             add(if (fav) SlotMenu.Choice.UNFAVORITE else SlotMenu.Choice.FAVORITE)
             add(SlotMenu.Choice.ADD_TO_COLLECTION)
+            if (activeCol != null) {
+                add(SlotMenu.Choice.REMOVE_FROM_COLLECTION)
+            }
             if (entry.rom != null) {
                 add(SlotMenu.Choice.OPEN_WITH)
                 add(SlotMenu.Choice.PLAYER)
@@ -1082,6 +1140,8 @@ class GameDeck(
             when (choice) {
                 SlotMenu.Choice.FAVORITE, SlotMenu.Choice.UNFAVORITE -> toggleFavorite(key)
                 SlotMenu.Choice.ADD_TO_COLLECTION -> promptAddToCollection(listOf(key))
+                SlotMenu.Choice.REMOVE_FROM_COLLECTION ->
+                    activeCol?.let { removeFromCollection(it, listOf(key)) }
                 SlotMenu.Choice.OPEN_WITH -> openWithMenu(entry)
                 SlotMenu.Choice.PLAYER -> entry.rom?.let { showPlayerProfileMenu(it) }
                 SlotMenu.Choice.SET_ART -> entry.rom?.let { setArtOverride(it) }
