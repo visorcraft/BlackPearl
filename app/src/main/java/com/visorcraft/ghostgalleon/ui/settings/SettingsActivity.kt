@@ -1408,7 +1408,10 @@ class SettingsActivity : AppCompatActivity() {
         chromeFlag("Year decade chips", chrome.yearChips) { c, v -> c.copy(yearChips = v) }
         chromeFlag("Platform chips", chrome.platformChips) { c, v -> c.copy(platformChips = v) }
         chromeFlag("Collection rails", chrome.collectionRails) { c, v -> c.copy(collectionRails = v) }
-        chromeFlag("Deck clock / battery", chrome.deckStatusPill) { c, v -> c.copy(deckStatusPill = v) }
+        chromeFlag(
+            "Clock / battery (time & charge)",
+            chrome.deckStatusPill,
+        ) { c, v -> c.copy(deckStatusPill = v) }
         chromeFlag(
             "Quick Panel browse (Fav/rails)",
             chrome.quickPanelBrowse,

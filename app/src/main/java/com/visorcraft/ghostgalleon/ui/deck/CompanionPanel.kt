@@ -982,14 +982,17 @@ object CompanionPanel {
             ).apply { bottomMargin = dp(12) })
         }
 
-        // Status pill, top-right (shared builder; large type for companion).
-        val pillRow = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.END
+        // Status pill (time + battery), top-right. Same Browse chrome flag as
+        // Grid/Game overlays — off under Minimal so lower/upper hero stays clean.
+        if (settings.browseChrome.deckStatusPill) {
+            val pillRow = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.END
+            }
+            pillRow.addView(StatusPill.build(context, compact = false))
+            content.addView(pillRow, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
-        pillRow.addView(StatusPill.build(context, compact = false))
-        content.addView(pillRow, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
         // Hero area.
         val selected = state.selectedKey

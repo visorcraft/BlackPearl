@@ -37,7 +37,11 @@ data class BrowseChrome(
     val platformChips: Boolean = true,
     /** Named user collection chips (not Favorites). Default on if user created any. */
     val collectionRails: Boolean = true,
-    /** Clock/battery overlay on Grid/Game decks (not companion hero pill). */
+    /**
+     * Clock / battery (time & charge). When on: compact overlay on Grid/Game
+     * decks and the larger pill on the companion hero. Off by default so
+     * dual-screen chrome stays minimal (Sugar bottom/top either role).
+     */
     val deckStatusPill: Boolean = false,
     /**
      * Quick Panel browse shortcuts beyond Continue: Random, Top, Fav, Games,
