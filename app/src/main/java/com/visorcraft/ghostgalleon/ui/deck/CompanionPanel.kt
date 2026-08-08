@@ -42,6 +42,7 @@ import com.visorcraft.ghostgalleon.rom.PlatformTile
 import com.visorcraft.ghostgalleon.rom.Platforms
 import com.visorcraft.ghostgalleon.rom.RomEntry
 import com.visorcraft.ghostgalleon.rom.RomProfiles
+import com.visorcraft.ghostgalleon.rom.SelectionStrip
 import com.visorcraft.ghostgalleon.settings.CompanionRole
 import com.visorcraft.ghostgalleon.settings.CompanionRoleResolve
 import com.visorcraft.ghostgalleon.settings.Settings
@@ -64,8 +65,16 @@ object CompanionPanel {
     private const val TAG_HERO_SHOT = "hero_shot"
     private const val TAG_HERO_VIDEO = "hero_video"
     private const val TAG_HERO_BANNER = "hero_banner"
-    private const val TAG_PANEL_ROOT = "panel_root"
+    /** Visible so PRIMARY TOP_STRIP paths can detect a hero panel in the tree. */
+    const val TAG_PANEL_ROOT = "panel_root"
+    /**
+     * Marker on the compact single-display selection strip. Presence means
+     * [updateSelection] must use the strip layout (not full dual hero).
+     */
+    const val TAG_TOP_STRIP = "top_strip"
     private const val TAG_ROLE_CHIPS = "role_chips"
+    private const val TAG_STRIP_ART_HOST = "strip_art_host"
+    private const val TAG_STRIP_DETAIL = "strip_detail"
 
     // Layered depth background: a vertical gradient lifting to #FF202028 in
     // the center band, plus a huge soft radial glow behind the hero icon
@@ -144,6 +153,10 @@ object CompanionPanel {
         roms: List<RomEntry>,
         settings: Settings,
     ): Boolean {
+        // Compact TOP_STRIP path: always selection-context, never full dual roles.
+        if (view.findViewWithTag<View>(TAG_TOP_STRIP) != null) {
+            return updateTopStrip(view, context, state, library, roms, settings)
+        }
         val rom = selectedRom(state.selectedKey, roms)
         if (rom != null) {
             // In-place only when the hero is already in ROM shape (banner
@@ -461,6 +474,255 @@ object CompanionPanel {
                 }
             }
         }
+    }
+
+    /**
+     * Compact selection hero for single-display TOP_STRIP. Always HERO /
+     * selection context (ignores companionRole PERF_HUD / PINNED_APP).
+     * Horizontal: art (fixed dp) + name / platform / player / RA — all
+     * content fits inside [SelectionStrip.STRIP_HEIGHT_DP].
+     */
+    fun buildTopStrip(
+        activity: AppCompatActivity,
+        state: DeckState,
+        library: AppLibrary,
+        roms: List<RomEntry>,
+        settings: Settings,
+    ): View {
+        val context: Context = activity
+        val density = context.resources.displayMetrics.density
+        fun dp(value: Int) = (value * density).toInt()
+        val app = activity.application as GhostGalleonApp
+        val model = resolveStripModel(state, library, roms, settings, app)
+
+        val root = FrameLayout(context).apply {
+            tag = TAG_TOP_STRIP
+            clipChildren = true
+            clipToPadding = true
+        }
+        val row = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            tag = TAG_PANEL_ROOT
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+            background = panelBackground(
+                context,
+                model.platformId?.let { PlatformLook.accentColor(it) }
+                    ?: settings.accentColor,
+            )
+        }
+
+        // Art host: square; holds ImageView (app) or platform tile (ROM).
+        val artSize = dp(SelectionStrip.ART_SIZE_DP)
+        val artHost = FrameLayout(context).apply {
+            tag = TAG_STRIP_ART_HOST
+        }
+        bindStripArt(artHost, context, state, library, roms, settings, app, artSize)
+        row.addView(artHost, LinearLayout.LayoutParams(artSize, artSize).apply {
+            marginEnd = dp(12)
+        })
+
+        val texts = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        texts.addView(TextView(context).apply {
+            tag = TAG_HERO_NAME
+            text = model.title
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
+            setTextColor(Color.WHITE)
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+        }, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+        ))
+        texts.addView(TextView(context).apply {
+            tag = TAG_HERO_SUB
+            text = model.subtitle
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            setTextColor(0xCCFFFFFF.toInt())
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+        }, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+        ).apply { topMargin = dp(2) })
+        texts.addView(TextView(context).apply {
+            tag = TAG_STRIP_DETAIL
+            text = model.detail.orEmpty()
+            visibility = if (model.detail != null) View.VISIBLE else View.GONE
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            setTextColor(0x99FFFFFF.toInt())
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+        }, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+        ).apply { topMargin = dp(2) })
+        texts.addView(TextView(context).apply {
+            tag = TAG_HERO_RA
+            text = model.raLine.orEmpty()
+            visibility = if (model.raLine != null) View.VISIBLE else View.GONE
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            setTextColor((settings.accentColor and 0x00FFFFFF) or (0xBB shl 24))
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+        }, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+        ).apply { topMargin = dp(2) })
+
+        row.addView(texts, LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f,
+        ))
+        root.addView(row, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT,
+        ))
+
+        // Kick live RA for ROM selection (same as full hero).
+        if (model.isRom) {
+            val rom = selectedRom(state.selectedKey, roms)
+            if (rom != null) app.requestRaProgress(rom.id, rom.name, rom.platformId)
+        }
+        return root
+    }
+
+    private fun resolveStripModel(
+        state: DeckState,
+        library: AppLibrary,
+        roms: List<RomEntry>,
+        settings: Settings,
+        app: GhostGalleonApp,
+    ): SelectionStrip.Model {
+        val rom = selectedRom(state.selectedKey, roms)
+        if (rom != null) {
+            val pmInstalled = { pkg: String ->
+                runCatching {
+                    app.packageManager.getPackageInfo(pkg, 0)
+                    true
+                }.getOrDefault(false)
+            }
+            val preferred = RomProfiles.preferredPlayerId(
+                rom.id,
+                settings.romProfiles,
+                settings.defaultPlayers[rom.platformId],
+            )
+            return SelectionStrip.forRom(
+                rom = rom,
+                preferredPlayerId = preferred,
+                installed = pmInstalled,
+                playMeta = romMetaLine(settings, SlotKey.rom(rom.id))
+                    .takeUnless { it.isBlank() },
+                raProgress = app.raProgressFor(rom.id),
+                hasRaCredentials = !settings.raApiKey.isNullOrBlank(),
+            )
+        }
+        val entry = library.visible(settings)
+            .firstOrNull { it.packageName == state.selectedKey }
+        if (entry != null) return SelectionStrip.forApp(entry.label)
+        return SelectionStrip.empty()
+    }
+
+    private fun bindStripArt(
+        host: FrameLayout,
+        context: Context,
+        state: DeckState,
+        library: AppLibrary,
+        roms: List<RomEntry>,
+        settings: Settings,
+        app: GhostGalleonApp,
+        artSize: Int,
+    ) {
+        host.removeAllViews()
+        val rom = selectedRom(state.selectedKey, roms)
+        if (rom != null) {
+            val tile = PlatformTile.view(context, rom.platformId, cornerRadiusDp = 12).apply {
+                tag = TAG_HERO_ICON
+            }
+            host.addView(tile, FrameLayout.LayoutParams(artSize, artSize))
+            // Prefer grid art when available; platform tile stays as placeholder.
+            val image = ImageView(context).apply {
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                visibility = View.GONE
+            }
+            host.addView(image, FrameLayout.LayoutParams(artSize, artSize))
+            val romId = rom.id
+            app.artCache.load(
+                context, rom,
+                maxDimension = artSize,
+                kind = ArtCache.ArtKind.GRID,
+                artOverrides = settings.artOverrides,
+                isStillValid = { image.isAttachedToWindow },
+            ) { bitmap ->
+                image.post {
+                    if (bitmap != null && image.isAttachedToWindow &&
+                        selectedRom(state.selectedKey, roms)?.id == romId
+                    ) {
+                        image.setImageBitmap(bitmap)
+                        image.visibility = View.VISIBLE
+                        tile.visibility = View.GONE
+                    }
+                }
+            }
+            return
+        }
+        val entry = library.visible(settings)
+            .firstOrNull { it.packageName == state.selectedKey }
+        val image = ImageView(context).apply {
+            tag = TAG_HERO_ICON
+            scaleType = ImageView.ScaleType.CENTER_INSIDE
+        }
+        host.addView(image, FrameLayout.LayoutParams(artSize, artSize))
+        if (entry != null) {
+            CustomIcon.bind(
+                image,
+                AppIconLoader(context.packageManager),
+                app.artCache,
+                settings,
+                entry.packageName,
+                artSize,
+            )
+        } else {
+            image.setImageResource(R.drawable.ic_brand_ship)
+        }
+    }
+
+    private fun updateTopStrip(
+        view: View,
+        context: Context,
+        state: DeckState,
+        library: AppLibrary,
+        roms: List<RomEntry>,
+        settings: Settings,
+    ): Boolean {
+        val name = view.findViewWithTag<TextView>(TAG_HERO_NAME) ?: return false
+        val sub = view.findViewWithTag<TextView>(TAG_HERO_SUB) ?: return false
+        val detail = view.findViewWithTag<TextView>(TAG_STRIP_DETAIL) ?: return false
+        val ra = view.findViewWithTag<TextView>(TAG_HERO_RA) ?: return false
+        val artHost = view.findViewWithTag<FrameLayout>(TAG_STRIP_ART_HOST) ?: return false
+        val app = context.applicationContext as GhostGalleonApp
+        val model = resolveStripModel(state, library, roms, settings, app)
+        name.text = model.title
+        sub.text = model.subtitle
+        detail.text = model.detail.orEmpty()
+        detail.visibility = if (model.detail != null) View.VISIBLE else View.GONE
+        ra.text = model.raLine.orEmpty()
+        ra.visibility = if (model.raLine != null) View.VISIBLE else View.GONE
+        view.findViewWithTag<View>(TAG_PANEL_ROOT)?.background = panelBackground(
+            context,
+            model.platformId?.let { PlatformLook.accentColor(it) } ?: settings.accentColor,
+        )
+        val density = context.resources.displayMetrics.density
+        val artSize = (SelectionStrip.ART_SIZE_DP * density).toInt()
+        bindStripArt(artHost, context, state, library, roms, settings, app, artSize)
+        if (model.isRom) {
+            val rom = selectedRom(state.selectedKey, roms)
+            if (rom != null) app.requestRaProgress(rom.id, rom.name, rom.platformId)
+        }
+        return true
     }
 
     fun build(

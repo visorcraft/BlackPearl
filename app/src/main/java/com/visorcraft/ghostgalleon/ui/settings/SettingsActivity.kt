@@ -1840,7 +1840,9 @@ class SettingsActivity : AppCompatActivity() {
         })
         libraryCard.addView(packRow, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))
-        // Bundled catalog: assets/platform_packs/*.json (multi-select + load all).
+        // Bundled catalog: assets/platform_packs/*.json (pick one, or Load all).
+        // Note: importing a single pack replaces the stored overlay; use
+        // "Load all" to merge every bundled pack into one overlay.
         val bundledCount = listBundledPackAssets().size
         val examplePackRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL

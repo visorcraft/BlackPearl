@@ -24,14 +24,17 @@ class PlatformPackCatalogTest {
     @Test
     fun `all bundled packs parse and merge without dropping builtins`() {
         val dir = packDir()
-        val files = dir.listFiles { f -> f.isFile && f.name.endsWith(".json") }
-            ?.sortedBy { it.name }
-            .orEmpty()
-        assertTrue("expected bundled packs, found none in $dir", files.isNotEmpty())
-        assertTrue(
-            "expected at least 4 packs (pcengine + 3 more), got ${files.size}",
-            files.size >= 4,
+        val expected = listOf(
+            "arcade-fbneo.json",
+            "dreamcast-flycast-ra.json",
+            "n64-extra.json",
+            "pcengine.json",
+            "psvita.json",
         )
+        val files = expected.map { File(dir, it) }
+        for (file in files) {
+            assertTrue("missing bundled pack ${file.name}", file.isFile)
+        }
         var merged = Platforms.BUILTIN
         for (file in files) {
             val parsed = PlatformPack.parse(file.readText())
@@ -41,18 +44,16 @@ class PlatformPackCatalogTest {
         // Builtins preserved.
         assertTrue(merged.any { it.id == "gb" })
         assertTrue(merged.any { it.id == "snes" })
-        // Catalog contents (by id) appear after merge.
         val ids = merged.map { it.id }.toSet()
-        assertTrue("pcengine missing after catalog merge", "pcengine" in ids ||
-            files.none { it.name.contains("pcengine") })
-        // At least one pack must add or extend something beyond pure builtins.
+        assertTrue("pcengine missing after catalog merge", "pcengine" in ids)
+        assertTrue("psvita missing after catalog merge", "psvita" in ids)
         assertTrue(merged.size >= Platforms.BUILTIN.size)
     }
 
     @Test
     fun `psvita pack adds psvita platform`() {
         val file = File(packDir(), "psvita.json")
-        if (!file.isFile) return // optional if renamed
+        assertTrue(file.isFile)
         val parsed = PlatformPack.parse(file.readText())
         assertNotNull(parsed)
         val merged = PlatformPack.merge(Platforms.BUILTIN, parsed!!.platforms)
@@ -62,7 +63,7 @@ class PlatformPackCatalogTest {
     @Test
     fun `n64-extra prepends alternate player`() {
         val file = File(packDir(), "n64-extra.json")
-        if (!file.isFile) return
+        assertTrue(file.isFile)
         val parsed = PlatformPack.parse(file.readText())
         assertNotNull(parsed)
         val merged = PlatformPack.merge(Platforms.BUILTIN, parsed!!.platforms)

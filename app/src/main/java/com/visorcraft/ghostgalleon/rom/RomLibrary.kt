@@ -29,6 +29,8 @@ class RomLibrary(private val file: File) {
             val entries: List<RomEntry>,
             /** Trees skipped because their fingerprint matched (incremental). */
             val skippedCleanTrees: Int = 0,
+            /** Granted trees that were unreadable this pass (prior entries retained). */
+            val retainedUnreadableTrees: Int = 0,
         ) : RescanResult()
 
         /** Every granted tree was unreadable (card ejected, provider
@@ -94,33 +96,40 @@ class RomLibrary(private val file: File) {
     ) {
         val appContext = context.applicationContext
         SCAN_EXECUTOR.execute {
-            val priorFp = loadFingerprints()
-            val (result, newFp) = rescanBlockingWithFingerprints(
-                treeUris = settings.romTreeUris,
-                prior = load(),
-                isReadable = { isTreeReadable(appContext, it) },
-                treeFor = { uriString ->
-                    SafDocumentTree(appContext, Uri.parse(uriString)) to
-                        (StoragePaths.treeRootName(uriString) ?: "")
-                },
-                priorFingerprints = priorFp,
-                force = force,
-                // Pure meta fingerprint (count+basenames): one SAF walk, then
-                // skip expensive RomScanner.scan when unchanged. quickMeta
-                // walk-skip is available for injectors that can probe without
-                // a full DocumentTree; production uses a single walk here.
-                fingerprintOf = { TreeFingerprint.ofFilesMeta(it) },
-                readText = { uriString ->
-                    runCatching {
-                        appContext.contentResolver.openInputStream(Uri.parse(uriString))
-                            ?.bufferedReader()
-                            ?.use { it.readText() }
-                    }.getOrNull()
-                },
-            )
-            if (result is RescanResult.Success) {
-                save(result.entries)
-                saveFingerprints(newFp)
+            val result = try {
+                val priorFp = loadFingerprints()
+                val (scanResult, newFp) = rescanBlockingWithFingerprints(
+                    treeUris = settings.romTreeUris,
+                    prior = load(),
+                    isReadable = { isTreeReadable(appContext, it) },
+                    treeFor = { uriString ->
+                        SafDocumentTree(appContext, Uri.parse(uriString)) to
+                            (StoragePaths.treeRootName(uriString) ?: "")
+                    },
+                    priorFingerprints = priorFp,
+                    force = force,
+                    // Pure meta fingerprint (count+basenames): one SAF walk, then
+                    // skip expensive RomScanner.scan when unchanged. quickMeta
+                    // walk-skip is available for injectors that can probe without
+                    // a full DocumentTree; production uses a single walk here.
+                    fingerprintOf = { TreeFingerprint.ofFilesMeta(it) },
+                    readText = { uriString ->
+                        runCatching {
+                            appContext.contentResolver.openInputStream(Uri.parse(uriString))
+                                ?.bufferedReader()
+                                ?.use { it.readText() }
+                        }.getOrNull()
+                    },
+                )
+                if (scanResult is RescanResult.Success) {
+                    save(scanResult.entries)
+                    saveFingerprints(newFp)
+                }
+                scanResult
+            } catch (_: Exception) {
+                // Fail soft: leave library untouched, report unreadable so
+                // callers clear in-flight flags and can retry on next resume.
+                RescanResult.Unreadable
             }
             Handler(Looper.getMainLooper()).post { onDone(result) }
         }
@@ -290,6 +299,7 @@ class RomLibrary(private val file: File) {
             val success = RescanResult.Success(
                 entries = SwitchDedupe.apply(merged),
                 skippedCleanTrees = cleanTrees.size,
+                retainedUnreadableTrees = skippedUnreadable.size,
             )
             return success to newFingerprints
         }

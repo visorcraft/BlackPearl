@@ -279,23 +279,30 @@ class GhostGalleonApp : Application() {
      * Background RA fetch for [romId] when credentials are set. Uses cache
      * immediately; network updates overwrite + persist. Failures are silent.
      */
-    fun requestRaProgress(romId: String, titleHint: String?) {
+    fun requestRaProgress(romId: String, titleHint: String?, platformId: String? = null) {
         val user = settings.raUsername?.trim().orEmpty()
         val key = settings.raApiKey?.trim().orEmpty()
         if (user.isEmpty() || key.isEmpty()) return
         val id = romId.trim()
         if (id.isEmpty()) return
-        // Debounce: skip if already have non-empty cache and a fetch is in flight.
+        // Skip only while a fetch for this ROM is already in flight.
         if (id in raFetchInFlight) return
         raFetchInFlight = raFetchInFlight + id
         val cachedGameId = raProgressByRomId[id]?.gameId
+        val platform = platformId
+            ?: romEntries.firstOrNull { it.id == id }?.platformId
         RA_IO.execute {
-            val progress = RaFetcher.fetchProgress(
-                username = user,
-                apiKey = key,
-                gameId = cachedGameId,
-                titleHint = titleHint,
-            )
+            val progress = try {
+                RaFetcher.fetchProgress(
+                    username = user,
+                    apiKey = key,
+                    gameId = cachedGameId,
+                    titleHint = titleHint,
+                    platformId = platform,
+                )
+            } catch (_: Exception) {
+                RaProgress()
+            }
             Handler(Looper.getMainLooper()).post {
                 raFetchInFlight = raFetchInFlight - id
                 if (!progress.isEmpty) putRaProgress(id, progress)
@@ -327,7 +334,7 @@ class GhostGalleonApp : Application() {
                 hadSuccessfulScan = true
                 lastHadUnreadableTree = RemountPolicy.nextHadUnreadableFlag(
                     allUnreadable = false,
-                    retainedUnreadableTreeCount = 0,
+                    retainedUnreadableTreeCount = result.retainedUnreadableTrees,
                 )
             }
             RomLibrary.RescanResult.Unreadable -> {
@@ -359,20 +366,24 @@ class GhostGalleonApp : Application() {
         lastQuietRescanUptimeMs = now
         quietRescanInFlight = true
         val beforeCount = romEntries.size
-        romLibrary.rescan(context.applicationContext, settings, force = false) { result ->
-            quietRescanInFlight = false
-            noteRescanOutcome(result)
-            if (result is RomLibrary.RescanResult.Success) {
-                publishRomEntries(result.entries)
-                // Only toast when we recovered from empty after remount.
-                if (beforeCount == 0 && result.entries.isNotEmpty()) {
-                    android.widget.Toast.makeText(
-                        context.applicationContext,
-                        "Library restored (${result.entries.size} ROMs)",
-                        android.widget.Toast.LENGTH_SHORT,
-                    ).show()
+        try {
+            romLibrary.rescan(context.applicationContext, settings, force = false) { result ->
+                quietRescanInFlight = false
+                noteRescanOutcome(result)
+                if (result is RomLibrary.RescanResult.Success) {
+                    publishRomEntries(result.entries)
+                    // Only toast when we recovered from empty after remount.
+                    if (beforeCount == 0 && result.entries.isNotEmpty()) {
+                        android.widget.Toast.makeText(
+                            context.applicationContext,
+                            "Library restored (${result.entries.size} ROMs)",
+                            android.widget.Toast.LENGTH_SHORT,
+                        ).show()
+                    }
                 }
             }
+        } catch (_: Exception) {
+            quietRescanInFlight = false
         }
     }
 

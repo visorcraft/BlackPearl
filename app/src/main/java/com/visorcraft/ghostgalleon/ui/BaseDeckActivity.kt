@@ -73,15 +73,23 @@ abstract class BaseDeckActivity : AppCompatActivity() {
         if (deckState.lastChange == DeckState.Change.SELECTION && ::currentDeck.isInitialized) {
             val role = DisplayRole.roleFor(display?.displayId ?: 0, deckState)
             val content = findViewById<ViewGroup>(android.R.id.content)
+            // updateSelection returns false when structure must rebuild (e.g.
+            // ROM↔app). Never treat deck-only success as enough when a hero
+            // strip is present and failed to update — that leaves a stale TOP_STRIP.
+            val stripPresent = content != null &&
+                content.findViewWithTag<View>(CompanionPanel.TAG_TOP_STRIP) != null
             val stripUpdated = content != null && content.childCount > 0 &&
                 CompanionPanel.updateSelection(
                     content, this, deckState, appLibrary, app.romEntries, settings)
             val updated = when (role) {
                 DisplayRole.PRIMARY -> {
-                    // Update deck selection; also refresh TOP_STRIP hero when present.
                     val deckOk = currentDeck.updateSelection()
                     requestRaForSelection()
-                    deckOk || stripUpdated
+                    when {
+                        stripPresent && !stripUpdated -> false
+                        stripPresent -> deckOk && stripUpdated
+                        else -> deckOk
+                    }
                 }
                 DisplayRole.COMPANION -> stripUpdated
             }
@@ -405,12 +413,16 @@ abstract class BaseDeckActivity : AppCompatActivity() {
             return deckView
         }
         val density = dm.density
-        val stripHeight = (200 * density).toInt().coerceAtMost(dm.heightPixels / 3)
+        // Compact strip: art + 3 text lines; never the full dual CompanionPanel
+        // (whose banner alone is heightPixels*2/5 and would clip name/play).
+        val stripHeight = (
+            com.visorcraft.ghostgalleon.rom.SelectionStrip.STRIP_HEIGHT_DP * density
+            ).toInt()
         val column = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.BLACK)
         }
-        val strip = CompanionPanel.build(
+        val strip = CompanionPanel.buildTopStrip(
             this, deckState, appLibrary, app.romEntries, settings,
         )
         column.addView(
