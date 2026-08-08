@@ -38,9 +38,17 @@ class MainActivity : BaseDeckActivity() {
     // intentional exit while NOT home — which exit-cascades through
     // onDestroy and never resumes — is not undone here.
     private fun healCompanionIfMissing() {
-        if (app.liveCompanion() == null && isHomeRole()) {
-            launchCompanionIfPresent()
-        }
+        if (!isHomeRole()) return
+        val topo = app.refreshDisplayConfig(debounce = true)
+        if (topo.mode != SurfaceMode.DUAL) return
+        val target = topo.secondaryHomeDisplayId
+            ?: topo.allIds.firstOrNull { it != (display?.displayId ?: -1) }
+            ?: return
+        val live = app.liveCompanions().filter { !it.isFinishing }
+        // Already healthy on the secondary panel — do not re-launch (that
+        // multiplies SINGLE_INSTANCE thrash with system SECONDARY_HOME).
+        if (live.any { it.display?.displayId == target }) return
+        launchCompanionIfPresent()
     }
 
     private fun launchCompanionIfPresent() {
