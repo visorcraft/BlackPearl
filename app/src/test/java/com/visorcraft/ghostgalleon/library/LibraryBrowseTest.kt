@@ -304,4 +304,24 @@ class LibraryBrowseTest {
             LibraryBrowse.filterGameApps(items) { it.game }.map { it.name },
         )
     }
+
+    @Test
+    fun `topPlayedKey returns highest positive playtime`() {
+        val play = mapOf("a" to 10L, "b" to 50L, "c" to 0L)
+        assertEquals("b", LibraryBrowse.topPlayedKey(play))
+        assertEquals(null, LibraryBrowse.topPlayedKey(emptyMap()))
+        assertEquals(null, LibraryBrowse.topPlayedKey(mapOf("x" to 0L)))
+    }
+
+    @Test
+    fun `railQuery wraps mode for Quick Panel`() {
+        assertEquals(
+            LibraryBrowse.Mode.GAMES,
+            LibraryBrowse.railQuery(LibraryBrowse.Mode.GAMES).mode,
+        )
+        assertEquals(
+            LibraryBrowse.Mode.FAVORITES,
+            LibraryBrowse.railQuery(LibraryBrowse.Mode.FAVORITES).mode,
+        )
+    }
 }

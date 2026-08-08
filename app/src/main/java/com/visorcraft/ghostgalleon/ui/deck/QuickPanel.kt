@@ -25,9 +25,9 @@ import com.visorcraft.ghostgalleon.ui.settings.SettingsActivity
 
 /**
  * Full-screen dim (~80%) overlay with a chip grid (Wi‑Fi, Bluetooth,
- * Display, Settings, Continue, Random, Top, Theme, Controller lab, Close).
- * Layout is 4 columns; incomplete last row is fine. D-pad + A navigate /
- * activate; B / Close dismisses.
+ * Display, Settings, Continue, Random, Top, Fav, Games, Installed, Theme,
+ * Controller lab, Close). Layout is 4 columns; incomplete last row is fine.
+ * D-pad + A navigate / activate; B / Close dismisses.
  */
 class QuickPanel(
     private val activity: AppCompatActivity,
@@ -102,6 +102,18 @@ class QuickPanel(
             },
             Cell("Top") {
                 openTopPlayed()
+                onClose()
+            },
+            Cell("Fav") {
+                openGameRail(LibraryBrowse.Mode.FAVORITES, "Favorites")
+                onClose()
+            },
+            Cell("Games") {
+                openGameRail(LibraryBrowse.Mode.GAMES, "Games")
+                onClose()
+            },
+            Cell("Installed") {
+                openGameRail(LibraryBrowse.Mode.RECENTLY_INSTALLED, "Installed")
                 onClose()
             },
             Cell("Theme") { cycleTheme(app) },
@@ -251,26 +263,31 @@ class QuickPanel(
     }
 
     /**
-     * Jump into Game Mode on the Most Played rail so Top is reachable from
-     * Grid Mode via Select → Quick Panel without hunting chips.
+     * Jump into Game Mode on a named browse rail so Fav / Games / Installed /
+     * Top are reachable from Grid Mode via Select → Quick Panel.
+     */
+    private fun openGameRail(
+        mode: LibraryBrowse.Mode,
+        toast: String,
+        selectKey: String? = null,
+    ) {
+        state.setMode(com.visorcraft.ghostgalleon.state.UIMode.GAME)
+        state.setLibraryBrowse(LibraryBrowse.railQuery(mode), force = true)
+        if (selectKey != null) state.select(selectKey, force = true)
+        Toast.makeText(activity, toast, Toast.LENGTH_SHORT).show()
+    }
+
+    /**
+     * Most Played rail + select the top title when playtime exists.
      */
     private fun openTopPlayed() {
-        state.setMode(com.visorcraft.ghostgalleon.state.UIMode.GAME)
-        state.setLibraryBrowse(
-            LibraryBrowse.BrowseQuery(mode = LibraryBrowse.Mode.MOST_PLAYED),
-            force = true,
-        )
         val live = (activity.application as GhostGalleonApp).settings
-        val top = LibraryBrowse.orderByPlaytime(
-            live.playtimeMs.filter { it.value > 0L }.keys.toList(),
-            live.playtimeMs,
-        ).firstOrNull()
-        if (top != null) {
-            state.select(top, force = true)
-            Toast.makeText(activity, "Top played", Toast.LENGTH_SHORT).show()
-        } else {
-            Toast.makeText(activity, "No playtime yet", Toast.LENGTH_SHORT).show()
-        }
+        val top = LibraryBrowse.topPlayedKey(live.playtimeMs)
+        openGameRail(
+            LibraryBrowse.Mode.MOST_PLAYED,
+            if (top != null) "Top played" else "No playtime yet",
+            selectKey = top,
+        )
     }
 
     private fun cycleTheme(app: GhostGalleonApp) {

@@ -220,6 +220,20 @@ object LibraryBrowse {
     }
 
     /**
+     * Highest playtime key (positive only), or null when none. Used by Quick
+     * Panel → Top to jump selection after switching to the Most Played rail.
+     */
+    fun topPlayedKey(playtimeMs: Map<String, Long>): String? {
+        val keys = playtimeMs.filter { it.value > 0L }.keys.toList()
+        if (keys.isEmpty()) return null
+        return orderByPlaytime(keys, playtimeMs).firstOrNull()
+    }
+
+    /** Browse query for a Game Mode rail (Quick Panel shortcuts). */
+    fun railQuery(mode: Mode): BrowseQuery =
+        BrowseQuery(mode = mode)
+
+    /**
      * A–Z letter bucket for a display label: first significant character
      * uppercased into A–Z, or '#' for empty / non-letter (digits, symbols).
      * Used by the Game Mode letter jump strip under A–Z / New rails.
