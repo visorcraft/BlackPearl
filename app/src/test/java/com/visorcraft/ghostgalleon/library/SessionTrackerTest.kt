@@ -139,4 +139,22 @@ class MultiSelectOpsTest {
         assertEquals(hidden, again)
         assertEquals(0, added2)
     }
+
+    @Test
+    fun `bulkUnpinFromDock and dockedCountInSelection`() {
+        val dock = listOf("a", "b", "c", null, null, null, null, null, null)
+        assertEquals(
+            2,
+            MultiSelectOps.dockedCountInSelection(dock, setOf("a", "c", "x", "  ")),
+        )
+        assertEquals(0, MultiSelectOps.dockedCountInSelection(dock, emptySet()))
+        assertEquals(0, MultiSelectOps.dockedCountInSelection(emptyList(), setOf("a")))
+        val (next, removed) = MultiSelectOps.bulkUnpinFromDock(dock, setOf("b", "x", "a"))
+        assertEquals(2, removed)
+        assertEquals(listOf("c"), com.visorcraft.ghostgalleon.settings.DockSlots.filled(next))
+        val (again, n2) = MultiSelectOps.bulkUnpinFromDock(next, setOf("a", "b"))
+        assertEquals(0, n2)
+        assertEquals(com.visorcraft.ghostgalleon.settings.DockSlots.filled(next),
+            com.visorcraft.ghostgalleon.settings.DockSlots.filled(again))
+    }
 }

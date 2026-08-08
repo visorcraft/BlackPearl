@@ -171,6 +171,36 @@ object MultiSelectOps {
         )
 
     /**
+     * How many of [selected] are currently pinned on the dock (bulk Unpin
+     * label). Blank keys ignored.
+     */
+    fun dockedCountInSelection(
+        dockSlots: List<String?>,
+        selected: Set<String>,
+    ): Int {
+        if (selected.isEmpty()) return 0
+        val filled = com.visorcraft.ghostgalleon.settings.DockSlots.filled(dockSlots).toSet()
+        if (filled.isEmpty()) return 0
+        return selected.count { k ->
+            val t = k.trim()
+            t.isNotEmpty() && t in filled
+        }
+    }
+
+    /**
+     * Unpin every selected key that is on the dock. Returns updated slots and
+     * how many keys were removed. Pure; host-tested.
+     */
+    fun bulkUnpinFromDock(
+        dockSlots: List<String?>,
+        selected: Set<String>,
+    ): Pair<List<String?>, Int> =
+        com.visorcraft.ghostgalleon.settings.DockSlots.unpinKeys(
+            dockSlots,
+            selected.toList(),
+        )
+
+    /**
      * Hide ROM entry ids from selected slot keys (package keys ignored).
      * Returns the updated [hiddenRomIds] set and how many ROMs were newly hidden.
      */

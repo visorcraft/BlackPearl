@@ -1140,6 +1140,8 @@ class GameDeck(
             live.lastLaunchedMs,
             state.multiSelectKeys,
         )
+        val dockedInSel = com.visorcraft.ghostgalleon.library.MultiSelectOps
+            .dockedCountInSelection(live.dockSlots, state.multiSelectKeys)
         val labels = mutableListOf(
             "Select all on rail (${railKeys.size})",
             "Invert selection on rail",
@@ -1150,6 +1152,9 @@ class GameDeck(
         }
         labels.add("Pin selected to grid ($n)")
         labels.add("Pin selected to dock ($n)")
+        if (dockedInSel > 0) {
+            labels.add("Unpin from dock ($dockedInSel)")
+        }
         labels.add("Add to collection…")
         labels.add("Hide selected ROMs ($romCount)")
         if (unplayedInSel > 0) {
@@ -1219,6 +1224,22 @@ class GameDeck(
                             if (added > 0) "Pinned $added to dock" else "Dock full or already pinned",
                             Toast.LENGTH_SHORT,
                         ).show()
+                    }
+                    label.startsWith("Unpin from dock") -> {
+                        val (dock, removed) =
+                            com.visorcraft.ghostgalleon.library.MultiSelectOps.bulkUnpinFromDock(
+                                app().settings.dockSlots, state.multiSelectKeys)
+                        if (removed == 0) {
+                            Toast.makeText(activity, "None on dock", Toast.LENGTH_SHORT).show()
+                        } else {
+                            app().updateSettings(app().settings.copy(dockSlots = dock))
+                            state.clearMultiSelect()
+                            Toast.makeText(
+                                activity,
+                                "Unpinned $removed from dock",
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                        }
                     }
                     label.startsWith("Add to collection") ->
                         promptAddToCollection(state.multiSelectKeys.toList(), clearMulti = true)
