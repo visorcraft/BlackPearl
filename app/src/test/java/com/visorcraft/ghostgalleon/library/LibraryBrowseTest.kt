@@ -828,6 +828,24 @@ class LibraryBrowseTest {
     }
 
     @Test
+    fun `recentHistory aliases continueHistory`() {
+        val last = mapOf("a" to 30L, "b" to 10L, "c" to 20L)
+        val available = listOf("a", "b", "c")
+        assertEquals(
+            LibraryBrowse.continueHistory(available, last),
+            LibraryBrowse.recentHistory(available, last),
+        )
+        assertEquals(
+            LibraryBrowse.continueHistory(available, last, limit = 2),
+            LibraryBrowse.recentHistory(available, last, limit = 2),
+        )
+        assertEquals(
+            LibraryBrowse.continueHistoryLine("Zelda", 30L, 90_000L),
+            LibraryBrowse.recentHistoryLine("Zelda", 30L, 90_000L),
+        )
+    }
+
+    @Test
     fun `continueHistory caps newest first and history line`() {
         val last = mapOf(
             "a" to 10L,

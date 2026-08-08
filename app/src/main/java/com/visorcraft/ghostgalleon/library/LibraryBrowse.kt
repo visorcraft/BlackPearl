@@ -901,8 +901,8 @@ object LibraryBrowse {
     }
 
     /**
-     * Long-press Continue history: newest-first candidates capped at [limit]
-     * (default 20). Empty when nothing is continue-able.
+     * Long-press Continue / Recent history: newest-first candidates capped at
+     * [limit] (default 20). Empty when nothing is continue-able.
      */
     fun continueHistory(
         availableKeys: List<String>,
@@ -918,6 +918,16 @@ object LibraryBrowse {
     }
 
     /**
+     * Long-press Recent chip history — same pool as [continueHistory]
+     * (newest first). Alias for call-site clarity. Pure; host-tested.
+     */
+    fun recentHistory(
+        availableKeys: List<String>,
+        lastLaunchedMs: Map<String, Long>,
+        limit: Int = 20,
+    ): List<String> = continueHistory(availableKeys, lastLaunchedMs, limit)
+
+    /**
      * Dialog/chip line for a history row: `"Zelda · 2h ago"` when last-played
      * is known, otherwise just [label]. Pure; host-tested.
      */
@@ -930,6 +940,13 @@ object LibraryBrowse {
         val ago = SessionMath.formatLastPlayed(lastMs, nowMs) ?: return name
         return "$name · $ago"
     }
+
+    /** Alias of [continueHistoryLine] for Recent picker rows. */
+    fun recentHistoryLine(
+        label: String,
+        lastMs: Long?,
+        nowMs: Long,
+    ): String = continueHistoryLine(label, lastMs, nowMs)
 
     /**
      * Swipe the Resume chip. [delta] +1 = older (typically fling left),

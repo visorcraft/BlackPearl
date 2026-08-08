@@ -732,6 +732,8 @@ class GameDeck(
                     LibraryBrowse.recentCount(settings.lastLaunchedMs),
                 ),
                 q.mode == LibraryBrowse.Mode.RECENT,
+                // Long-press: jump list of recent titles (same depth as Continue).
+                onLongClick = { showRecentHistory() },
             ) {
                 setBrowse(q.copy(
                     mode = LibraryBrowse.Mode.RECENT,
@@ -1512,8 +1514,8 @@ class GameDeck(
         return key.substringAfterLast(':').ifBlank { key }
     }
 
-    /** Jump to [key] on the Recent rail (Continue / history picker). */
-    private fun jumpToContinue(key: String, live: Settings) {
+    /** Jump to [key] on the Recent rail (Continue / Recent history pickers). */
+    private fun jumpToContinue(key: String, live: Settings, toastPrefix: String = "Continue") {
         // RECENT rail puts cont at the front after rebuild. force on both
         // sides so re-tapping still scrolls/rebinds when already selected.
         state.setLibraryBrowse(
@@ -1522,7 +1524,39 @@ class GameDeck(
         )
         state.select(key, force = true)
         val label = continueLabel(key, live)
-        Toast.makeText(activity, "Continue: $label", Toast.LENGTH_SHORT).show()
+        Toast.makeText(activity, "$toastPrefix: $label", Toast.LENGTH_SHORT).show()
+    }
+
+    /**
+     * Shared long-press history picker for Continue / Recent chips.
+     * Newest-first, capped; no always-on chrome.
+     */
+    private fun showLaunchHistoryPicker(
+        title: String,
+        emptyToast: String,
+        toastPrefix: String,
+        keysOf: (available: List<String>, last: Map<String, Long>) -> List<String>,
+        lineOf: (label: String, lastMs: Long?, nowMs: Long) -> String,
+    ) {
+        val live = app().settings
+        val nowMs = System.currentTimeMillis()
+        val keys = keysOf(availableContinueKeys(live), live.lastLaunchedMs)
+        if (keys.isEmpty()) {
+            Toast.makeText(activity, emptyToast, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val lines = keys.map { k ->
+            lineOf(continueLabel(k, live), live.lastLaunchedMs[k], nowMs)
+        }.toTypedArray()
+        android.app.AlertDialog.Builder(activity)
+            .setTitle(title)
+            .setItems(lines) { _, which ->
+                if (which in keys.indices) {
+                    jumpToContinue(keys[which], app().settings, toastPrefix = toastPrefix)
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     /**
@@ -1530,32 +1564,31 @@ class GameDeck(
      * No new always-on chrome — depth of the core Continue chip.
      */
     private fun showContinueHistory() {
-        val live = app().settings
-        val nowMs = System.currentTimeMillis()
-        val keys = LibraryBrowse.continueHistory(
-            availableContinueKeys(live),
-            live.lastLaunchedMs,
+        showLaunchHistoryPicker(
+            title = "Continue",
+            emptyToast = "Nothing to continue",
+            toastPrefix = "Continue",
+            keysOf = { available, last ->
+                LibraryBrowse.continueHistory(available, last)
+            },
+            lineOf = LibraryBrowse::continueHistoryLine,
         )
-        if (keys.isEmpty()) {
-            Toast.makeText(activity, "Nothing to continue", Toast.LENGTH_SHORT).show()
-            return
-        }
-        val lines = keys.map { k ->
-            LibraryBrowse.continueHistoryLine(
-                continueLabel(k, live),
-                live.lastLaunchedMs[k],
-                nowMs,
-            )
-        }.toTypedArray()
-        android.app.AlertDialog.Builder(activity)
-            .setTitle("Continue")
-            .setItems(lines) { _, which ->
-                if (which in keys.indices) {
-                    jumpToContinue(keys[which], app().settings)
-                }
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
+    }
+
+    /**
+     * Long-press Recent: same history pool as Continue, titled Recent.
+     * Depth of the core Recent chip — no always-on chrome.
+     */
+    private fun showRecentHistory() {
+        showLaunchHistoryPicker(
+            title = "Recent",
+            emptyToast = "Nothing recent yet",
+            toastPrefix = "Recent",
+            keysOf = { available, last ->
+                LibraryBrowse.recentHistory(available, last)
+            },
+            lineOf = LibraryBrowse::recentHistoryLine,
+        )
     }
 
     /**
