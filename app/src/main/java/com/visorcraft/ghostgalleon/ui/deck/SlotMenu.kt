@@ -42,6 +42,7 @@ class SlotMenu(
         MOVE_DOWN("Move down"),
         MOVE_TO_END("Move to end"),
         DETAILS("Details…"),
+        COPY_TITLE("Copy title"),
         CLEAR_PLAY_STATS("Clear play stats"),
         APP_INFO("App info"),
         HIDE("Hide from library"),

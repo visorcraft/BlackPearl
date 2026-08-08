@@ -62,6 +62,26 @@ object SessionMath {
         )
     }
 
+    /** How many of [keys] currently have play stats (bulk clear label). */
+    fun statsCountInSelection(stats: PlayStats, keys: Collection<String>): Int =
+        keys.count { hasStats(stats, it) }
+
+    /**
+     * Clear last-launch + playtime for every key in [keys]. Returns updated
+     * stats and how many keys actually had stats removed.
+     */
+    fun bulkClearStats(stats: PlayStats, keys: Collection<String>): Pair<PlayStats, Int> {
+        var next = stats
+        var cleared = 0
+        keys.forEach { key ->
+            if (hasStats(next, key)) {
+                next = clearStats(next, key)
+                cleared++
+            }
+        }
+        return next to cleared
+    }
+
     /** Human-readable playtime for hero labels (e.g. "12m", "1h 5m"). */
     fun formatPlaytime(ms: Long): String {
         if (ms <= 0L) return "0m"

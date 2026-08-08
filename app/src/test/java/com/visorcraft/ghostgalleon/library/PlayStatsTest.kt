@@ -96,4 +96,19 @@ class PlayStatsTest {
         // No-op when already empty
         assertEquals(cleared, SessionMath.clearStats(cleared, "a"))
     }
+
+    @Test
+    fun `bulkClearStats clears multiple keys`() {
+        val stats = PlayStats(
+            lastLaunchedMs = mapOf("a" to 10L, "b" to 20L, "c" to 30L),
+            totalPlaytimeMs = mapOf("a" to 100L, "c" to 200L),
+        )
+        assertEquals(2, SessionMath.statsCountInSelection(stats, listOf("a", "x", "c")))
+        val (next, n) = SessionMath.bulkClearStats(stats, listOf("a", "c", "missing"))
+        assertEquals(2, n)
+        assertFalse(SessionMath.hasStats(next, "a"))
+        assertFalse(SessionMath.hasStats(next, "c"))
+        assertTrue(SessionMath.hasStats(next, "b"))
+        assertEquals(mapOf("b" to 20L), next.lastLaunchedMs)
+    }
 }

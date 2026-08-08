@@ -967,8 +967,13 @@ class GameDeck(
             .favoriteCountInSelection(live.favorites, state.multiSelectKeys)
         val railKeys = entries.map { it.key }
         val activeCol = activeCollectionName()
+        val statsInSel = SessionMath.statsCountInSelection(
+            PlayStats(live.lastLaunchedMs, live.playtimeMs),
+            state.multiSelectKeys,
+        )
         val labels = mutableListOf(
             "Select all on rail (${railKeys.size})",
+            "Invert selection on rail",
             "Favorite selected ($n)",
         )
         if (favInSel > 0) {
@@ -978,6 +983,9 @@ class GameDeck(
         labels.add("Pin selected to dock ($n)")
         labels.add("Add to collection…")
         labels.add("Hide selected ROMs ($romCount)")
+        if (statsInSel > 0) {
+            labels.add("Clear play stats ($statsInSel)")
+        }
         if (activeCol != null) {
             labels.add("Remove from $activeCol ($n)")
         }
@@ -995,6 +1003,16 @@ class GameDeck(
                         Toast.makeText(
                             activity,
                             "Selected ${all.size}",
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                    }
+                    label.startsWith("Invert selection") -> {
+                        val inv = com.visorcraft.ghostgalleon.library.MultiSelectOps
+                            .invertSelectionOnRail(railKeys, state.multiSelectKeys)
+                        state.setMultiSelectKeys(inv)
+                        Toast.makeText(
+                            activity,
+                            "Selected ${inv.size}",
                             Toast.LENGTH_SHORT,
                         ).show()
                     }
@@ -1049,6 +1067,29 @@ class GameDeck(
                             Toast.makeText(
                                 activity,
                                 "Hidden $added ROM(s)",
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                        }
+                    }
+                    label.startsWith("Clear play stats") -> {
+                        val cur = app().settings
+                        val (next, cleared) = SessionMath.bulkClearStats(
+                            PlayStats(cur.lastLaunchedMs, cur.playtimeMs),
+                            state.multiSelectKeys,
+                        )
+                        if (cleared == 0) {
+                            Toast.makeText(activity, "No play stats", Toast.LENGTH_SHORT).show()
+                        } else {
+                            app().updateSettings(
+                                cur.copy(
+                                    lastLaunchedMs = next.lastLaunchedMs,
+                                    playtimeMs = next.totalPlaytimeMs,
+                                ),
+                            )
+                            state.clearMultiSelect()
+                            Toast.makeText(
+                                activity,
+                                "Cleared stats for $cleared",
                                 Toast.LENGTH_SHORT,
                             ).show()
                         }
@@ -1746,6 +1787,20 @@ class GameDeck(
             }
     }
 
+    private fun copyTitleToClipboard(title: String) {
+        val text = title.trim().ifEmpty { return }
+        val clipboard = activity.getSystemService(Context.CLIPBOARD_SERVICE)
+            as? android.content.ClipboardManager
+        if (clipboard == null) {
+            Toast.makeText(activity, "Clipboard unavailable", Toast.LENGTH_SHORT).show()
+            return
+        }
+        clipboard.setPrimaryClip(
+            android.content.ClipData.newPlainText("title", text),
+        )
+        Toast.makeText(activity, "Copied title", Toast.LENGTH_SHORT).show()
+    }
+
     private fun openEntryMenu(entry: CarouselEntry) {
         val key = entry.key
         val fav = key in settings.favorites
@@ -1758,6 +1813,7 @@ class GameDeck(
         )
         val choices = buildList {
             add(SlotMenu.Choice.DETAILS)
+            add(SlotMenu.Choice.COPY_TITLE)
             if (SessionMath.hasStats(liveStats, key)) {
                 add(SlotMenu.Choice.CLEAR_PLAY_STATS)
             }
@@ -1793,6 +1849,7 @@ class GameDeck(
             closeSlotMenu()
             when (choice) {
                 SlotMenu.Choice.DETAILS -> showDetails(entry)
+                SlotMenu.Choice.COPY_TITLE -> copyTitleToClipboard(entry.label)
                 SlotMenu.Choice.CLEAR_PLAY_STATS -> clearPlayStats(key)
                 SlotMenu.Choice.PIN_TO_DOCK -> pinToDock(key)
                 SlotMenu.Choice.UNPIN_FROM_DOCK -> unpinFromDock(key)

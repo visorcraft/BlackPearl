@@ -1105,6 +1105,7 @@ class GridDeck(
                 }
                 else -> {
                     add(SlotMenu.Choice.DETAILS)
+                    add(SlotMenu.Choice.COPY_TITLE)
                     if (key != null) {
                         val stats = com.visorcraft.ghostgalleon.library.PlayStats(
                             lastLaunchedMs = settings.lastLaunchedMs,
@@ -1144,6 +1145,9 @@ class GridDeck(
             closeSlotMenu()
             when (choice) {
                 SlotMenu.Choice.DETAILS -> key?.let { k -> showGridDetails(k) }
+                SlotMenu.Choice.COPY_TITLE -> key?.let { k ->
+                    copyGridTitleToClipboard(gridEntryLabel(k))
+                }
                 SlotMenu.Choice.CLEAR_PLAY_STATS -> key?.let { k -> clearGridPlayStats(k) }
                 SlotMenu.Choice.APP_INFO -> key?.let { k ->
                     if (!SlotKey.isRom(k) && !SlotKey.isFolder(k)) openAppInfo(k)
@@ -1242,6 +1246,20 @@ class GridDeck(
         return settings.customNames[key]
             ?: visibleByPkg[key]?.label
             ?: key.substringAfterLast(':').ifBlank { key }
+    }
+
+    private fun copyGridTitleToClipboard(title: String) {
+        val text = title.trim().ifEmpty { return }
+        val clipboard = activity.getSystemService(Context.CLIPBOARD_SERVICE)
+            as? android.content.ClipboardManager
+        if (clipboard == null) {
+            Toast.makeText(activity, "Clipboard unavailable", Toast.LENGTH_SHORT).show()
+            return
+        }
+        clipboard.setPrimaryClip(
+            android.content.ClipData.newPlainText("title", text),
+        )
+        Toast.makeText(activity, "Copied title", Toast.LENGTH_SHORT).show()
     }
 
     private fun clearGridPlayStats(key: String) {

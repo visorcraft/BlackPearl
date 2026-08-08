@@ -97,6 +97,27 @@ class MultiSelectOpsTest {
     }
 
     @Test
+    fun `invertSelectionOnRail flips within rail only`() {
+        val rail = listOf("a", "b", "c")
+        assertEquals(
+            setOf("b", "c"),
+            MultiSelectOps.invertSelectionOnRail(rail, setOf("a", "x")),
+        )
+        assertEquals(
+            setOf("a", "b", "c"),
+            MultiSelectOps.invertSelectionOnRail(rail, emptySet()),
+        )
+        assertEquals(
+            emptySet<String>(),
+            MultiSelectOps.invertSelectionOnRail(rail, setOf("a", "b", "c")),
+        )
+        assertEquals(
+            emptySet<String>(),
+            MultiSelectOps.invertSelectionOnRail(emptyList(), setOf("a")),
+        )
+    }
+
+    @Test
     fun `bulkPinToGrid fills empty slots`() {
         val slots = listOf<String?>(null, "keep", null)
         val next = MultiSelectOps.bulkPinToGrid(slots, setOf("x", "y"))

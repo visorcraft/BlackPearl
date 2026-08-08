@@ -121,6 +121,20 @@ object MultiSelectOps {
     fun clearSelection(): Set<String> = emptySet()
 
     /**
+     * Invert selection within the current rail: keys on [railKeys] that are
+     * not selected become selected; prior selection outside the rail is
+     * dropped. Empty rail → empty selection.
+     */
+    fun invertSelectionOnRail(
+        railKeys: List<String>,
+        selected: Set<String>,
+    ): Set<String> {
+        if (railKeys.isEmpty()) return emptySet()
+        val rail = railKeys.toSet()
+        return rail.filter { it !in selected }.toSet()
+    }
+
+    /**
      * How many of [selected] are currently in [favorites] (for bulk
      * Unfavorite affordance labels).
      */
