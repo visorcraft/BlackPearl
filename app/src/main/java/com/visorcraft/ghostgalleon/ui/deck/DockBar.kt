@@ -20,6 +20,7 @@ import com.visorcraft.ghostgalleon.rom.RomEntry
 import com.visorcraft.ghostgalleon.settings.DockSlots
 import com.visorcraft.ghostgalleon.settings.Settings
 import com.visorcraft.ghostgalleon.settings.SlotKey
+import com.visorcraft.ghostgalleon.ui.dp
 
 // The dock bar pinned at the bottom edge of BOTH launcher decks: a
 // wrap-content card bar (just wide enough for its visible slots, centered)
@@ -75,8 +76,6 @@ class DockBar(
 
     // [pageDots] is the grid deck's dot strip (null in game mode).
     fun build(context: Context, pageDots: LinearLayout?): View {
-        val density = context.resources.displayMetrics.density
-        fun dp(value: Int) = (value * density).toInt()
 
         // Slot frames sized from window metrics (LayoutMetrics clamps) so
         // a full dock always fits; not a fixed 2160×1080 table.
@@ -92,15 +91,15 @@ class DockBar(
         )
         val screenW = metrics.widthPixels
         slotSize = minOf(
-            dp(layout.suggestedDockSlotDp),
-            (screenW - dp(8) * 2) / DockSlots.CAPACITY - dp(12),
-        ).coerceAtLeast(dp(40))
+            context.dp(layout.suggestedDockSlotDp),
+            (screenW - context.dp(8) * 2) / DockSlots.CAPACITY - context.dp(12),
+        ).coerceAtLeast(context.dp(40))
 
         val bar = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
             background = TileBackgrounds.card(context)
-            setPadding(dp(8), dp(8), dp(8), dp(8))
+            setPadding(context.dp(8), context.dp(8), context.dp(8), context.dp(8))
         }
         // Transient move-mode hint (child 0, hidden by default); shown in
         // place of the slots/page dots while a tile is lifted.
@@ -126,11 +125,11 @@ class DockBar(
             populate(frame, index)
             slotFrames.add(frame)
             bar.addView(frame, LinearLayout.LayoutParams(slotSize, slotSize).apply {
-                marginStart = dp(6); marginEnd = dp(6)
+                marginStart = context.dp(6); marginEnd = context.dp(6)
             })
         }
         if (pageDots != null) {
-            pageDots.setPadding(dp(10), 0, 0, 0)
+            pageDots.setPadding(context.dp(10), 0, 0, 0)
             bar.addView(pageDots, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT))

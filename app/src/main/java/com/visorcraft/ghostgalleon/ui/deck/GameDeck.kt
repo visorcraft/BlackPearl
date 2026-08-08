@@ -7,7 +7,6 @@ import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
-import android.view.inputmethod.InputMethodManager
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -353,8 +352,9 @@ class GameDeck(
         )
     }
     private val nav get() = CarouselNavigation(entries.size)
+    private val dockMove = DockMoveState()
     private val dockNav get() = DockNavigation(
-        DockSlots.visibleCount(dockMoveWorking ?: settings.dockSlots), 0, 1)
+        DockSlots.visibleCount(dockMove.working ?: settings.dockSlots), 0, 1)
     private var recycler: RecyclerView? = null
     private var dockBar: DockBar? = null
     private var hintView: TextView? = null
@@ -362,14 +362,8 @@ class GameDeck(
     /** Letter-jump chips (A–Z / #) when ALPHA/UNPLAYED; repainted on selection. */
     private var letterChipViews: List<Pair<Char, TextView>> = emptyList()
 
-    // Modals (at most one at a time): dock slot menu, app picker.
     private var slotMenu: SlotMenu? = null
     private var picker: AppPicker? = null
-
-    // Dock move mode: a lifted dock tile swaps slots left/right until
-    // dropped (saved to settings) or cancelled (working copy discarded).
-    private var dockMoveIndex: Int? = null
-    private var dockMoveWorking: MutableList<String?>? = null
 
     private fun selectedIndex(): Int =
         entries.indexOfFirst { it.key == state.selectedKey }.coerceAtLeast(0)
@@ -487,7 +481,7 @@ class GameDeck(
         // NAV DOWN from the carousel focuses it, UP returns.
         val bar = DockBar(
             activity, settings, library, iconLoader, roms,
-            slots = { dockMoveWorking ?: settings.dockSlots },
+            slots = { dockMove.working ?: settings.dockSlots },
             onTap = ::onDockTap,
             onLongPress = ::onDockLongPress,
         )
@@ -542,8 +536,8 @@ class GameDeck(
         // Dock focus is a selection change too: repaint the dock ring (and
         // the lifted tile's pulse during a dock move) and switch the hint
         // bar between carousel and dock actions.
-        dockBar?.updateFocus(state.dockSlot, dockMoveIndex)
-        hintView?.text = if (dockMoveIndex != null) {
+        dockBar?.updateFocus(state.dockSlot, dockMove.index)
+        hintView?.text = if (dockMove.active) {
             HintBar.MOVE_TEXT
         } else {
             HintBar.textFor(state.dockSlot != null)
@@ -569,7 +563,7 @@ class GameDeck(
     override fun handleAction(action: Action): Boolean {
         slotMenu?.let { return it.handleAction(action) }
         picker?.let { return it.handleAction(action) }
-        dockMoveIndex?.let { return handleDockMoveAction(action, it) }
+        dockMove.index?.let { return handleDockMoveAction(action, it) }
         state.dockSlot?.let { return handleDockAction(action, it) }
         return when (action) {
             Action.CONFIRM -> {
@@ -2360,14 +2354,14 @@ class GameDeck(
     private fun onDockTap(index: Int) {
         val bar = dockBar ?: return
         when {
-            dockMoveIndex != null -> dropDockMove(tapSlot = index)
+            dockMove.active -> dropDockMove(tapSlot = index)
             bar.isBlank(index) -> openDockPicker(index)
             else -> bar.keyAt(index)?.let { launchSlotKey(activity, state, roms, it) }
         }
     }
 
     private fun onDockLongPress(index: Int) {
-        if (dockMoveIndex == null && dockBar?.isBlank(index) == false) {
+        if (!dockMove.active && dockBar?.isBlank(index) == false) {
             openDockSlotMenu(index)
         }
     }
@@ -2381,33 +2375,24 @@ class GameDeck(
             when (choice) {
                 SlotMenu.Choice.MOVE -> startDockMove(index)
                 SlotMenu.Choice.REMOVE -> {
-                    val next = DockSlots.remove(settings.dockSlots, index)
+                    val next = DockActions.removeAt(app(), index)
                     updateDockSlots(next, "Removed from dock")
-                    // Removal compacts and can shrink the visible row;
-                    // keep the dock focus on a rendered slot.
-                    state.dockSlot?.let { focused ->
-                        val last = DockSlots.visibleCount(next) - 1
-                        if (focused > last) state.focusDock(last)
-                    }
+                    DockActions.clampFocus(state.dockSlot, next)?.let { state.focusDock(it) }
                 }
                 else -> {}
             }
         }
         slotMenu = menu
-        rootView?.addView(menu.view, FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        DeckOverlays.attach(rootView, menu.view)
     }
 
     private fun closeSlotMenu() {
-        slotMenu?.let { rootView?.removeView(it.view) }
+        DeckOverlays.detach(rootView, slotMenu?.view)
         slotMenu = null
     }
 
     private fun startDockMove(index: Int) {
-        dockMoveIndex = index
-        dockMoveWorking = settings.dockSlots.toMutableList()
-        // The dock slots STAY visible during a dock move (they are the
-        // swap targets); the hint moves to the hint bar.
+        dockMove.start(index, settings.dockSlots)
         hintView?.text = HintBar.MOVE_TEXT
         state.focusDock(index)
         dockBar?.updateFocus(index, moving = index)
@@ -2418,67 +2403,38 @@ class GameDeck(
             Action.NAV_LEFT, Action.NAV_RIGHT -> {
                 val to = dockNav.move(from, action)
                 if (to != from) {
-                    val working = dockMoveWorking ?: return true
-                    val tmp = working[from]
-                    working[from] = working[to]
-                    working[to] = tmp
-                    dockMoveIndex = to
+                    val next = dockMove.swap(from, to) ?: return true
                     dockBar?.rebind()
-                    state.focusDock(to)
-                    dockBar?.updateFocus(to, moving = to)
+                    state.focusDock(next)
+                    dockBar?.updateFocus(next, moving = next)
                 }
             }
             Action.CONFIRM -> dropDockMove()
             Action.BACK -> cancelDockMove()
             else -> {}
         }
-        return true // dock move mode swallows every action
+        return true
     }
 
     private fun dropDockMove(tapSlot: Int? = null) {
-        val from = dockMoveIndex ?: return
-        val working = dockMoveWorking ?: return
-        var finalSlot = from
-        if (tapSlot != null && tapSlot in working.indices && tapSlot != from) {
-            val tmp = working[from]
-            working[from] = working[tapSlot]
-            working[tapSlot] = tmp
-            finalSlot = tapSlot
-        }
-        val slots = working.toList()
-        dockMoveIndex = null
-        dockMoveWorking = null
+        val result = dockMove.drop(tapSlot) ?: return
         hintView?.text = HintBar.textFor(state.dockSlot != null)
-        // Compact first: the working copy may park the tile on the visible
-        // "+" placeholder, which is not a real storage slot — focus the
-        // tile's post-compact position.
-        val compacted = DockSlots.compact(slots)
-        val droppedKey = slots.getOrNull(finalSlot)
-        updateDockSlots(compacted)
-        state.focusDock(
-            if (droppedKey != null) compacted.indexOf(droppedKey) else finalSlot)
+        updateDockSlots(result.compacted)
+        state.focusDock(result.focusIndex)
     }
 
     private fun cancelDockMove() {
-        dockMoveIndex = null
-        dockMoveWorking = null
+        dockMove.clear()
         hintView?.text = HintBar.textFor(state.dockSlot != null)
-        // Slots still show the discarded working copy: repopulate.
         dockBar?.rebind()
         dockBar?.updateFocus(state.dockSlot)
     }
 
-    // Dock-focused input: LEFT/RIGHT walk the slots, UP/BACK return to the
-    // carousel (the carousel selection was left untouched, so re-selecting
-    // its key just clears the dock focus), A launches or opens the picker.
     private fun handleDockAction(action: Action, dockIndex: Int): Boolean {
         when (action) {
             Action.NAV_LEFT, Action.NAV_RIGHT ->
                 state.focusDock(dockNav.move(dockIndex, action))
             Action.NAV_UP, Action.BACK ->
-                // Re-selecting the carousel key just clears the dock focus
-                // (select notifies when dockSlot was set, even for an
-                // unchanged key); the fallback covers an empty carousel.
                 state.select(entries.getOrNull(selectedIndex())?.key ?: state.selectedKey)
             Action.CONFIRM -> {
                 val bar = dockBar
@@ -2490,7 +2446,7 @@ class GameDeck(
             }
             else -> {}
         }
-        return true // dock focus swallows every action
+        return true
     }
 
     private fun openDockPicker(slot: Int) {
@@ -2503,37 +2459,21 @@ class GameDeck(
             title = "Add to dock",
             onPick = { key ->
                 closePicker()
-                val app = activity.application as GhostGalleonApp
-                updateDockSlots(DockSlots.fill(app.settings.dockSlots, slot, key))
+                updateDockSlots(DockActions.fill(app(), slot, key))
             },
             onHide = { packageName ->
                 closePicker()
-                hideApp(packageName)
+                DeckOverlays.hideApp(activity, packageName)
             },
             onClose = { closePicker() },
         )
         picker = appPicker
-        rootView?.addView(appPicker.view, FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-    }
-
-    // Hiding removes the app from the picker/all-apps lists only; dock and
-    // grid slots that already hold it keep the tile (still launchable).
-    private fun hideApp(packageName: String) {
-        val app = activity.application as GhostGalleonApp
-        app.updateSettings(app.settings.copy(
-            hiddenPackages = app.settings.hiddenPackages + packageName))
-        Toast.makeText(activity, "App hidden", Toast.LENGTH_SHORT).show()
+        DeckOverlays.attach(rootView, appPicker.view)
     }
 
     private fun closePicker() {
-        picker?.let {
-            rootView?.removeView(it.view)
-            rootView?.let { root ->
-                activity.getSystemService(InputMethodManager::class.java)
-                    ?.hideSoftInputFromWindow(root.windowToken, 0)
-            }
-        }
+        DeckOverlays.detach(rootView, picker?.view)
+        DeckOverlays.hideIme(activity, rootView)
         picker = null
     }
 

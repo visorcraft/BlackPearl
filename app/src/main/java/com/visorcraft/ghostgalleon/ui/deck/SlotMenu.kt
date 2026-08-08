@@ -8,6 +8,7 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.visorcraft.ghostgalleon.settings.Action
+import com.visorcraft.ghostgalleon.ui.dp
 
 // Small centered modal for a filled grid tile: Move / Pin to dock /
 // Remove / Cancel, plus Rename / Custom icon (and their Reset variants) for
@@ -58,8 +59,6 @@ class SlotMenu(
     private val rows = mutableListOf<TextView>()
 
     val view: View by lazy {
-        val density = context.resources.displayMetrics.density
-        fun dp(value: Int) = (value * density).toInt()
 
         val overlay = FrameLayout(context).apply {
             setBackgroundColor(0x99000000.toInt())
@@ -69,7 +68,7 @@ class SlotMenu(
         val card = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             background = TileBackgrounds.card(context)
-            setPadding(dp(16), dp(12), dp(16), dp(12))
+            setPadding(context.dp(16), context.dp(12), context.dp(16), context.dp(12))
         }
         choices.forEachIndexed { index, choice ->
             val row = TextView(context).apply {
@@ -77,13 +76,13 @@ class SlotMenu(
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
                 setTextColor(0xFFFFFFFF.toInt())
                 gravity = Gravity.CENTER
-                setPadding(dp(24), dp(12), dp(24), dp(12))
+                setPadding(context.dp(24), context.dp(12), context.dp(24), context.dp(12))
                 setOnClickListener { onChoice(choice) }
             }
             rows.add(row)
             card.addView(row, LinearLayout.LayoutParams(
-                dp(220), android.view.ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                topMargin = dp(4); bottomMargin = dp(4)
+                context.dp(220), android.view.ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                topMargin = context.dp(4); bottomMargin = context.dp(4)
             })
         }
         paintRows()

@@ -12,6 +12,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import com.visorcraft.ghostgalleon.ui.dp
 
 /**
  * Live gamepad/key probe for remapping verification. Shows last key code,
@@ -28,13 +29,11 @@ class ControllerLabActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         hideStatusBar(window)
-        val density = resources.displayMetrics.density
-        fun dp(v: Int) = (v * density).toInt()
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.BLACK)
-            setPadding(dp(24), dp(24), dp(24), dp(24))
+            setPadding(this.dp(24), this.dp(24), this.dp(24), this.dp(24))
         }
         root.addView(TextView(this).apply {
             text = "Controller Lab"
@@ -47,7 +46,7 @@ class ControllerLabActivity : AppCompatActivity() {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             setTextColor(0x99FFFFFF.toInt())
             gravity = Gravity.CENTER
-            setPadding(0, dp(8), 0, dp(16))
+            setPadding(0, this.dp(8), 0, this.dp(16))
         })
         keyLine = line(this, "Key: —")
         actionLine = line(this, "Action: —")
@@ -58,7 +57,7 @@ class ControllerLabActivity : AppCompatActivity() {
         log = TextView(this).apply {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
             setTextColor(0x88FFFFFF.toInt())
-            setPadding(0, dp(16), 0, 0)
+            setPadding(0, this.dp(16), 0, 0)
         }
         val scroll = ScrollView(this).apply {
             addView(log, ViewGroup.LayoutParams(

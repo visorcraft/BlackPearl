@@ -11,6 +11,7 @@ import android.view.View
 import android.widget.LinearLayout
 import android.widget.TextClock
 import android.widget.TextView
+import com.visorcraft.ghostgalleon.ui.dp
 
 /**
  * Compact battery + clock chrome for immersive decks (system status bar is
@@ -39,8 +40,6 @@ object StatusPill {
      * smaller type for overlay on the interactive deck.
      */
     fun build(context: Context, compact: Boolean = true): View {
-        val density = context.resources.displayMetrics.density
-        fun dp(v: Int) = (v * density).toInt()
         val textSp = if (compact) 13f else 20f
         val padH = if (compact) 12 else 20
         val padV = if (compact) 4 else 8
@@ -50,7 +49,7 @@ object StatusPill {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             background = TileBackgrounds.pill(context)
-            setPadding(dp(padH), dp(padV), dp(padH), dp(padV))
+            setPadding(context.dp(padH), context.dp(padV), context.dp(padH), context.dp(padV))
             tag = TAG
             contentDescription = "Status"
         }
@@ -63,7 +62,7 @@ object StatusPill {
                 contentDescription = "Battery $label"
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, textSp)
                 setTextColor(Color.WHITE)
-                setPadding(0, 0, dp(gap), 0)
+                setPadding(0, 0, context.dp(gap), 0)
             })
         }
         pill.addView(TextClock(context).apply {
@@ -79,15 +78,13 @@ object StatusPill {
 
     /** Overlay params: top-end with small margin (interactive decks). */
     fun overlayLayoutParams(context: Context): android.widget.FrameLayout.LayoutParams {
-        val density = context.resources.displayMetrics.density
-        fun dp(v: Int) = (v * density).toInt()
         return android.widget.FrameLayout.LayoutParams(
             android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
             android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
             Gravity.TOP or Gravity.END,
         ).apply {
-            topMargin = dp(8)
-            marginEnd = dp(12)
+            topMargin = context.dp(8)
+            marginEnd = context.dp(12)
         }
     }
 

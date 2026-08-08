@@ -22,6 +22,7 @@ import com.visorcraft.ghostgalleon.settings.ThemePack
 import com.visorcraft.ghostgalleon.state.DeckState
 import com.visorcraft.ghostgalleon.ui.ControllerLabActivity
 import com.visorcraft.ghostgalleon.ui.settings.SettingsActivity
+import com.visorcraft.ghostgalleon.ui.dp
 
 /**
  * Full-screen dim (~80%) overlay with a chip grid (Wi‑Fi, Bluetooth,
@@ -79,8 +80,6 @@ class QuickPanel(
 
     private fun build(): View {
         val context = activity
-        val density = context.resources.displayMetrics.density
-        fun dp(v: Int) = (v * density).toInt()
         val app = activity.application as GhostGalleonApp
         accent = app.settings.accentColor
 
@@ -142,7 +141,7 @@ class QuickPanel(
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             background = TileBackgrounds.card(context)
-            setPadding(dp(20), dp(20), dp(20), dp(20))
+            setPadding(context.dp(20), context.dp(20), context.dp(20), context.dp(20))
             isClickable = true
         }
 
@@ -151,7 +150,7 @@ class QuickPanel(
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
-            setPadding(0, 0, 0, dp(16))
+            setPadding(0, 0, 0, context.dp(16))
         })
 
         cells.chunked(columns).forEachIndexed { rowIndex, rowCells ->
@@ -165,7 +164,7 @@ class QuickPanel(
                     text = cell.label
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
                     gravity = Gravity.CENTER
-                    setPadding(dp(8), dp(16), dp(8), dp(16))
+                    setPadding(context.dp(8), context.dp(16), context.dp(8), context.dp(16))
                     setOnClickListener {
                         selection = index
                         paint()
@@ -173,15 +172,15 @@ class QuickPanel(
                     }
                 }
                 rowViews.add(btn)
-                row.addView(btn, LinearLayout.LayoutParams(0, dp(72), 1f).apply {
-                    if (colIndex > 0) marginStart = dp(8)
+                row.addView(btn, LinearLayout.LayoutParams(0, context.dp(72), 1f).apply {
+                    if (colIndex > 0) marginStart = context.dp(8)
                 })
             }
             sheet.addView(row, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT,
             ).apply {
-                if (rowIndex > 0) topMargin = dp(8)
+                if (rowIndex > 0) topMargin = context.dp(8)
             })
         }
 
@@ -191,8 +190,8 @@ class QuickPanel(
             ViewGroup.LayoutParams.WRAP_CONTENT,
             Gravity.CENTER,
         ).apply {
-            marginStart = dp(24)
-            marginEnd = dp(24)
+            marginStart = context.dp(24)
+            marginEnd = context.dp(24)
         })
         return root
     }

@@ -10,6 +10,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import com.visorcraft.ghostgalleon.settings.Action
+import com.visorcraft.ghostgalleon.ui.dp
 
 /**
  * Modal list of folder members. A launches the selected member; B closes.
@@ -29,8 +30,6 @@ class FolderPanel(
     private var memberKeys: MutableList<Pair<String, String>> = members.toMutableList()
 
     val view: View by lazy {
-        val density = context.resources.displayMetrics.density
-        fun dp(value: Int) = (value * density).toInt()
 
         val overlay = FrameLayout(context).apply {
             setBackgroundColor(0x99000000.toInt())
@@ -40,14 +39,14 @@ class FolderPanel(
         val card = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             background = TileBackgrounds.card(context)
-            setPadding(dp(16), dp(12), dp(16), dp(12))
+            setPadding(context.dp(16), context.dp(12), context.dp(16), context.dp(12))
         }
         card.addView(TextView(context).apply {
             text = title
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
             setTextColor(0xFFFFFFFF.toInt())
             gravity = Gravity.CENTER
-            setPadding(0, 0, 0, dp(8))
+            setPadding(0, 0, 0, context.dp(8))
         })
         if (memberKeys.isEmpty()) {
             card.addView(TextView(context).apply {
@@ -55,7 +54,7 @@ class FolderPanel(
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
                 setTextColor(0x99FFFFFF.toInt())
                 gravity = Gravity.CENTER
-                setPadding(dp(16), dp(20), dp(16), dp(20))
+                setPadding(context.dp(16), context.dp(20), context.dp(16), context.dp(20))
             })
         } else {
             val list = LinearLayout(context).apply {
@@ -67,7 +66,7 @@ class FolderPanel(
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
                     setTextColor(0xFFFFFFFF.toInt())
                     gravity = Gravity.CENTER_VERTICAL
-                    setPadding(dp(16), dp(12), dp(16), dp(12))
+                    setPadding(context.dp(16), context.dp(12), context.dp(16), context.dp(12))
                     setOnClickListener {
                         selection = index
                         paintRows()
@@ -85,8 +84,8 @@ class FolderPanel(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT,
                 ).apply {
-                    topMargin = dp(2)
-                    bottomMargin = dp(2)
+                    topMargin = context.dp(2)
+                    bottomMargin = context.dp(2)
                 })
             }
             paintRows()
@@ -95,7 +94,7 @@ class FolderPanel(
             }
             card.addView(scroll, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                dp(280),
+                context.dp(280),
             ))
         }
         card.addView(TextView(context).apply {
@@ -107,10 +106,10 @@ class FolderPanel(
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
             setTextColor(0x66FFFFFF.toInt())
             gravity = Gravity.CENTER
-            setPadding(0, dp(8), 0, 0)
+            setPadding(0, context.dp(8), 0, 0)
         })
         overlay.addView(card, FrameLayout.LayoutParams(
-            dp(300),
+            context.dp(300),
             ViewGroup.LayoutParams.WRAP_CONTENT,
             Gravity.CENTER,
         ))

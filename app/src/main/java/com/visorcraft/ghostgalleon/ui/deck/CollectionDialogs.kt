@@ -3,10 +3,10 @@ package com.visorcraft.ghostgalleon.ui.deck
 import android.app.AlertDialog
 import android.content.Context
 import android.widget.EditText
-import android.widget.Toast
 import com.visorcraft.ghostgalleon.GhostGalleonApp
 import com.visorcraft.ghostgalleon.library.CollectionsOps
 import com.visorcraft.ghostgalleon.library.LibraryBrowse
+import com.visorcraft.ghostgalleon.ui.toast
 
 /** Shared “Add to collection” picker for Grid and Game decks. */
 object CollectionDialogs {
@@ -18,7 +18,7 @@ object CollectionDialogs {
         onDone: (() -> Unit)? = null,
     ) {
         if (keys.isEmpty()) {
-            Toast.makeText(context, "Nothing selected", Toast.LENGTH_SHORT).show()
+            context.toast("Nothing selected")
             return
         }
         val live = app.settings
@@ -38,7 +38,7 @@ object CollectionDialogs {
                             cols = CollectionsOps.bulkAddToCollection(cols, name, keys)
                             app.updateSettings(app.settings.copy(collections = cols))
                             onDone?.invoke()
-                            Toast.makeText(context, "Added to $name", Toast.LENGTH_SHORT).show()
+                            context.toast("Added to $name")
                         }
                         .setNegativeButton("Cancel", null)
                         .show()
@@ -49,7 +49,7 @@ object CollectionDialogs {
                     )
                     app.updateSettings(app.settings.copy(collections = cols))
                     onDone?.invoke()
-                    Toast.makeText(context, "Added to $name", Toast.LENGTH_SHORT).show()
+                    context.toast("Added to $name")
                 }
             }
             .show()
