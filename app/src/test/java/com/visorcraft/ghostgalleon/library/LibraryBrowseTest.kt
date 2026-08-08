@@ -112,4 +112,45 @@ class LibraryBrowseTest {
         )
         assertEquals(listOf("alpha", "Zebra"), rails)
     }
+
+    @Test
+    fun `orderByPlaytime ranks positive times descending`() {
+        val keys = listOf("a", "b", "c", "d")
+        // Missing keys sort after explicit zeros (MIN_VALUE vs 0).
+        val play = mapOf("c" to 500L, "a" to 100L, "d" to 0L)
+        assertEquals(listOf("c", "a", "d", "b"), LibraryBrowse.orderByPlaytime(keys, play))
+    }
+
+    @Test
+    fun `browseRoms MOST_PLAYED orders by playtime and drops zero`() {
+        val play = mapOf(
+            SlotKey.rom("snes:Mario.rom") to 900L,
+            SlotKey.rom("snes:Zelda.rom") to 100L,
+            SlotKey.rom("switch:BotW.rom") to 0L,
+            SlotKey.rom("3ds:Pokemon.rom") to 400L,
+        )
+        val out = LibraryBrowse.browseRoms(
+            library,
+            LibraryBrowse.BrowseQuery(mode = LibraryBrowse.Mode.MOST_PLAYED),
+            playtimeMs = play,
+        )
+        assertEquals(listOf("Mario", "Pokemon", "Zelda"), out.map { it.name })
+    }
+
+    @Test
+    fun `browseRoms MOST_PLAYED respects platform filter`() {
+        val play = mapOf(
+            SlotKey.rom("snes:Mario.rom") to 50L,
+            SlotKey.rom("3ds:Pokemon.rom") to 999L,
+        )
+        val out = LibraryBrowse.browseRoms(
+            library,
+            LibraryBrowse.BrowseQuery(
+                mode = LibraryBrowse.Mode.MOST_PLAYED,
+                platformId = "snes",
+            ),
+            playtimeMs = play,
+        )
+        assertEquals(listOf("Mario"), out.map { it.name })
+    }
 }

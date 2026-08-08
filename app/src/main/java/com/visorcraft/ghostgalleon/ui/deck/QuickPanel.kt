@@ -23,9 +23,10 @@ import com.visorcraft.ghostgalleon.ui.ControllerLabActivity
 import com.visorcraft.ghostgalleon.ui.settings.SettingsActivity
 
 /**
- * Full-screen dim (~80%) overlay with a 2×4 chip grid (Wi‑Fi, Bluetooth,
- * Display, Ghost Settings, Continue, Theme cycle, Controller lab, Close).
- * D-pad + A navigate/activate; B / Close dismisses.
+ * Full-screen dim (~80%) overlay with a chip grid (Wi‑Fi, Bluetooth,
+ * Display, Settings, Continue, Random, Top, Theme, Controller lab, Close).
+ * Layout is 4 columns; incomplete last row is fine. D-pad + A navigate /
+ * activate; B / Close dismisses.
  */
 class QuickPanel(
     private val activity: AppCompatActivity,
@@ -92,6 +93,14 @@ class QuickPanel(
             },
             Cell("Continue") {
                 launchContinue(app)
+                onClose()
+            },
+            Cell("Random") {
+                launchRandom(app)
+                onClose()
+            },
+            Cell("Top") {
+                openTopPlayed()
                 onClose()
             },
             Cell("Theme") { cycleTheme(app) },
@@ -213,6 +222,48 @@ class QuickPanel(
         val idx = app.settings.gridSlots.indexOf(cont)
         if (idx >= 0) state.selectSlot(idx, cont) else state.select(cont)
         launchSlotKey(activity, state, roms, cont)
+    }
+
+    /** Pick a random curated app or visible ROM and launch it immediately. */
+    private fun launchRandom(app: GhostGalleonApp) {
+        val pool = buildList {
+            addAll(app.settings.gridSlots.filterNotNull())
+            addAll(app.settings.dockSlots.filterNotNull())
+            addAll(roms.filter { it.visibleInUi }.map { SlotKey.rom(it.id) })
+        }.distinct()
+        val key = LibraryBrowse.pickRandom(pool) { size ->
+            java.util.concurrent.ThreadLocalRandom.current().nextInt(size)
+        }
+        if (key == null) {
+            Toast.makeText(activity, "Library empty", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val idx = app.settings.gridSlots.indexOf(key)
+        if (idx >= 0) state.selectSlot(idx, key) else state.select(key, force = true)
+        launchSlotKey(activity, state, roms, key)
+    }
+
+    /**
+     * Jump into Game Mode on the Most Played rail so Top is reachable from
+     * Grid Mode via Select → Quick Panel without hunting chips.
+     */
+    private fun openTopPlayed() {
+        state.setMode(com.visorcraft.ghostgalleon.state.UIMode.GAME)
+        state.setLibraryBrowse(
+            LibraryBrowse.BrowseQuery(mode = LibraryBrowse.Mode.MOST_PLAYED),
+            force = true,
+        )
+        val live = (activity.application as GhostGalleonApp).settings
+        val top = LibraryBrowse.orderByPlaytime(
+            live.playtimeMs.filter { it.value > 0L }.keys.toList(),
+            live.playtimeMs,
+        ).firstOrNull()
+        if (top != null) {
+            state.select(top, force = true)
+            Toast.makeText(activity, "Top played", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(activity, "No playtime yet", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun cycleTheme(app: GhostGalleonApp) {

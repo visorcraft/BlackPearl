@@ -5,11 +5,11 @@ import com.visorcraft.ghostgalleon.settings.SlotKey
 
 /**
  * Pure library browse ops for Game Mode / pickers: platform filter, text
- * search, and recents ordering. Host-tested; no Android types.
+ * search, recents / most-played ordering. Host-tested; no Android types.
  */
 object LibraryBrowse {
 
-    enum class Mode { ALL, RECENT, FAVORITES, COLLECTION }
+    enum class Mode { ALL, RECENT, FAVORITES, COLLECTION, MOST_PLAYED }
 
     data class BrowseQuery(
         val mode: Mode = Mode.ALL,
@@ -50,8 +50,20 @@ object LibraryBrowse {
     }
 
     /**
-     * Full browse pipeline: mode → platform → text. Recents/favorites are
-     * applied by restricting to known keys first, then filter/search.
+     * Order keys by accumulated playtime descending. Keys with zero/missing
+     * playtime fall to the end, preserving relative input order among ties.
+     */
+    fun orderByPlaytime(keys: List<String>, playtimeMs: Map<String, Long>): List<String> {
+        return keys.withIndex().sortedWith(
+            compareByDescending<IndexedValue<String>> { playtimeMs[it.value] ?: Long.MIN_VALUE }
+                .thenBy { it.index },
+        ).map { it.value }
+    }
+
+    /**
+     * Full browse pipeline: mode → platform → text. Recents / most-played /
+     * favorites are applied by restricting to known keys first, then
+     * filter/search.
      */
     fun browseRoms(
         roms: List<RomEntry>,
@@ -59,6 +71,7 @@ object LibraryBrowse {
         lastLaunchedMs: Map<String, Long> = emptyMap(),
         favorites: Set<String> = emptySet(),
         collections: Map<String, List<String>> = emptyMap(),
+        playtimeMs: Map<String, Long> = emptyMap(),
     ): List<RomEntry> {
         val base = when (query.mode) {
             Mode.ALL -> roms.filter { it.visibleInUi }
@@ -67,6 +80,16 @@ object LibraryBrowse {
                     .associateBy { SlotKey.rom(it.id) }
                 val recentKeys = lastLaunchedMs.keys.filter { it in byKey }
                 orderByRecent(recentKeys, lastLaunchedMs).mapNotNull { byKey[it] }
+            }
+            Mode.MOST_PLAYED -> {
+                val byKey = roms.filter { it.visibleInUi }
+                    .associateBy { SlotKey.rom(it.id) }
+                // Only keys with positive playtime — empty Top rail when none.
+                val topKeys = playtimeMs
+                    .filter { (k, v) -> v > 0L && k in byKey }
+                    .keys
+                    .toList()
+                orderByPlaytime(topKeys, playtimeMs).mapNotNull { byKey[it] }
             }
             Mode.FAVORITES -> {
                 val favIds = favorites.mapNotNull { key ->

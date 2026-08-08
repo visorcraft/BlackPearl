@@ -55,8 +55,8 @@ class GameDeck(
     )
 
     // Curated apps (when browse mode is ALL and no platform filter/search),
-    // then browsed ROMs via LibraryBrowse (platform / search / recent / fav).
-    // Recent also interleaves recently launched apps (package keys).
+    // then browsed ROMs via LibraryBrowse (platform / search / recent / top /
+    // fav). Recent + Most Played interleave apps by the same ranking maps.
     private val entries: List<CarouselEntry> by lazy {
         val q = state.libraryBrowse
         val browsed = LibraryBrowse.browseRoms(
@@ -64,6 +64,7 @@ class GameDeck(
             lastLaunchedMs = settings.lastLaunchedMs,
             favorites = settings.favorites,
             collections = settings.collections,
+            playtimeMs = settings.playtimeMs,
         ).map {
             CarouselEntry(SlotKey.rom(it.id), it.name, null, it)
         }
@@ -99,6 +100,27 @@ class GameDeck(
                     settings.lastLaunchedMs[it.key] ?: 0L
                 }
             }
+            q.mode == LibraryBrowse.Mode.MOST_PLAYED &&
+                q.platformId == null && q.text.isBlank() -> {
+                val byPkg = library.curated(settings)
+                    .associateBy { it.packageName }
+                val appKeys = settings.playtimeMs
+                    .filter { (k, v) ->
+                        v > 0L && !SlotKey.isRom(k) && k in byPkg
+                    }
+                    .keys
+                    .toList()
+                val topApps = LibraryBrowse.orderByPlaytime(
+                    appKeys, settings.playtimeMs,
+                ).mapNotNull { pkg ->
+                    byPkg[pkg]?.let {
+                        CarouselEntry(it.packageName, it.label, it.packageName, null)
+                    }
+                }
+                (topApps + browsed).sortedByDescending {
+                    settings.playtimeMs[it.key] ?: 0L
+                }
+            }
             q.mode == LibraryBrowse.Mode.FAVORITES &&
                 q.platformId == null -> {
                 val favApps = library.curated(settings)
@@ -114,6 +136,21 @@ class GameDeck(
                 library.curated(settings).map {
                     CarouselEntry(it.packageName, it.label, it.packageName, null)
                 } + browsed
+            }
+            // Unified text search: include matching curated apps when there is
+            // no platform chip (platform chips are ROM-only).
+            q.text.isNotBlank() && q.platformId == null &&
+                q.mode != LibraryBrowse.Mode.COLLECTION -> {
+                val needle = q.text.trim()
+                val matchedApps = library.curated(settings)
+                    .filter {
+                        it.label.contains(needle, ignoreCase = true) ||
+                            it.packageName.contains(needle, ignoreCase = true)
+                    }
+                    .map {
+                        CarouselEntry(it.packageName, it.label, it.packageName, null)
+                    }
+                matchedApps + browsed
             }
             else -> browsed
         }
@@ -324,7 +361,19 @@ class GameDeck(
         })
         row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
         row.addView(chip("Recent", q.mode == LibraryBrowse.Mode.RECENT) {
-            setQuery(q.copy(mode = LibraryBrowse.Mode.RECENT, platformId = null))
+            setQuery(q.copy(
+                mode = LibraryBrowse.Mode.RECENT,
+                platformId = null,
+                collectionName = null,
+            ))
+        })
+        row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
+        row.addView(chip("Top", q.mode == LibraryBrowse.Mode.MOST_PLAYED) {
+            setQuery(q.copy(
+                mode = LibraryBrowse.Mode.MOST_PLAYED,
+                platformId = null,
+                collectionName = null,
+            ))
         })
         row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
         row.addView(chip("Continue", false) {
@@ -515,7 +564,7 @@ class GameDeck(
     private fun openSearchDialog() {
         val input = android.widget.EditText(activity).apply {
             setText(state.libraryBrowse.text)
-            hint = "Search ROMs"
+            hint = "Search apps & ROMs"
             setSingleLine()
         }
         android.app.AlertDialog.Builder(activity)
