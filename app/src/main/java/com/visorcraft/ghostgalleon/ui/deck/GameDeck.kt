@@ -2079,23 +2079,23 @@ class GameDeck(
     private fun showDetails(entry: CarouselEntry) {
         val key = entry.key
         val rom = entry.rom
-        val body = GameDetails.body(
-            GameDetails.Input(
-                title = entry.label,
-                key = key,
-                kind = if (rom != null) "ROM" else "App",
-                platformId = rom?.platformId,
-                genre = rom?.genre,
-                developer = rom?.developer,
-                year = rom?.year,
-                rating = rom?.rating,
-                lastLaunchedMs = settings.lastLaunchedMs[key],
-                playtimeMs = settings.playtimeMs[key] ?: 0L,
-                favorite = key in settings.favorites,
-                collections = GameDetails.collectionsContaining(settings.collections, key),
-                nowMs = System.currentTimeMillis(),
-            ),
+        val input = GameDetails.Input(
+            title = entry.label,
+            key = key,
+            kind = if (rom != null) "ROM" else "App",
+            platformId = rom?.platformId,
+            genre = rom?.genre,
+            developer = rom?.developer,
+            year = rom?.year,
+            rating = rom?.rating,
+            lastLaunchedMs = settings.lastLaunchedMs[key],
+            playtimeMs = settings.playtimeMs[key] ?: 0L,
+            favorite = key in settings.favorites,
+            collections = GameDetails.collectionsContaining(settings.collections, key),
+            nowMs = System.currentTimeMillis(),
         )
+        val body = GameDetails.body(input)
+        val related = relatedOptionsFor(rom)
         val builder = android.app.AlertDialog.Builder(activity)
             .setTitle("Details")
             .setMessage(body)
@@ -2103,11 +2103,61 @@ class GameDeck(
             .setNeutralButton("Copy title") { _, _ ->
                 copyTitleToClipboard(entry.label)
             }
-        // Apps: optional jump to system package details.
-        if (rom == null && !SlotKey.isRom(key)) {
-            builder.setNegativeButton("App info") { _, _ -> openAppInfo(key) }
+        // Apps: system package details. ROMs with meta: Browse related.
+        when {
+            rom == null && !SlotKey.isRom(key) ->
+                builder.setNegativeButton("App info") { _, _ -> openAppInfo(key) }
+            related.isNotEmpty() ->
+                builder.setNegativeButton("Related…") { _, _ ->
+                    showBrowseRelatedDialog(related)
+                }
         }
         builder.show()
+    }
+
+    /** Related-filter options for a ROM, gated by browse-chrome chip flags. */
+    private fun relatedOptionsFor(rom: com.visorcraft.ghostgalleon.rom.RomEntry?): List<GameDetails.RelatedOption> {
+        if (rom == null) return emptyList()
+        val chrome = settings.browseChrome
+        return GameDetails.relatedOptions(
+            platformId = rom.platformId,
+            genre = rom.genre,
+            developer = rom.developer,
+            year = rom.year,
+            allowPlatform = chrome.platformChips,
+            allowGenre = chrome.genreChips,
+            allowDeveloper = chrome.developerChips,
+            allowYear = chrome.yearChips,
+        )
+    }
+
+    /**
+     * Apply a Browse-related jump: All rail + one meta filter; preserves sort.
+     * Sanitize keeps options aligned with chrome (caller only offers allowed).
+     */
+    private fun applyRelatedOption(option: GameDetails.RelatedOption) {
+        val next = settings.browseChrome.sanitize(
+            GameDetails.toBrowseQuery(option, sort = state.libraryBrowse.sort),
+        )
+        state.setLibraryBrowse(next, force = true)
+        toastIfEmptyBrowse(next)
+        Toast.makeText(activity, option.label, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun showBrowseRelatedDialog(options: List<GameDetails.RelatedOption>) {
+        if (options.isEmpty()) return
+        if (options.size == 1) {
+            applyRelatedOption(options[0])
+            return
+        }
+        val labels = options.map { it.label }.toTypedArray()
+        android.app.AlertDialog.Builder(activity)
+            .setTitle("Browse related")
+            .setItems(labels) { _, which ->
+                if (which in options.indices) applyRelatedOption(options[which])
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun openAppInfo(packageName: String) {
@@ -2148,9 +2198,13 @@ class GameDeck(
             totalPlaytimeMs = settings.playtimeMs,
         )
         val neverPlayed = LibraryBrowse.isUnplayed(key, settings.lastLaunchedMs)
+        val related = relatedOptionsFor(entry.rom)
         val choices = buildList {
             add(SlotMenu.Choice.DETAILS)
             add(SlotMenu.Choice.COPY_TITLE)
+            if (related.isNotEmpty()) {
+                add(SlotMenu.Choice.BROWSE_RELATED)
+            }
             if (neverPlayed) {
                 add(SlotMenu.Choice.MARK_PLAYED)
             }
@@ -2190,6 +2244,7 @@ class GameDeck(
             when (choice) {
                 SlotMenu.Choice.DETAILS -> showDetails(entry)
                 SlotMenu.Choice.COPY_TITLE -> copyTitleToClipboard(entry.label)
+                SlotMenu.Choice.BROWSE_RELATED -> showBrowseRelatedDialog(related)
                 SlotMenu.Choice.MARK_PLAYED -> markAsPlayed(key)
                 SlotMenu.Choice.CLEAR_PLAY_STATS -> clearPlayStats(key)
                 SlotMenu.Choice.PIN_TO_DOCK -> pinToDock(key)

@@ -1114,6 +1114,9 @@ class GridDeck(
                 else -> {
                     add(SlotMenu.Choice.DETAILS)
                     add(SlotMenu.Choice.COPY_TITLE)
+                    if (isRom && key != null && gridRelatedOptions(key).isNotEmpty()) {
+                        add(SlotMenu.Choice.BROWSE_RELATED)
+                    }
                     if (key != null) {
                         if (com.visorcraft.ghostgalleon.library.LibraryBrowse.isUnplayed(
                                 key,
@@ -1162,6 +1165,9 @@ class GridDeck(
                 SlotMenu.Choice.DETAILS -> key?.let { k -> showGridDetails(k) }
                 SlotMenu.Choice.COPY_TITLE -> key?.let { k ->
                     copyGridTitleToClipboard(gridEntryLabel(k))
+                }
+                SlotMenu.Choice.BROWSE_RELATED -> key?.let { k ->
+                    showGridBrowseRelated(k)
                 }
                 SlotMenu.Choice.MARK_PLAYED -> key?.let { k -> markGridAsPlayed(k) }
                 SlotMenu.Choice.CLEAR_PLAY_STATS -> key?.let { k -> clearGridPlayStats(k) }
@@ -1329,6 +1335,57 @@ class GridDeck(
             .show()
     }
 
+    private fun gridRelatedOptions(key: String): List<com.visorcraft.ghostgalleon.library.GameDetails.RelatedOption> {
+        val rom = SlotKey.romId(key)?.let { id -> roms.firstOrNull { it.id == id } }
+            ?: return emptyList()
+        val chrome = settings.browseChrome
+        return com.visorcraft.ghostgalleon.library.GameDetails.relatedOptions(
+            platformId = rom.platformId,
+            genre = rom.genre,
+            developer = rom.developer,
+            year = rom.year,
+            allowPlatform = chrome.platformChips,
+            allowGenre = chrome.genreChips,
+            allowDeveloper = chrome.developerChips,
+            allowYear = chrome.yearChips,
+        )
+    }
+
+    /**
+     * Jump to Game Mode with a related meta filter (platform/genre/…). Used
+     * from Grid long-press / Details so Browse related works in both decks.
+     */
+    private fun applyGridRelated(
+        option: com.visorcraft.ghostgalleon.library.GameDetails.RelatedOption,
+    ) {
+        val next = settings.browseChrome.sanitize(
+            com.visorcraft.ghostgalleon.library.GameDetails.toBrowseQuery(
+                option,
+                sort = state.libraryBrowse.sort,
+            ),
+        )
+        state.setLibraryBrowse(next, force = true)
+        state.setMode(com.visorcraft.ghostgalleon.state.UIMode.GAME)
+        Toast.makeText(activity, option.label, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun showGridBrowseRelated(key: String) {
+        val options = gridRelatedOptions(key)
+        if (options.isEmpty()) return
+        if (options.size == 1) {
+            applyGridRelated(options[0])
+            return
+        }
+        val labels = options.map { it.label }.toTypedArray()
+        android.app.AlertDialog.Builder(activity)
+            .setTitle("Browse related")
+            .setItems(labels) { _, which ->
+                if (which in options.indices) applyGridRelated(options[which])
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
     private fun showGridDetails(key: String) {
         val rom = SlotKey.romId(key)?.let { id -> roms.firstOrNull { it.id == id } }
         val title = when {
@@ -1344,6 +1401,9 @@ class GridDeck(
                 kind = if (rom != null) "ROM" else "App",
                 platformId = rom?.platformId,
                 genre = rom?.genre,
+                developer = rom?.developer,
+                year = rom?.year,
+                rating = rom?.rating,
                 lastLaunchedMs = settings.lastLaunchedMs[key],
                 playtimeMs = settings.playtimeMs[key] ?: 0L,
                 favorite = key in settings.favorites,
@@ -1352,6 +1412,7 @@ class GridDeck(
                 nowMs = System.currentTimeMillis(),
             ),
         )
+        val related = if (rom != null) gridRelatedOptions(key) else emptyList()
         val builder = android.app.AlertDialog.Builder(activity)
             .setTitle("Details")
             .setMessage(body)
@@ -1359,8 +1420,13 @@ class GridDeck(
             .setNeutralButton("Copy title") { _, _ ->
                 copyGridTitleToClipboard(title)
             }
-        if (rom == null && !SlotKey.isRom(key) && !SlotKey.isFolder(key)) {
-            builder.setNegativeButton("App info") { _, _ -> openAppInfo(key) }
+        when {
+            rom == null && !SlotKey.isRom(key) && !SlotKey.isFolder(key) ->
+                builder.setNegativeButton("App info") { _, _ -> openAppInfo(key) }
+            related.isNotEmpty() ->
+                builder.setNegativeButton("Related…") { _, _ ->
+                    showGridBrowseRelated(key)
+                }
         }
         builder.show()
     }

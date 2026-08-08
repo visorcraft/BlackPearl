@@ -43,6 +43,7 @@ class SlotMenu(
         MOVE_TO_END("Move to end"),
         DETAILS("Details…"),
         COPY_TITLE("Copy title"),
+        BROWSE_RELATED("Browse related…"),
         MARK_PLAYED("Mark as played"),
         CLEAR_PLAY_STATS("Clear play stats"),
         APP_INFO("App info"),

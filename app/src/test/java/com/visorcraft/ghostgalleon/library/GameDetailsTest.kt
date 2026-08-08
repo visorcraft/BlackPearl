@@ -2,6 +2,7 @@ package com.visorcraft.ghostgalleon.library
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -76,5 +77,61 @@ class GameDetailsTest {
         assertTrue(body.contains("Collections: —"))
         assertFalse(body.contains("Platform:"))
         assertFalse(body.contains("Genre:"))
+    }
+
+    @Test
+    fun `relatedOptions respects chrome flags and genre tokens`() {
+        assertTrue(
+            GameDetails.relatedOptions(
+                platformId = "snes",
+                genre = "Action / RPG",
+                developer = "Nintendo",
+                year = "1991",
+                allowPlatform = false,
+                allowGenre = false,
+                allowDeveloper = false,
+                allowYear = false,
+            ).isEmpty(),
+        )
+        val platformOnly = GameDetails.relatedOptions(
+            platformId = "snes",
+            genre = "Action / RPG",
+            developer = "Nintendo",
+            year = "1991",
+            allowPlatform = true,
+        )
+        assertEquals(1, platformOnly.size)
+        assertEquals("Platform · snes", platformOnly[0].label)
+        assertEquals("snes", platformOnly[0].platformId)
+
+        val full = GameDetails.relatedOptions(
+            platformId = "snes",
+            genre = "Action / RPG, Action",
+            developer = "Nintendo",
+            year = "1991",
+            allowPlatform = true,
+            allowGenre = true,
+            allowDeveloper = true,
+            allowYear = true,
+        )
+        assertEquals("Platform · snes", full[0].label)
+        // Distinct genre tokens: Action, RPG (duplicate Action dropped)
+        assertEquals(
+            listOf("Genre · Action", "Genre · RPG"),
+            full.filter { it.genre != null }.map { it.label },
+        )
+        assertTrue(full.any { it.developer == "Nintendo" })
+        assertEquals("1990s", full.first { it.yearDecade != null }.yearDecade)
+
+        val q = GameDetails.toBrowseQuery(
+            GameDetails.RelatedOption(label = "Genre · RPG", genre = "RPG"),
+            sort = LibraryBrowse.Sort.NAME,
+        )
+        assertEquals(LibraryBrowse.Mode.ALL, q.mode)
+        assertEquals("RPG", q.genre)
+        assertNull(q.platformId)
+        assertEquals(LibraryBrowse.Sort.NAME, q.sort)
+        assertEquals("", q.text)
+        assertNull(q.collectionName)
     }
 }
