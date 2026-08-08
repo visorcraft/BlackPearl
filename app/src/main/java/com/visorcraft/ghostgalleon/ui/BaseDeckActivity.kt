@@ -74,10 +74,13 @@ abstract class BaseDeckActivity : AppCompatActivity() {
     // Selection-only changes update the already-built views in place;
     // everything else (mode, display, settings) keeps the full rebuild.
     private fun onDeckStateChanged() {
-        // Never re-enter render while setContentView is running — that left
-        // both physical panels as pure-black surfaces (view tree present,
-        // GPU buffer never presented).
-        if (rendering) return
+        // Never re-enter setContentView while a full paint is in progress —
+        // that left both physical panels pure black. Queue a deferred paint
+        // instead of dropping the mutation (browse chips / SETTINGS must land).
+        if (rendering) {
+            scheduleDeferredFullRender(0L, "nested-state ${deckState.lastChange}")
+            return
+        }
         if (deckState.lastChange == DeckState.Change.SELECTION && ::currentDeck.isInitialized) {
             val role = DisplayRole.roleFor(display?.displayId ?: 0, deckState)
             val content = findViewById<ViewGroup>(android.R.id.content)

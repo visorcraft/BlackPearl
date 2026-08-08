@@ -10,9 +10,11 @@ invariants”). Host-tested policy:
 
 | Module | Role |
 |---|---|
-| `ui/DualPaintPolicy.kt` | Full-paint re-entrancy/coalesce, display-attach paint, absorb silent, drawer open-only, heal debounce |
+| `ui/DualPaintPolicy.kt` | Full-paint re-entrancy/coalesce, **deferred retry** when blocked, display-attach paint, absorb silent, drawer open-only, heal debounce |
 | `library/RaProgressGate.kt` | One RA fetch per ROM per process; store only if changed; SELECTION notify only |
 | `ui/deck/CompanionHeroMetrics.kt` | Scale hero art/title on short secondary panels (no mid-glyph title clip) |
+| `state/DeckState.kt` | `setLibraryBrowse` / `select` `force=` for chip re-taps; SELECTION vs SETTINGS tags |
+| `library/LibraryBrowse.kt` | Pure All/Recent/Fav/platform/search + `continueKey` (host-tested) |
 
 ## Hard rules (do not violate)
 
@@ -61,7 +63,12 @@ If both panels go pure black after thrash:
 - [ ] Optional: RA credentials set → hero RA line can update without full
       deck flash
 - [ ] `adb logcat -s GGPaint` during swipe storms shows **no** rapid-fire
-      FULL paint spam (coalesce / absorb silence)
+      FULL paint spam (coalesce / absorb silence); blocked paints may show
+      `DEFER` then a later `FULL`, never permanent stale UI
+- [ ] Game Mode: NDS chip → tap a game → **All** clears platform filter
+      (full library / no "Platform · NDS" banner)
+- [ ] Game Mode: **Continue** jumps to last launched (toast if none); re-tap
+      still re-centers when already selected
 
 ## Host tests
 
@@ -70,5 +77,7 @@ If both panels go pure black after thrash:
   --tests 'com.visorcraft.ghostgalleon.ui.DualPaintPolicyTest' \
   --tests 'com.visorcraft.ghostgalleon.library.RaProgressGateTest' \
   --tests 'com.visorcraft.ghostgalleon.ui.deck.CompanionHeroMetricsTest' \
-  --tests 'com.visorcraft.ghostgalleon.state.DeckStateTest'
+  --tests 'com.visorcraft.ghostgalleon.state.DeckStateTest' \
+  --tests 'com.visorcraft.ghostgalleon.library.LibraryBrowseTest' \
+  --tests 'com.visorcraft.ghostgalleon.library.LibraryDiscoveryTest'
 ```

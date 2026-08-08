@@ -310,11 +310,17 @@ class GameDeck(
         fun setQuery(next: LibraryBrowse.BrowseQuery, force: Boolean = false) {
             state.setLibraryBrowse(next, force = force)
         }
-        // All = full reset: clear platform, search text, collection, mode.
-        // force=true so a coalesced paint cannot leave a stale NDS filter.
+        // All = full reset: clear platform/search/collection AND jump the
+        // carousel to the first unrestricted entry. Keeping the prior NDS
+        // selection centered made "All" look like a no-op (same cards still
+        // on screen even though the filter was cleared).
         row.addView(chip("All", q.mode == LibraryBrowse.Mode.ALL && q.platformId == null &&
             q.text.isBlank() && q.collectionName == null) {
+            val live = app().settings
+            val firstKey = library.curated(live).firstOrNull()?.packageName
+                ?: roms.firstOrNull { it.visibleInUi }?.let { SlotKey.rom(it.id) }
             setQuery(LibraryBrowse.BrowseQuery(), force = true)
+            if (firstKey != null) state.select(firstKey, force = true)
         })
         row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
         row.addView(chip("Recent", q.mode == LibraryBrowse.Mode.RECENT) {
@@ -322,16 +328,18 @@ class GameDeck(
         })
         row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
         row.addView(chip("Continue", false) {
-            // Jump to the most recently launched key still in the library
-            // (not limited to the current platform filter / carousel slice).
+            // Live settings: GameDeck holds a construction-time snapshot, so
+            // lastLaunchedMs from `settings` can be empty after launches until
+            // the next SETTINGS rebuild — Continue would silently toast-null.
+            val live = app().settings
             val available = buildList {
                 addAll(roms.filter { it.visibleInUi }.map { SlotKey.rom(it.id) })
-                addAll(library.curated(settings).map { it.packageName })
-                addAll(settings.gridSlots.filterNotNull())
-                addAll(settings.dockSlots.filterNotNull())
-                addAll(settings.lastLaunchedMs.keys)
+                addAll(library.curated(live).map { it.packageName })
+                addAll(live.gridSlots.filterNotNull())
+                addAll(live.dockSlots.filterNotNull())
+                addAll(live.lastLaunchedMs.keys)
             }
-            val cont = LibraryBrowse.continueKey(available, settings.lastLaunchedMs)
+            val cont = LibraryBrowse.continueKey(available, live.lastLaunchedMs)
             if (cont == null) {
                 Toast.makeText(activity, "Nothing to continue", Toast.LENGTH_SHORT).show()
             } else {
@@ -343,6 +351,8 @@ class GameDeck(
                     force = true,
                 )
                 state.select(cont, force = true)
+                val label = continueLabel(cont, live)
+                Toast.makeText(activity, "Continue: $label", Toast.LENGTH_SHORT).show()
             }
         })
         row.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
@@ -469,14 +479,24 @@ class GameDeck(
             .show()
     }
 
+    /** Human label for a continue/slot key (ROM name or app label). */
+    private fun continueLabel(key: String, live: Settings): String {
+        SlotKey.romId(key)?.let { id ->
+            roms.firstOrNull { it.id == id }?.name?.let { return it }
+        }
+        library.curated(live).firstOrNull { it.packageName == key }?.label?.let { return it }
+        return key.substringAfterLast(':').ifBlank { key }
+    }
+
     /**
      * Select a random visible library item. Switches browse mode to ALL so
      * the pick lands in the carousel and A/CONFIRM launches the same key
      * (not a stale filter list).
      */
     private fun pickRandomEntry() {
+        val live = app().settings
         val pool = buildList {
-            addAll(library.curated(settings).map { it.packageName })
+            addAll(library.curated(live).map { it.packageName })
             addAll(roms.filter { it.visibleInUi }.map { SlotKey.rom(it.id) })
         }
         val key = LibraryBrowse.pickRandom(pool) { size ->
@@ -487,8 +507,8 @@ class GameDeck(
             return
         }
         // Full library view so the selection is present in entries after rebuild.
-        state.setLibraryBrowse(LibraryBrowse.BrowseQuery(mode = LibraryBrowse.Mode.ALL))
-        state.select(key)
+        state.setLibraryBrowse(LibraryBrowse.BrowseQuery(), force = true)
+        state.select(key, force = true)
         Toast.makeText(activity, "Random pick", Toast.LENGTH_SHORT).show()
     }
 
