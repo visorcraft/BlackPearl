@@ -13,7 +13,9 @@ import android.graphics.drawable.LayerDrawable
 import android.media.MediaPlayer
 import android.net.Uri
 import android.util.TypedValue
+import android.view.GestureDetector
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewOutlineProvider
@@ -24,6 +26,7 @@ import android.widget.TextView
 import android.widget.VideoView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.children
+import kotlin.math.abs
 import com.visorcraft.ghostgalleon.GhostGalleonApp
 import com.visorcraft.ghostgalleon.R
 import com.visorcraft.ghostgalleon.art.ArtCache
@@ -268,6 +271,78 @@ object CompanionPanel {
     private fun selectedRom(key: String?, roms: List<RomEntry>): RomEntry? {
         val id = SlotKey.romId(key) ?: return null
         return roms.firstOrNull { it.id == id }
+    }
+
+    private fun resumeLabel(
+        key: String,
+        library: AppLibrary,
+        roms: List<RomEntry>,
+        settings: Settings,
+    ): String = when {
+        SlotKey.isRom(key) -> {
+            val id = SlotKey.romId(key)
+            roms.firstOrNull { it.id == id }?.name ?: key
+        }
+        else -> library.visible(settings)
+            .firstOrNull { it.packageName == key }?.label ?: key
+    }
+
+    /**
+     * Tap = launch resume target. Horizontal fling cycles older/newer
+     * candidates; fling past either end clears the current key from
+     * lastLaunched so the chip can disappear.
+     */
+    private fun bindResumeChipGestures(
+        view: TextView,
+        cont: String,
+        candidates: List<String>,
+        activity: AppCompatActivity,
+        state: DeckState,
+        roms: List<RomEntry>,
+        app: GhostGalleonApp,
+    ) {
+        val detector = GestureDetector(
+            view.context,
+            object : GestureDetector.SimpleOnGestureListener() {
+                override fun onDown(e: MotionEvent): Boolean = true
+
+                override fun onSingleTapUp(e: MotionEvent): Boolean {
+                    val idx = app.settings.gridSlots.indexOf(cont)
+                    if (idx >= 0) state.selectSlot(idx, cont) else state.select(cont)
+                    launchSlotKey(activity, state, roms, cont)
+                    return true
+                }
+
+                override fun onFling(
+                    e1: MotionEvent?,
+                    e2: MotionEvent,
+                    velocityX: Float,
+                    velocityY: Float,
+                ): Boolean {
+                    if (abs(velocityX) < abs(velocityY) || abs(velocityX) < 400f) {
+                        return false
+                    }
+                    // Left fling → older (+1); right fling → newer (−1).
+                    val delta = if (velocityX < 0f) +1 else -1
+                    val next = LibraryBrowse.continueAfterSwipe(candidates, cont, delta)
+                    val now = System.currentTimeMillis()
+                    val updated = LibraryBrowse.applyContinueSwipe(
+                        lastLaunchedMs = app.settings.lastLaunchedMs,
+                        current = cont,
+                        next = next,
+                        nowMs = now,
+                    )
+                    if (updated == app.settings.lastLaunchedMs) return true
+                    app.updateSettings(app.settings.copy(lastLaunchedMs = updated))
+                    return true
+                }
+            },
+        )
+        view.setOnTouchListener { v, event ->
+            val handled = detector.onTouchEvent(event)
+            // Consume so parent scroll views do not steal the fling.
+            handled || event.actionMasked == MotionEvent.ACTION_DOWN
+        }
     }
 
     // Loads res/raw/<name> (animated WebP/GIF) as a started-or-startable
@@ -949,6 +1024,10 @@ object CompanionPanel {
         // when a session is open (Now Playing owns that state). lastLaunchedMs
         // alone is not "running" — that misread as "Continue: Eden" while Eden
         // sat idle as the cold-start selection.
+        //
+        // Swipe left/right: cycle older/newer resume targets. Swipe past either
+        // end clears the current key from lastLaunched (chip goes away when no
+        // other candidates remain). Tap still launches.
         run {
             if (app.openSession != null) return@run
             val available = buildList {
@@ -958,42 +1037,46 @@ object CompanionPanel {
                 addAll(library.visible(settings).map { it.packageName })
                 addAll(settings.lastLaunchedMs.keys)
             }
-            val cont = LibraryBrowse.continueKey(available, settings.lastLaunchedMs)
-            if (cont != null && cont != state.selectedKey) {
-                val contName = when {
-                    SlotKey.isRom(cont) -> {
-                        val id = SlotKey.romId(cont)
-                        roms.firstOrNull { it.id == id }?.name ?: cont
-                    }
-                    else -> library.visible(settings)
-                        .firstOrNull { it.packageName == cont }?.label ?: cont
-                }
-                // Filled accent pill + white text (dark card + black text was
-                // unreadable on the secondary OLED).
-                hero.addView(TextView(context).apply {
-                    text = "Resume $contName"
-                    setTextSize(TypedValue.COMPLEX_UNIT_PX, dp(14).toFloat())
-                    setTextColor(Color.WHITE)
-                    background = TileBackgrounds.accentPill(context, settings.accentColor)
-                    setPadding(dp(18), dp(10), dp(18), dp(10))
-                    gravity = Gravity.CENTER
-                    maxLines = 1
-                    ellipsize = android.text.TextUtils.TruncateAt.END
-                    setOnClickListener {
-                        val idx = settings.gridSlots.indexOf(cont)
-                        if (idx >= 0) state.selectSlot(idx, cont) else state.select(cont)
-                        launchSlotKey(activity, state, roms, cont)
-                    }
-                }, LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                ).apply {
-                    gravity = Gravity.CENTER_HORIZONTAL
-                    bottomMargin = dp(10)
-                    marginStart = dp(24)
-                    marginEnd = dp(24)
-                })
-            }
+            val candidates = LibraryBrowse.continueCandidates(
+                availableKeys = available,
+                lastLaunchedMs = settings.lastLaunchedMs,
+                excludeKey = state.selectedKey,
+            )
+            val cont = candidates.firstOrNull() ?: return@run
+            val contName = resumeLabel(cont, library, roms, settings)
+            // Filled accent pill + white text (dark card + black text was
+            // unreadable on the secondary OLED).
+            hero.addView(TextView(context).apply {
+                text = "Resume $contName"
+                contentDescription =
+                    "Resume $contName. Swipe left or right to change; swipe past end to clear."
+                setTextSize(TypedValue.COMPLEX_UNIT_PX, dp(14).toFloat())
+                setTextColor(Color.WHITE)
+                background = TileBackgrounds.accentPill(context, settings.accentColor)
+                setPadding(dp(18), dp(10), dp(18), dp(10))
+                gravity = Gravity.CENTER
+                maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                isClickable = true
+                isFocusable = true
+                bindResumeChipGestures(
+                    view = this,
+                    cont = cont,
+                    candidates = candidates,
+                    activity = activity,
+                    state = state,
+                    roms = roms,
+                    app = app,
+                )
+            }, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                gravity = Gravity.CENTER_HORIZONTAL
+                bottomMargin = dp(10)
+                marginStart = dp(24)
+                marginEnd = dp(24)
+            })
         }
         if (selectedRom != null) {
             // ROM hero: wide HERO banner when cached (async swap-in),

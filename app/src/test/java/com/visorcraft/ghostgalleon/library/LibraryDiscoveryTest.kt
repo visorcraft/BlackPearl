@@ -4,6 +4,7 @@ import com.visorcraft.ghostgalleon.rom.RomEntry
 import com.visorcraft.ghostgalleon.settings.SlotKey
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LibraryDiscoveryTest {
@@ -57,6 +58,37 @@ class LibraryDiscoveryTest {
                 mapOf("b" to 1L),
             ),
         )
+    }
+
+    @Test
+    fun `continueCandidates excludes selected and orders newest first`() {
+        val keys = listOf("a", "b", "c")
+        val last = mapOf("a" to 10L, "b" to 30L, "c" to 20L)
+        assertEquals(listOf("b", "c", "a"), LibraryBrowse.continueCandidates(keys, last))
+        assertEquals(listOf("b", "c"), LibraryBrowse.continueCandidates(keys, last, excludeKey = "a"))
+    }
+
+    @Test
+    fun `continueAfterSwipe cycles then clears past end`() {
+        val c = listOf("newest", "mid", "oldest")
+        assertEquals("mid", LibraryBrowse.continueAfterSwipe(c, "newest", delta = +1))
+        assertEquals("oldest", LibraryBrowse.continueAfterSwipe(c, "mid", delta = +1))
+        assertNull(LibraryBrowse.continueAfterSwipe(c, "oldest", delta = +1))
+        assertEquals("mid", LibraryBrowse.continueAfterSwipe(c, "oldest", delta = -1))
+        assertNull(LibraryBrowse.continueAfterSwipe(c, "newest", delta = -1))
+        // Solo candidate: any swipe clears.
+        assertNull(LibraryBrowse.continueAfterSwipe(listOf("only"), "only", delta = +1))
+        assertNull(LibraryBrowse.continueAfterSwipe(listOf("only"), "only", delta = -1))
+    }
+
+    @Test
+    fun `applyContinueSwipe promote and clear`() {
+        val base = mapOf("a" to 10L, "b" to 20L)
+        val cleared = LibraryBrowse.applyContinueSwipe(base, current = "b", next = null, nowMs = 99L)
+        assertEquals(mapOf("a" to 10L), cleared)
+        val promoted = LibraryBrowse.applyContinueSwipe(base, current = "b", next = "a", nowMs = 99L)
+        assertTrue(promoted.getValue("a") > promoted.getValue("b"))
+        assertEquals("a", LibraryBrowse.continueKey(listOf("a", "b"), promoted))
     }
 
     @Test

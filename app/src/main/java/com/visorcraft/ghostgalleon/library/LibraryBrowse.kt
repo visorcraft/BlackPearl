@@ -361,13 +361,61 @@ object LibraryBrowse {
     fun continueKey(
         availableKeys: List<String>,
         lastLaunchedMs: Map<String, Long>,
-    ): String? {
-        if (availableKeys.isEmpty() || lastLaunchedMs.isEmpty()) return null
+    ): String? = continueCandidates(
+        availableKeys = availableKeys,
+        lastLaunchedMs = lastLaunchedMs,
+        excludeKey = null,
+    ).firstOrNull()
+
+    /**
+     * Resume-chip candidates newest-first: keys present in [availableKeys]
+     * with a last-launched stamp, excluding [excludeKey] (usually the current
+     * hero selection so Resume never points at what's already shown).
+     */
+    fun continueCandidates(
+        availableKeys: List<String>,
+        lastLaunchedMs: Map<String, Long>,
+        excludeKey: String? = null,
+    ): List<String> {
+        if (availableKeys.isEmpty() || lastLaunchedMs.isEmpty()) return emptyList()
         val present = availableKeys.toSet()
         return orderByRecent(
-            lastLaunchedMs.keys.filter { it in present },
+            lastLaunchedMs.keys.filter { it in present && it != excludeKey },
             lastLaunchedMs,
-        ).firstOrNull()
+        )
+    }
+
+    /**
+     * Swipe the Resume chip. [delta] +1 = older (typically fling left),
+     * −1 = newer (fling right). Past either end → null (clear that resume).
+     */
+    fun continueAfterSwipe(
+        candidates: List<String>,
+        current: String,
+        delta: Int,
+    ): String? {
+        if (candidates.isEmpty() || delta == 0) return current.takeIf { it in candidates }
+        val i = candidates.indexOf(current).let { if (it < 0) 0 else it }
+        val next = i + delta
+        if (next < 0 || next >= candidates.size) return null
+        return candidates[next]
+    }
+
+    /**
+     * Apply a Resume swipe to [lastLaunchedMs].
+     * - [next] null → drop [current] (chip may go away or show the next newest)
+     * - [next] other → promote that key to newest so [continueKey] returns it
+     */
+    fun applyContinueSwipe(
+        lastLaunchedMs: Map<String, Long>,
+        current: String,
+        next: String?,
+        nowMs: Long,
+    ): Map<String, Long> {
+        if (next == null) return lastLaunchedMs - current
+        if (next == current) return lastLaunchedMs
+        val peak = (lastLaunchedMs.values.maxOrNull() ?: 0L) + 1L
+        return lastLaunchedMs + (next to maxOf(peak, nowMs))
     }
 
     /**
