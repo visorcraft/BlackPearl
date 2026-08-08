@@ -4,10 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.view.Gravity
-import android.view.View
-import android.view.ViewGroup
 import android.widget.FrameLayout
-import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.visorcraft.ghostgalleon.GhostGalleonApp
@@ -84,49 +81,3 @@ internal fun attachSystemChromeOverlay(
         },
     )
 }
-
-/** @deprecated Prefer [attachSystemChromeOverlay] for corner placement. */
-internal fun buildSystemChromeRow(
-    context: Context,
-    activity: AppCompatActivity,
-    state: DeckState,
-): View {
-    val density = context.resources.displayMetrics.density
-    fun dp(v: Int) = (v * density).toInt()
-    val row = LinearLayout(context).apply {
-        orientation = LinearLayout.HORIZONTAL
-        gravity = Gravity.CENTER_VERTICAL
-        setPadding(dp(8), 0, dp(8), 0)
-    }
-    row.addView(
-        iconButton(context, R.drawable.ic_swap, "Swap screens") {
-            val appCtx = activity.application as? GhostGalleonApp
-            if (appCtx != null && !appCtx.swapInteractiveDisplay()) {
-                Toast.makeText(
-                    context,
-                    "Only one display — swap unavailable",
-                    Toast.LENGTH_SHORT,
-                ).show()
-            }
-        },
-        LinearLayout.LayoutParams(dp(40), dp(40)),
-    )
-    row.addView(View(context), LinearLayout.LayoutParams(0, 1, 1f))
-    row.addView(
-        iconButton(context, R.drawable.ic_settings, "Settings") {
-            launchOnOtherDisplay(
-                activity,
-                state,
-                Intent(activity, SettingsActivity::class.java),
-            )
-        },
-        LinearLayout.LayoutParams(dp(40), dp(40)),
-    )
-    return row
-}
-
-internal fun systemChromeRowLayoutParams(): LinearLayout.LayoutParams =
-    LinearLayout.LayoutParams(
-        ViewGroup.LayoutParams.MATCH_PARENT,
-        ViewGroup.LayoutParams.WRAP_CONTENT,
-    )

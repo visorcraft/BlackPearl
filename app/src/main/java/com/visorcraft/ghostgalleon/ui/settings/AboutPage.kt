@@ -185,7 +185,7 @@ object AboutPage {
             Feature("Grid Mode",
                 "Curated 3DS/Wii-style icon grid with blank \"+\" slots, dock, favorites, and folders."),
             Feature("Game Mode",
-                "Card carousel with Recent / Continue / Favorites, platform filters, and playtime."),
+                "Card carousel with minimal default chrome (All/Recent/Continue/Fav); power-user rails opt-in."),
             Feature("ROM library",
                 "SAF-scanned folders launch into the right emulator; optional SteamGridDB & RA."),
             Feature("Dual screens",

@@ -18,7 +18,7 @@
   <img src="https://img.shields.io/badge/platform-Android%208%2B-3ddc84?logo=android&amp;logoColor=white" alt="Android 8+" />
   <img src="https://img.shields.io/badge/language-Kotlin-7f52ff?logo=kotlin&amp;logoColor=white" alt="Kotlin" />
   <img src="https://img.shields.io/badge/API-26%E2%80%9334-0b57a4" alt="API 26–34" />
-  <img src="https://img.shields.io/badge/version-0.3.0-informational" alt="0.3.0" />
+  <img src="https://img.shields.io/badge/version-0.4.0-informational" alt="0.4.0" />
 </p>
 
 ---
@@ -160,12 +160,12 @@ On Sugar, the bottom panel is interactive by default; the top shows the companio
 
 | Page | Contents |
 |------|----------|
-| **Display & Grid** | Orientation, hints, mode, themes, wallpaper, grid, companion role, **Browse chrome** (Minimal/Full preset + per-feature toggles) |
+| **Display & Grid** | Orientation, hints, mode, themes, wallpaper, grid, companion role, **Browse chrome** (Minimal / Custom / Full preset + per-feature toggles: rails, chips, clock/battery, Resume chip, Quick Panel browse) |
 | **Apps** | Hidden apps, dock management |
 | **Controls** | Haptics, remappable keys, Controller Lab |
-| **Library** | ROM folders, rescan, SteamGridDB, RetroAchievements, export/import, platform packs |
+| **Library** | ROM folders, Hidden ROMs, rescan, SteamGridDB, RetroAchievements, export/import, platform packs |
 | **Stats** | Most played / recently played |
-| **System** | Device profile, interactive display mode, topology diagnostics |
+| **System** | Live topology (primary / companion / launch / secondaryHome / larger), hardware readings |
 | **About** | Version, git SHA, credits, licenses |
 
 ---

@@ -234,11 +234,6 @@ class SettingsActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun loadBundledExamplePack() {
-        // Backward-compatible entry: open the multi-pack catalog.
-        showBundledPackCatalog()
-    }
-
     private fun refreshAppsRows() {
         hiddenValue?.text = app.settings.hiddenPackages.size.toString()
         hiddenRomsValue?.text = app.settings.hiddenRomIds.size.toString()
@@ -948,10 +943,16 @@ class SettingsActivity : AppCompatActivity() {
             if (stroke != 0) setStroke(dp(1), stroke)
         }
 
-    /** Segmented pill control (Default mode / Grid scrolling style). */
+    /**
+     * Segmented pill control (Default mode / Grid scrolling / chrome preset).
+     * Optional [bindSelected] receives a setter so hosts can rebind selection
+     * when external state changes without a full recreate.
+     * [onSelect] is last so trailing-lambda call sites keep working.
+     */
     private fun segmented(
         options: List<Pair<String, String>>, // value -> pill text
         current: String,
+        bindSelected: ((setSelected: (String) -> Unit) -> Unit)? = null,
         onSelect: (String) -> Unit,
     ): View {
         val track = LinearLayout(this).apply {
@@ -996,6 +997,12 @@ class SettingsActivity : AppCompatActivity() {
                 ViewGroup.LayoutParams.WRAP_CONTENT, dp(34)))
         }
         restyle()
+        bindSelected?.invoke { value ->
+            if (selected != value) {
+                selected = value
+                restyle()
+            }
+        }
         return track
     }
 
@@ -1364,22 +1371,50 @@ class SettingsActivity : AppCompatActivity() {
         // Browse chrome: minimal default; power users opt into extra rails.
         val chrome = s.browseChrome
         val chromeCard = sectionCard()
-        val presetOptions = listOf("minimal" to "MINIMAL", "full" to "FULL")
-        val presetId = when {
-            chrome.isFull() -> "full"
-            chrome.isMinimal() -> "minimal"
-            else -> "minimal" // custom: applying Minimal/Full resets
+        fun chromePresetId(c: com.visorcraft.ghostgalleon.settings.BrowseChrome): String = when {
+            c.isFull() -> "full"
+            c.isMinimal() -> "minimal"
+            else -> "custom"
         }
+        val presetOptions = listOf(
+            "minimal" to "MINIMAL",
+            "custom" to "CUSTOM",
+            "full" to "FULL",
+        )
+        var rebindChromePreset: ((String) -> Unit)? = null
         chromeCard.addView(controlRow(
             "Chrome preset",
-            segmented(presetOptions, presetId) { id ->
-                val next = if (id == "full") {
-                    com.visorcraft.ghostgalleon.settings.BrowseChrome.FULL
-                } else {
-                    com.visorcraft.ghostgalleon.settings.BrowseChrome.MINIMAL
+            segmented(
+                presetOptions,
+                chromePresetId(chrome),
+                bindSelected = { set -> rebindChromePreset = set },
+            ) { id ->
+                when (id) {
+                    "full" -> {
+                        app.updateSettings(
+                            app.settings.copy(
+                                browseChrome = com.visorcraft.ghostgalleon.settings.BrowseChrome.FULL,
+                            ),
+                        )
+                        recreate()
+                    }
+                    "minimal" -> {
+                        app.updateSettings(
+                            app.settings.copy(
+                                browseChrome = com.visorcraft.ghostgalleon.settings.BrowseChrome.MINIMAL,
+                            ),
+                        )
+                        recreate()
+                    }
+                    else -> {
+                        // CUSTOM is display-only (produced by flag toggles).
+                        // Snap the pill back to the true preset if settings
+                        // are still pure MINIMAL/FULL.
+                        rebindChromePreset?.invoke(
+                            chromePresetId(app.settings.browseChrome),
+                        )
+                    }
                 }
-                app.updateSettings(app.settings.copy(browseChrome = next))
-                recreate()
             },
         ), LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(64)))
@@ -1390,9 +1425,9 @@ class SettingsActivity : AppCompatActivity() {
                 com.visorcraft.ghostgalleon.settings.BrowseChrome,
         ) {
             toggle(chromeCard, label, checked) { on ->
-                app.updateSettings(
-                    app.settings.copy(browseChrome = set(app.settings.browseChrome, on)),
-                )
+                val next = set(app.settings.browseChrome, on)
+                app.updateSettings(app.settings.copy(browseChrome = next))
+                rebindChromePreset?.invoke(chromePresetId(next))
             }
         }
         chromeFlag("Installed rail", chrome.installedRail) { c, v -> c.copy(installedRail = v) }
@@ -1457,6 +1492,7 @@ class SettingsActivity : AppCompatActivity() {
             setOnLongClickListener {
                 app.updateSettings(app.settings.copy(companionPinnedPackage = null))
                 Toast.makeText(this@SettingsActivity, "Pin cleared", Toast.LENGTH_SHORT).show()
+                recreate()
                 true
             }
         }
@@ -2062,7 +2098,9 @@ class SettingsActivity : AppCompatActivity() {
         ))
         systemCardExtra.addView(statRow(
             "Topology",
-            "primary=${topo.primaryDisplayId} companion=${topo.companionDisplayId} launch=${topo.launchDisplayId}",
+            "primary=${topo.primaryDisplayId} companion=${topo.companionDisplayId} " +
+                "launch=${topo.launchDisplayId} secondaryHome=${topo.secondaryHomeDisplayId} " +
+                "larger=${topo.largerDisplayId}",
         ))
         systemCardExtra.addView(TextView(this).apply {
             text = topo.reason
