@@ -39,6 +39,43 @@ object HeroDetail {
     fun platformLine(platform: Platform?, platformId: String): String =
         platform?.displayName ?: platformId
 
+    /**
+     * Compact hero subline for short dual panels: join platform, play meta,
+     * and player into one " · " line so three labels do not stack vertically.
+     * [playerLabel] should be the bare player name (no "Player:" prefix).
+     */
+    fun compactSubline(
+        platformLabel: String?,
+        playMeta: String?,
+        playerLabel: String?,
+    ): String =
+        listOfNotNull(
+            platformLabel?.trim()?.takeIf { it.isNotEmpty() },
+            playMeta?.trim()?.takeIf { it.isNotEmpty() },
+            playerLabel?.trim()?.takeIf { it.isNotEmpty() }
+                ?.removePrefix("Player:")
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() },
+        ).joinToString(" · ")
+
+    /**
+     * Bare preferred/installed player display name (no "Player:" prefix),
+     * for [compactSubline]. Null when platform is null.
+     */
+    fun playerShortName(
+        platform: Platform?,
+        preferredPlayerId: String?,
+        installed: (packageName: String) -> Boolean,
+    ): String? {
+        if (platform == null) return null
+        val line = playerLine(platform, preferredPlayerId, installed) ?: return null
+        return line.removePrefix("Player:").trim()
+            .substringBefore(" (not installed)")
+            .substringBefore(" (default offline)")
+            .trim()
+            .takeIf { it.isNotEmpty() }
+    }
+
     /** Screenshot URI to bind, or null. */
     fun screenshotUri(rom: RomEntry): String? =
         rom.screenshotUri?.takeIf { it.isNotBlank() }

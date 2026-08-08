@@ -903,12 +903,25 @@ abstract class BaseDeckActivity : AppCompatActivity() {
         Action.SWAP_SCREENS -> {
             if (repeatCount == 0) {
                 haptic(HapticFeedbackConstants.KEYBOARD_TAP)
-                if (!app.swapInteractiveDisplay()) {
-                    Toast.makeText(
-                        this,
-                        "Only one display — swap unavailable",
-                        Toast.LENGTH_SHORT,
-                    ).show()
+                // Prefer topology swap (rebuilds both roles). If single-display
+                // or swap fails, still try companion recreate — recovers a pure
+                // black secondary without system Force Stop.
+                val swapped = app.swapInteractiveDisplay()
+                if (!swapped) {
+                    val main = this as? MainActivity
+                        ?: app.liveDeckActivities().filterIsInstance<MainActivity>()
+                            .firstOrNull()
+                    if (main != null) {
+                        main.restartCompanionPanel("swap-recover")
+                        Toast.makeText(this, "Restarting bottom panel…", Toast.LENGTH_SHORT)
+                            .show()
+                    } else {
+                        Toast.makeText(
+                            this,
+                            "Only one display — swap unavailable",
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                    }
                 }
             }
             true

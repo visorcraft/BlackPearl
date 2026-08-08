@@ -74,4 +74,29 @@ class HeroDetailTest {
         assertEquals("content://vid/x.mp4", HeroDetail.videoUri(rom))
         assertNull(HeroDetail.videoUri(rom.copy(videoUri = "  ")))
     }
+
+    @Test
+    fun `compactSubline joins platform play and player`() {
+        assertEquals(
+            "Nintendo DS · Never played · melonDualDS",
+            HeroDetail.compactSubline(
+                "Nintendo DS",
+                "Never played",
+                "Player: melonDualDS",
+            ),
+        )
+        assertEquals(
+            "SNES · melonDS",
+            HeroDetail.compactSubline("SNES", null, "melonDS"),
+        )
+        assertEquals("", HeroDetail.compactSubline(null, "  ", null))
+    }
+
+    @Test
+    fun `playerShortName strips Player prefix`() {
+        val platform = Platforms.SNES
+        val pref = platform.players.first().id
+        val short = HeroDetail.playerShortName(platform, pref) { true }
+        assertEquals(platform.players.first().displayName, short)
+    }
 }

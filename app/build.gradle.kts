@@ -27,8 +27,8 @@ android {
         applicationId = if (bridge) "com.visorcraft.blackpearl" else "com.visorcraft.ghostgalleon"
         minSdk = 26
         targetSdk = 34
-        versionCode = if (bridge) 12 else 13
-        versionName = if (bridge) "0.3.0-migrate" else "0.3.1"
+        versionCode = if (bridge) 12 else 16
+        versionName = if (bridge) "0.3.0-migrate" else "0.3.4"
         buildConfigField("boolean", "EXPORT_MIGRATE_ON_BOOT", if (bridge) "true" else "false")
     }
 

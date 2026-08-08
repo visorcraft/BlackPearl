@@ -38,6 +38,27 @@ object TileBackgrounds {
     /** Idle chip fill from the active theme pack. */
     fun chipIdleColor(context: Context): Int = tokens(context).chipIdle
 
+    /**
+     * Rounded action chip (role / quick actions). [fill] defaults to theme
+     * idle chip; pass accent for selected/primary CTAs.
+     */
+    fun chip(
+        context: Context,
+        fill: Int = chipIdleColor(context),
+        cornerRadiusDp: Int = 10,
+    ): GradientDrawable = GradientDrawable().apply {
+        setColor(fill)
+        cornerRadius = dp(context, cornerRadiusDp)
+    }
+
+    /**
+     * Filled accent pill for primary CTAs (e.g. Resume). White text on top.
+     * Avoids the old "dark card + accent stroke + black text" which was
+     * unreadable on the secondary OLED.
+     */
+    fun accentPill(context: Context, accent: Int, cornerRadiusDp: Int = 20): GradientDrawable =
+        chip(context, fill = accent, cornerRadiusDp = cornerRadiusDp)
+
     /** Rounded strip for dock / status containers. */
     fun pill(context: Context): GradientDrawable {
         val t = tokens(context)

@@ -186,10 +186,6 @@ object CompanionPanel {
             )
             name.text = rom.name
             val platform = Platforms.byId(rom.platformId)
-            sub.text = HeroDetail.platformLine(platform, rom.platformId)
-            view.findViewWithTag<TextView>(TAG_HERO_META)?.text =
-                romMetaLine(settings, SlotKey.rom(rom.id))
-            bindMetadataLine(view.findViewWithTag(TAG_HERO_METADATA), rom)
             val installed = { pkg: String ->
                 runCatching {
                     context.packageManager.getPackageInfo(pkg, 0)
@@ -201,8 +197,15 @@ object CompanionPanel {
                 settings.romProfiles,
                 settings.defaultPlayers[rom.platformId],
             )
-            view.findViewWithTag<TextView>(TAG_HERO_PLAYER)?.text =
-                HeroDetail.playerLine(platform, preferred, installed) ?: ""
+            // One compact subline (platform · play · player) — not three stacked rows.
+            sub.text = HeroDetail.compactSubline(
+                HeroDetail.platformLine(platform, rom.platformId),
+                romMetaLine(settings, SlotKey.rom(rom.id)),
+                HeroDetail.playerShortName(platform, preferred, installed),
+            )
+            view.findViewWithTag<TextView>(TAG_HERO_META)?.visibility = View.GONE
+            view.findViewWithTag<TextView>(TAG_HERO_PLAYER)?.visibility = View.GONE
+            bindMetadataLine(view.findViewWithTag(TAG_HERO_METADATA), rom)
             val appCtx = context.applicationContext as GhostGalleonApp
             bindRaLine(
                 view.findViewWithTag(TAG_HERO_RA),
@@ -992,12 +995,14 @@ object CompanionPanel {
                     else -> library.visible(settings)
                         .firstOrNull { it.packageName == cont }?.label ?: cont
                 }
+                // Filled accent pill + white text (dark card + black text was
+                // unreadable on the secondary OLED).
                 hero.addView(TextView(context).apply {
                     text = "Resume $contName"
-                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-                    setTextColor(Color.BLACK)
-                    background = TileBackgrounds.selected(context, settings.accentColor)
-                    setPadding(dp(16), dp(8), dp(16), dp(8))
+                    setTextSize(TypedValue.COMPLEX_UNIT_PX, dp(14).toFloat())
+                    setTextColor(Color.WHITE)
+                    background = TileBackgrounds.accentPill(context, settings.accentColor)
+                    setPadding(dp(18), dp(10), dp(18), dp(10))
                     gravity = Gravity.CENTER
                     maxLines = 1
                     ellipsize = android.text.TextUtils.TruncateAt.END
@@ -1011,7 +1016,7 @@ object CompanionPanel {
                     ViewGroup.LayoutParams.WRAP_CONTENT,
                 ).apply {
                     gravity = Gravity.CENTER_HORIZONTAL
-                    bottomMargin = dp(12)
+                    bottomMargin = dp(10)
                     marginStart = dp(24)
                     marginEnd = dp(24)
                 })
@@ -1064,17 +1069,35 @@ object CompanionPanel {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT,
             ))
+            val platform = Platforms.byId(selectedRom.platformId)
+            val installed = { pkg: String ->
+                runCatching {
+                    context.packageManager.getPackageInfo(pkg, 0)
+                    true
+                }.getOrDefault(false)
+            }
+            val preferredPlayer = RomProfiles.preferredPlayerId(
+                selectedRom.id,
+                settings.romProfiles,
+                settings.defaultPlayers[selectedRom.platformId],
+            )
+            // Single compact subline saves ~2 rows on the short secondary panel.
+            // Tags META/PLAYER kept GONE so updateSelection paths stay stable.
+            val compact = HeroDetail.compactSubline(
+                HeroDetail.platformLine(platform, selectedRom.platformId),
+                romMetaLine(settings, SlotKey.rom(selectedRom.id)),
+                HeroDetail.playerShortName(platform, preferredPlayer, installed),
+            )
             hero.addView(TextView(context).apply {
                 tag = TAG_HERO_SUB
-                text = Platforms.byId(selectedRom.platformId)?.displayName
-                    ?: selectedRom.platformId
+                text = compact
                 setTextSize(
                     TypedValue.COMPLEX_UNIT_SP,
-                    if (heroSpec.artSizeDp < 180) 14f else 18f,
+                    if (heroSpec.artSizeDp < 180) 13f else 15f,
                 )
-                setTextColor(0x99FFFFFF.toInt())
+                setTextColor(0xB3FFFFFF.toInt())
                 gravity = Gravity.CENTER
-                maxLines = 1
+                maxLines = 2
                 ellipsize = android.text.TextUtils.TruncateAt.END
                 setPadding(dp(heroSpec.nameSidePadDp), dp(4), dp(heroSpec.nameSidePadDp), 0)
             }, LinearLayout.LayoutParams(
@@ -1083,17 +1106,8 @@ object CompanionPanel {
             ))
             hero.addView(TextView(context).apply {
                 tag = TAG_HERO_META
-                text = romMetaLine(settings, SlotKey.rom(selectedRom.id))
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-                setTextColor(0x88FFFFFF.toInt())
-                gravity = Gravity.CENTER
-                maxLines = 1
-                ellipsize = android.text.TextUtils.TruncateAt.END
-                setPadding(dp(heroSpec.nameSidePadDp), dp(2), dp(heroSpec.nameSidePadDp), 0)
-            }, LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-            ))
+                visibility = View.GONE
+            })
             val metadataText = HeroDetail.metadataLine(selectedRom)
             hero.addView(TextView(context).apply {
                 tag = TAG_HERO_METADATA
@@ -1113,31 +1127,9 @@ object CompanionPanel {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT,
             ))
-            val platform = Platforms.byId(selectedRom.platformId)
-            val installed = { pkg: String ->
-                runCatching {
-                    context.packageManager.getPackageInfo(pkg, 0)
-                    true
-                }.getOrDefault(false)
-            }
-            val preferredPlayer = RomProfiles.preferredPlayerId(
-                selectedRom.id,
-                settings.romProfiles,
-                settings.defaultPlayers[selectedRom.platformId],
-            )
             hero.addView(TextView(context).apply {
                 tag = TAG_HERO_PLAYER
-                text = HeroDetail.playerLine(
-                    platform,
-                    preferredPlayer,
-                    installed,
-                ).orEmpty()
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
-                setTextColor(0x99FFFFFF.toInt())
-                gravity = Gravity.CENTER
-                maxLines = 1
-                ellipsize = android.text.TextUtils.TruncateAt.END
-                setPadding(0, dp(2), 0, 0)
+                visibility = View.GONE
             })
             val raLine = RetroAchievements.heroLine(
                 app.raProgressFor(selectedRom.id),
@@ -1205,39 +1197,62 @@ object CompanionPanel {
                 })
                 bindHeroVideo(video, selectedRom)
             }
-            // Hero quick actions for the selected ROM (Phase 3).
+            // Hero quick actions — same dark rounded idle chips as Hero/Now/
+            // Perf/Pin (not solid accent bricks). Fixed height + baseline off
+            // so glyphs paint on the Sugar secondary (see dual-paint notes).
             if (heroSpec.showQuickChips) {
+                val chipH = dp(34)
                 val quick = LinearLayout(context).apply {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER
-                    setPadding(0, dp(8), 0, 0)
+                    isBaselineAligned = false
+                    setPadding(0, dp(8), 0, dp(2))
                 }
-                fun quickChip(label: String, onClick: () -> Unit) =
+                fun quickChip(label: String, onClick: () -> Unit): TextView =
                     TextView(context).apply {
                         text = label
-                        setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                        contentDescription = label
+                        setTextSize(TypedValue.COMPLEX_UNIT_PX, dp(12).toFloat())
                         setTextColor(Color.WHITE)
-                        setBackgroundColor(0xFF2A2A32.toInt())
-                        setPadding(dp(12), dp(8), dp(12), dp(8))
+                        background = TileBackgrounds.chip(context)
+                        gravity = Gravity.CENTER
+                        setPadding(dp(12), 0, dp(12), 0)
+                        includeFontPadding = true
+                        setSingleLine()
+                        isClickable = true
+                        isFocusable = true
                         setOnClickListener { onClick() }
                     }
+                fun addChip(label: String, onClick: () -> Unit) {
+                    if (quick.childCount > 0) {
+                        quick.addView(
+                            View(context),
+                            LinearLayout.LayoutParams(dp(6), chipH),
+                        )
+                    }
+                    quick.addView(
+                        quickChip(label, onClick),
+                        LinearLayout.LayoutParams(
+                            ViewGroup.LayoutParams.WRAP_CONTENT,
+                            chipH,
+                        ),
+                    )
+                }
                 val romKey = SlotKey.rom(selectedRom.id)
-                quick.addView(quickChip(
-                    if (romKey in settings.favorites) "Unfav" else "Fav",
+                addChip(
+                    if (romKey in settings.favorites) "Unfavorite" else "Favorite",
                 ) {
                     val next = CollectionsOps.toggleFavorite(settings.favorites, romKey)
                     app.updateSettings(settings.copy(favorites = next))
-                })
-                quick.addView(View(context), LinearLayout.LayoutParams(dp(8), 1))
-                quick.addView(quickChip("Pin") {
+                }
+                addChip("Pin") {
                     val filled = CollectionsOps.bulkFillSlots(
                         settings.gridSlots, listOf(romKey))
                     app.updateSettings(settings.copy(gridSlots = filled))
                     android.widget.Toast.makeText(
                         activity, "Pinned to grid", android.widget.Toast.LENGTH_SHORT).show()
-                })
-                quick.addView(View(context), LinearLayout.LayoutParams(dp(8), 1))
-                quick.addView(quickChip("Art") {
+                }
+                addChip("Art") {
                     (activity as? com.visorcraft.ghostgalleon.ui.BaseDeckActivity)
                         ?.requestCustomIcon { uri ->
                             app.artCache.invalidate(selectedRom.id)
@@ -1245,9 +1260,8 @@ object CompanionPanel {
                                 artOverrides = settings.artOverrides +
                                     (selectedRom.id to uri.toString())))
                         }
-                })
-                quick.addView(View(context), LinearLayout.LayoutParams(dp(8), 1))
-                quick.addView(quickChip("Open with") {
+                }
+                addChip("Open with") {
                     val openPlatform = Platforms.byId(selectedRom.platformId)
                     val players = openPlatform?.players.orEmpty()
                     if (players.isEmpty()) {
@@ -1271,8 +1285,14 @@ object CompanionPanel {
                             .setNegativeButton("Cancel", null)
                             .show()
                     }
-                })
-                hero.addView(quick)
+                }
+                hero.addView(
+                    quick,
+                    LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ),
+                )
             }
         } else if (selectedEntry != null) {
             val icon = ImageView(context)
@@ -1431,19 +1451,22 @@ object CompanionPanel {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
+        row.isBaselineAligned = false
         fun chip(role: CompanionRole, label: String) {
             row.addView(TextView(context).apply {
                 text = label
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                setTextSize(TypedValue.COMPLEX_UNIT_PX, dp(12).toFloat())
                 setTextColor(if (current == role) Color.BLACK else Color.WHITE)
                 setBackgroundColor(
                     if (current == role) settings.accentColor
                     else TileBackgrounds.chipIdleColor(context))
-                setPadding(dp(10), dp(6), dp(10), dp(6))
+                gravity = Gravity.CENTER
+                setPadding(dp(10), 0, dp(10), 0)
+                setSingleLine()
                 setOnClickListener { onPick(role) }
             }, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
+                dp(32),
             ).apply { marginEnd = dp(6) })
         }
         chip(CompanionRole.HERO, "Hero")
