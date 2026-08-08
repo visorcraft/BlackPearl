@@ -54,13 +54,14 @@ class MainActivity : BaseDeckActivity() {
             ?: topo.allIds.firstOrNull { it != (display?.displayId ?: -1) }
             ?: return
         if (!AndroidDisplayProbe.hasDisplay(this, secondaryHomeId)) return
-        // MAIN + SECONDARY_HOME so the task is typed as home on the secondary
-        // panel (not a free-floating standard task that launcher3 can cover).
+        // Plain component start + setLaunchDisplayId. Do NOT attach
+        // CATEGORY_SECONDARY_HOME here: on Sugar that forces a home-typed
+        // task onto display 0 and ignores the launch display id, so the
+        // bottom panel stays empty (launcher3/recents). System-fired
+        // SECONDARY_HOME intents still hit Companion via the manifest filter.
         // NEW_TASK without MULTIPLE_TASK: singleInstance reuses the existing
         // companion task instead of leaking a new one per call.
-        val intent = Intent(Intent.ACTION_MAIN)
-            .setClass(this, CompanionActivity::class.java)
-            .addCategory(Intent.CATEGORY_SECONDARY_HOME)
+        val intent = Intent(this, CompanionActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         val options = ActivityOptions.makeBasic().setLaunchDisplayId(secondaryHomeId)
         startActivity(intent, options.toBundle())

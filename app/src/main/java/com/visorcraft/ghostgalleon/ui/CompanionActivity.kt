@@ -68,13 +68,14 @@ class CompanionActivity : BaseDeckActivity() {
         // No healthy target companion yet: we are the real one. Close leftovers.
         existing.forEach { it.closeQuietly() }
 
-        // SECONDARY_HOME may land on the focused display; redirect to secondary panel.
+        // System SECONDARY_HOME may land on the focused display. Relaunch on
+        // the secondary panel with MULTIPLE_TASK so singleInstance task reuse
+        // cannot pin us to the wrong display. No SECONDARY_HOME category —
+        // that overrides setLaunchDisplayId on Sugar (see MainActivity).
         val currentDisplay = display?.displayId
         if (currentDisplay != null && currentDisplay != target) {
             if (AndroidDisplayProbe.hasDisplay(this, target)) {
-                val intent = Intent(Intent.ACTION_MAIN)
-                    .setClass(this, CompanionActivity::class.java)
-                    .addCategory(Intent.CATEGORY_SECONDARY_HOME)
+                val intent = Intent(this, CompanionActivity::class.java)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
                 val options = ActivityOptions.makeBasic().setLaunchDisplayId(target)
                 selfClosing = true
